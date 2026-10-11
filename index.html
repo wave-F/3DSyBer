@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cyber Bridge</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+      canvas { display: block; }
+      #overlay {
+        position: fixed; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 12px;
+        background: rgba(0, 0, 0, 0.55); color: #e8f6ff; cursor: pointer;
+        font-family: "PingFang SC", sans-serif; user-select: none;
+      }
+      #overlay h1 { margin: 0; font-size: 36px; color: #3ff; text-shadow: 0 0 12px #3ff; }
+      #overlay p { margin: 0; opacity: 0.8; }
+      #overlay.hidden { display: none; }
+      #crosshair {
+        position: fixed; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px;
+        border-radius: 50%; background: rgba(255, 255, 255, 0.6); pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="overlay">
+      <h1>点击开始</h1>
+      <p>WASD 移动 · Shift 奔跑 · 鼠标环顾 · Esc 暂停</p>
+    </div>
+    <div id="crosshair"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
