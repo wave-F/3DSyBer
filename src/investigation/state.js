@@ -30,13 +30,21 @@ export function createInvestigation(scene, camera, crash, controls) {
   const ui = createUI();
   preloadClueImages(CLUES);
   const recon = createRecon(scene, crash);
-  const tablet = createTablet(camera);
+  const tablet = createTablet(camera, {
+    onStamp: () => ui.toast('案件已结案', '调查报告已提交归档', 4000),
+  });
   const vm = createViewmodel(tablet.uiScene, camera);
-  const baseSpeed = controls.pointerSpeed;
-  function setTablet(on) {
+  // 打开平板：释放鼠标用来点击界面，视角固定；收起：重新锁定鼠标
+  // relock = false 时（Esc 收起）不重新锁定，回到暂停层
+  function setTablet(on, relock = true) {
     tablet.toggle(on);
-    controls.pointerSpeed = on ? baseSpeed * 0.15 : baseSpeed;
-    if (on) { holdKey = false; vm.analyze(null, 0); ui.setPrompt(null); ui.hidePanel(); syncTablet(); }
+    if (on) {
+      holdT = 0; finishedAnalysis = null; fx.setFocus(false); ui.setAnalysis(null);
+      holdKey = false; vm.analyze(null, 0); ui.setPrompt(null); ui.hidePanel(); syncTablet();
+      controls.keepOverlayHidden = true;
+      controls.unlock();
+    } else if (relock) controls.lock();
+    else controls.showPause();
   }
   // 把当前调查进度同步给平板
   function syncTablet() {
@@ -53,6 +61,7 @@ export function createInvestigation(scene, camera, crash, controls) {
   const recorded = EVENTS.map(() => false);
   let mode = 'explore';
   let holdT = 0, holdKey = false, aimed = null;
+  let finishedAnalysis = null;
   let rt = 0, playing = false;
   let solved = false;
   let endTimer = 0;
@@ -65,12 +74,35 @@ export function createInvestigation(scene, camera, crash, controls) {
   setMode('explore');
 
   const locked = () => document.pointerLockElement != null;
+
+  // 测试按钮：跳过探索，标记全部线索已分析并直接进入事件重建
+  // 只在鼠标未锁定时显示（暂停画面、平板打开时）
+  const testBtn = document.createElement('button');
+  testBtn.textContent = '测试 · 直接重建';
+  testBtn.style.cssText = 'position:fixed;right:24px;top:20px;transform:scale(1.5);transform-origin:right top;z-index:10;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#ffcf6a;background:rgba(5,12,20,.7);border:1px solid rgba(255,207,106,.6);cursor:pointer;';
+  document.body.appendChild(testBtn);
+  const syncTestBtn = () => { testBtn.style.display = locked() || mode === 'end' ? 'none' : ''; };
+  document.addEventListener('pointerlockchange', syncTestBtn);
+  testBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clues.forEach((c) => { c.done = true; });
+    ui.setHint(true);
+    if (tablet.open) tablet.toggle(false);
+    ui.hideConclusion();
+    setMode('recon');
+    controls.lock();
+    testBtn.blur();
+  });
+  syncTestBtn();
   const keyDone = () => clues.filter((c) => c.key && c.done).length;
   const reconReady = () => keyDone() >= keyTotal;
 
   // 模式：explore（自由探索 + 线索分析）、recon（事件重建，世界冻结）、end（结论页）
   function setMode(m) {
     mode = m;
+    holdT = 0; holdKey = false; finishedAnalysis = null;
+    fx.setFocus(false);
+    ui.setAnalysis(null);
     clock.target = m === 'explore' ? 1 : 0;
     fx.setActive(m === 'recon');
     recon.root.visible = m === 'recon';
@@ -86,10 +118,14 @@ export function createInvestigation(scene, camera, crash, controls) {
 
   addEventListener('keydown', (e) => {
     if (e.code === 'Tab') e.preventDefault();
-    if (!locked() && mode !== 'end') return;
+    // 平板打开时鼠标已释放，按键照常处理
+    if (!locked() && mode !== 'end' && !tablet.open) return;
     // 平板只在探索时可用；打开期间按键都交给平板
-    if (e.code === 'Tab' && mode === 'explore') { setTablet(!tablet.open); return; }
-    if (tablet.open) { tablet.nav(e.code); return; }
+    if (e.code === 'Tab' && mode === 'explore') { if (!e.repeat) setTablet(!tablet.open); return; }
+    if (tablet.open) {
+      if (!tablet.nav(e.code) && e.code === 'Escape') setTablet(false, false);
+      return;
+    }
     if (e.code === 'KeyQ') {
       if (mode === 'explore') scan();
       else if (mode === 'recon') setMode('explore');
@@ -107,6 +143,12 @@ export function createInvestigation(scene, camera, crash, controls) {
     }
   });
   addEventListener('keyup', (e) => { if (e.code === 'KeyE') holdKey = false; });
+  document.addEventListener('pointerlockchange', () => {
+    if (!locked()) {
+      holdKey = false; holdT = 0; finishedAnalysis = null;
+      fx.setFocus(false); vm.analyze(null, 0); ui.setAnalysis(null);
+    }
+  });
   addEventListener('wheel', (e) => {
     if (mode !== 'recon') return;
     playing = false;
@@ -177,33 +219,48 @@ export function createInvestigation(scene, camera, crash, controls) {
       const d = c.p.distanceTo(camera.position);
       if (fx.pulsing && !c.hit && d < SCAN_RANGE && d < fx.pulseRadius) { c.hit = true; c.reveal = SCAN_SHOW; }
     }
-    aimed = aim();
-    if (aimed && !aimed.done && holdKey && locked()) {
+    const nextAim = aim();
+    if (nextAim !== aimed) holdT = 0;
+    aimed = nextAim;
+    if (finishedAnalysis) {
+      finishedAnalysis.remaining -= dt;
+      if (finishedAnalysis.remaining <= 0) {
+        const c = finishedAnalysis.clue;
+        ui.showClue(c, clues.indexOf(c));
+        finishedAnalysis = null;
+      }
+    }
+    if (aimed && !aimed.done && holdKey && locked() && !finishedAnalysis) {
+      if (holdT === 0) ui.hidePanel();
       holdT += dt;
       if (holdT >= HOLD_TIME) {
         aimed.done = true;
         holdT = 0;
-        ui.showClue(aimed, clues.indexOf(aimed));
+        finishedAnalysis = { clue: aimed, remaining: 0.45 };
         ui.setCounter(clues.filter((c) => c.done).length, clues.length);
         if (aimed.key && reconReady()) ui.toast('关键线索已收集完毕', '按 R 开始事件重建', 4500);
         ui.setHint(reconReady());
       }
     } else holdT = 0;
-    ui.setHold(holdT / HOLD_TIME);
-    vm.analyze(aimed && !aimed.done && holdKey && locked() ? aimed.p : null, holdT / HOLD_TIME);
+    const analyzing = holdT > 0;
+    const analysisClue = locked() ? finishedAnalysis?.clue ?? (aimed && !aimed.done ? aimed : null) : null;
+    ui.setAnalysis(analysisClue ? { ...project(analysisClue.p), name: analysisClue.name } : null,
+      finishedAnalysis ? 1 : holdT / HOLD_TIME, finishedAnalysis ? 'complete' : analyzing ? 'working' : 'ready');
+    fx.setFocus(analyzing || !!finishedAnalysis);
+    vm.analyze(analyzing ? aimed.p : finishedAnalysis?.clue.p ?? null, finishedAnalysis ? 1 : holdT / HOLD_TIME);
     if (dbgAim >= 0) vm.analyze(clues[dbgAim].p, 0.6);
 
-    if (aimed && !aimed.done) ui.setPrompt(`按住 E 分析：${aimed.name}`);
+    if (analysisClue) ui.setPrompt(null);
     else if (aimed && aimed.done) ui.setPrompt(`按 E 查看：${aimed.name}`);
     else if (reconReady()) ui.setPrompt('线索充足 · 按 R 开始事件重建', true);
     else ui.setPrompt(null);
 
-    ui.updateMarkers(clues.map((c, i) => {
+    ui.updateMarkers(clues.map((c) => {
       const s = project(c.p);
       const d = c.p.distanceTo(camera.position);
       return {
-        id: c.id, x: s.x, y: s.y, show: s.front && (d < NEAR_RANGE || c === aimed || (!c.done && c.reveal > 0)), done: c.done, aim: c === aimed,
-        label: c.done ? (c === aimed ? c.name : '') : (c === aimed || d < 8 ? `${String(i + 1).padStart(2, '0')} · ${d.toFixed(1)} m` : String(i + 1).padStart(2, '0')),
+        id: c.id, x: s.x, y: s.y, front: s.front, show: c !== analysisClue && s.front && (d < NEAR_RANGE || c === aimed || (!c.done && c.reveal > 0)), done: c.done, aim: c === aimed,
+        label: c.done ? (c === aimed ? c.name : '') : (c === aimed || d < 8 ? `${d.toFixed(1)} m` : ''),
       };
     }));
   }
@@ -239,7 +296,7 @@ export function createInvestigation(scene, camera, crash, controls) {
       if (mode !== 'explore') vm.analyze(null, 0);
       vm.update(realDt, mode === 'explore' && !tablet.open && tablet.amount < 0.02);
       ui.setTabletOpen(tablet.amount > 0.05);
-      if (tablet.open) return;
+      if (tablet.open || tablet.amount > 0.05) return;
       if (mode === 'explore') updateExplore(realDt);
       else if (mode === 'recon') updateRecon(realDt);
     },

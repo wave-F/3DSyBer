@@ -5,6 +5,7 @@ import {
   mx_fractal_noise_float, color, hash, instanceIndex,
 } from 'three/tsl';
 import { loadTexture, farWindowTexture, idTexture } from './textures.js';
+import { addLightGroup } from './debugLights.js';
 
 export const FOG_HEX = 0x1b2726;
 
@@ -80,14 +81,14 @@ function buildMegabuildings(scene) {
 
 // 全息广告：加法混合 + 扫描线 + 闪烁，缓慢漂浮
 const holos = [];
-function holoMaterial(file) {
-  const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+function holoMaterial(file, side = THREE.DoubleSide, { k = 1.6, lo = 0.05, hi = 0.18 } = {}) {
+  const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side });
   const scan = sin(uv().y.mul(260).add(gameTime.mul(6))).mul(0.25).add(0.75);
   const flick = sin(gameTime.mul(23)).mul(0.06).add(0.94).mul(sin(gameTime.mul(3.1)).mul(0.1).add(0.9));
   const img = texture(loadTexture(file), uv()).rgb;
   // 压掉 JPG 底色噪点，避免出现方框
-  const mask = smoothstep(0.05, 0.18, img.r.max(img.g).max(img.b));
-  m.colorNode = img.mul(mask).mul(scan).mul(flick).mul(1.6);
+  const mask = smoothstep(lo, hi, img.r.max(img.g).max(img.b));
+  m.colorNode = img.mul(mask).mul(scan).mul(flick).mul(k);
   m.fog = false; // 加法混合的面片若参与雾计算，会叠加出雾色方框
   return m;
 }
@@ -103,9 +104,41 @@ function buildHolograms(scene) {
   geisha.rotation.y = Math.PI - 0.2;
   scene.add(geisha);
   holos.push({ mesh: geisha, base: geisha.position.clone(), rot: geisha.rotation.y, k: 0.4 });
+
+  // 右前方：斜靠在楼顶上的巨型人像（右前03_tower02，楼顶约 62m），侧身朝向桥面的玩家
+  const LW = 44, LH = LW * 732 / 916;
+  const lady = new THREE.Mesh(new THREE.PlaneGeometry(LW, LH), holoMaterial('gen/holo_lady.jpg', THREE.DoubleSide, { k: 2.0, lo: 0.04, hi: 0.16 }));
+  lady.position.set(20, 62 + LH / 2 - 3, -50);
+  lady.rotation.set(-0.12, -0.75, 0);   // 微微后仰，像靠在楼顶上
+  scene.add(lady);
+  holos.push({ mesh: lady, base: lady.position.clone(), rot: lady.rotation.y, k: 0.25, bob: 0.6 });
+  // 这张斜靠的大面片从桥面看会变成一道不受灯光开关影响的白光柱，默认关掉
+  addLightGroup('楼顶全息人像', (on) => { lady.visible = on; }, false);
+
+  // 左侧后排楼顶上方：缓慢旋转的企业标志（左后02_bldgLG，楼顶约 136m）
+  // 背靠背两片单面，转到背面时文字也是正的
+  const logo = new THREE.Group();
+  const lmat = holoMaterial('gen/holo_logo.jpg', THREE.FrontSide, { k: 2.2 });
+  for (const ry of [0, Math.PI]) {
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(34, 34 * 611 / 573), lmat);
+    face.rotation.y = ry;
+    logo.add(face);
+  }
+  logo.position.set(-83, 136 + 6 + 18, -56);
+  scene.add(logo);
+  // 投影环
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0xffb030, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+  ringMat.color.multiplyScalar(2.5);
+  ringMat.fog = false;
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(9, 0.25, 6, 48), ringMat);
+  ring.rotation.x = Math.PI / 2;
+  ring.position.set(-83, 137.5, -56);
+  scene.add(ring);
+  holos.push({ mesh: logo, base: logo.position.clone(), rot: 0, k: 0.3, bob: 0.8, spin: 0.25 });
 }
 
-// 远处飞行器：白色前灯 + 红色尾灯的移动光点
+// 远处飞行器：白色前灯 + 红色尾灯的移动光点。先关掉，全息仍由这里带动。
+const SHOW_FLYERS = false;
 function buildFlyers(scene) {
   const white = new THREE.MeshBasicMaterial({ color: 0xffffff });
   white.color.setScalar(8);
@@ -113,7 +146,7 @@ function buildFlyers(scene) {
   red.color.multiplyScalar(8);
   const body = new THREE.MeshStandardMaterial({ color: 0x111316, roughness: 0.4, metalness: 0.8 });
   const flyers = [];
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 14 && SHOW_FLYERS; i++) {
     const g = new THREE.Group();
     const hull = new THREE.Mesh(new THREE.BoxGeometry(5, 1.2, 2.4), body);
     const f = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 2.0), white);
@@ -134,7 +167,7 @@ function buildFlyers(scene) {
     });
   }
   return function update(dt, t) {
-    for (const f of flyers) {
+    if (SHOW_FLYERS) for (const f of flyers) {
       f.s += f.speed * dt;
       if (f.s > 800) f.s -= 1600;
       if (f.s < -800) f.s += 1600;
@@ -142,8 +175,8 @@ function buildFlyers(scene) {
       else { f.g.position.set(f.s, f.y, f.off); f.g.rotation.y = f.speed > 0 ? 0 : Math.PI; }
     }
     for (const h of holos) {
-      h.mesh.position.y = h.base.y + Math.sin(t * h.k) * 2.5;
-      h.mesh.rotation.y = h.rot + Math.sin(t * h.k * 0.5) * 0.12;
+      h.mesh.position.y = h.base.y + Math.sin(t * h.k) * 2.5 * (h.bob ?? 1);
+      h.mesh.rotation.y = h.spin ? t * h.spin : h.rot + Math.sin(t * h.k * 0.5) * 0.12;
     }
   };
 }

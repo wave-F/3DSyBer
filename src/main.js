@@ -2,10 +2,12 @@ import * as THREE from 'three/webgpu';
 import {
   pass, mrt, output, normalView, metalness, roughness, vec2, vec3, float, sample, uniform,
   packNormalToRGB, unpackRGBToNormal, renderOutput, screenUV, mix, smoothstep, luminance,
-  fog, color, exp, positionView, positionWorld,
+  fog, color, exp, positionView, positionWorld, builtinAOContext, rtt,
 } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { ssr } from 'three/addons/tsl/display/SSRNode.js';
+import { ao } from 'three/addons/tsl/display/GTAONode.js';
+import { denoise } from 'three/addons/tsl/display/DenoiseNode.js';
 import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { film } from 'three/addons/tsl/display/FilmNode.js';
 import { chromaticAberration } from 'three/addons/tsl/display/ChromaticAberrationNode.js';
@@ -21,6 +23,7 @@ import { createPlayer } from './player.js';
 import { buildSky, FOG_HEX } from './sky.js';
 import { clock, tick } from './investigation/clock.js';
 import { createInvestigation } from './investigation/state.js';
+import { addLightGroup } from './debugLights.js';
 
 const renderer = new THREE.WebGPURenderer();
 // Forward+ 分簇光照：每个像素只计算真正照到它的点光源（灯一盏不少，开销按覆盖范围算）
@@ -41,10 +44,19 @@ scene.fogNode = fog(color(FOG_HEX), float(1).sub(float(1).sub(haze).mul(float(1)
 
 const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.05, 3000);
 
-scene.add(new THREE.HemisphereLight(0x3a5258, 0x05070a, 0.55));
+const hemi = new THREE.HemisphereLight(0x3a5258, 0x05070a, 0.55);
 const moon = new THREE.DirectionalLight(0x8899cc, 0.3);
 moon.position.set(-50, 100, 30);
-scene.add(moon);
+scene.add(hemi, moon);
+let envOn = true;
+addLightGroup('环境光（天光、月光）', (on) => {
+  hemi.intensity = on ? 0.55 : 0;
+  moon.intensity = on ? 0.3 : 0;
+});
+addLightGroup('环境反射', (on) => {
+  envOn = on;
+  scene.environmentIntensity = on ? 0.12 : 0;
+});
 
 // 夜景 HDRI 只用作反射环境（车漆、水面），不作背景
 new HDRLoader().load('/assets/shanghai_bund_1k.hdr', (hdr) => {
@@ -52,11 +64,11 @@ new HDRLoader().load('/assets/shanghai_bund_1k.hdr', (hdr) => {
   scene.environment = hdr;
   inv.tablet.uiScene.environment = hdr;   // 手和设备的金属反射
   inv.tablet.uiScene.environmentIntensity = 0.35;
-  scene.environmentIntensity = 0.12;
+  scene.environmentIntensity = envOn ? 0.12 : 0;
 });
 
 buildBridge(scene);
-buildCity(scene);
+const updateCity = buildCity(scene);
 const crash = buildCrash(scene);
 const updateSky = buildSky(scene);
 const updateRain = buildRain(scene, camera);
@@ -66,7 +78,25 @@ const inv = createInvestigation(scene, camera, crash, updatePlayer.controls);
 if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; window.__renderer = renderer; window.__scene = scene; } // 开发时截图调机位用
 
 // ---------- 后期 ----------
+// Separate pre-pass avoids feeding the shaded scene back into its own AO.
+const aoPrePass = pass(scene, camera);
+aoPrePass.setResolutionScale(0.5);
+aoPrePass.transparent = false;
+aoPrePass.setMRT(mrt({ output: normalView }));
+const aoDepth = aoPrePass.getTextureNode('depth');
+const aoNormal = aoPrePass.getTextureNode('output');
+const aoPass = ao(aoDepth, aoNormal, camera);
+aoPass.resolutionScale = 0.5;
+aoPass.radius.value = 0.65;
+aoPass.thickness.value = 0.35;
+aoPass.samples.value = 16;
+const aoFiltered = denoise(aoPass.getTextureNode(), aoDepth, aoNormal, camera);
+aoFiltered.radius.value = 3;
+const aoTexture = rtt(aoFiltered).setResolutionScale(0.5);
+const aoAmount = uniform(0.65);
 const scenePass = pass(scene, camera);
+scenePass.contextNode = builtinAOContext(mix(float(1), aoTexture.sample(screenUV).r, aoAmount));
+addLightGroup('AO（车底、轮拱遮蔽）', (on) => { aoAmount.value = on ? 0.65 : 0; });
 scenePass.setMRT(mrt({
   output,
   normal: packNormalToRGB(normalView),
@@ -91,7 +121,9 @@ ssrPass.resolutionScale = 0.5;
 ssrPass.maxDistance.value = 80;
 ssrPass.thickness.value = 0.6;
 ssrPass.quality.value = 0.5;
-let hdr = sceneColor.add(ssrPass.rgb);
+const ssrAmt = uniform(1);
+let hdr = sceneColor.add(ssrPass.rgb.mul(ssrAmt));
+addLightGroup('屏幕反射', (on) => { ssrAmt.value = on ? 1 : 0; });
 
 // 1.5 平板：举起时背景压暗虚化，叠加单独渲染的平板界面（独立场景，不会被场景遮挡）
 const tabletAmt = uniform(0);
@@ -106,7 +138,9 @@ hdr = hdr.mul(float(1).sub(uiMask)).add(uiPass.getTextureNode('output').rgb);
 
 // 2. 辉光
 // 阈值 1.3：只让真正的光源发光晕，被照亮的地面和高光不再泛白
-hdr = hdr.add(bloom(hdr, 0.5, 0.35, 1.3));
+const bloomAmt = uniform(1);
+hdr = hdr.add(bloom(hdr, 0.5, 0.35, 1.3).mul(bloomAmt));
+addLightGroup('辉光', (on) => { bloomAmt.value = on ? 1 : 0; });
 
 // 2.5 分析模式：灰蓝去饱和 + 世界网格 + 扫描波
 hdr = inv.fx.apply(hdr, sceneDepth, scenePass.getTextureNode('keep'), uiMask);
@@ -143,6 +177,7 @@ renderer.setAnimationLoop(() => {
   updateRain(clock.dt);
   updateCordon(dt, camera.position);
   updateSky(clock.dt, clock.elapsed);
+  updateCity();
   inv.update(dt);
   tabletAmt.value = Math.min(1, inv.tablet.amount * 1.4);
   pipeline.render();

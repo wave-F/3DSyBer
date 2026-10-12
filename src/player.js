@@ -14,8 +14,13 @@ export function createPlayer(camera, domElement, overlay) {
   camera.lookAt(4, DECK_Y + 0.6, 1);
 
   overlay.addEventListener('click', () => controls.lock());
-  controls.addEventListener('lock', () => overlay.classList.add('hidden'));
-  controls.addEventListener('unlock', () => overlay.classList.remove('hidden'));
+  // keepOverlayHidden：打开平板时主动释放鼠标，不弹出暂停层
+  controls.keepOverlayHidden = false;
+  controls.showPause = () => { controls.keepOverlayHidden = false; overlay.classList.remove('hidden'); };
+  controls.addEventListener('lock', () => { controls.keepOverlayHidden = false; overlay.classList.add('hidden'); });
+  controls.addEventListener('unlock', () => { if (!controls.keepOverlayHidden) overlay.classList.remove('hidden'); });
+  // 重新锁定失败（浏览器限制）时回到暂停层，点击继续
+  document.addEventListener('pointerlockerror', () => controls.showPause());
 
   const keys = {};
   addEventListener('keydown', (e) => { keys[e.code] = true; });

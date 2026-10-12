@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { DECK_Y } from '../bridge.js';
 import { rng } from '../textures.js';
 import { markKeep } from './mask.js';
+import { addTireTracks } from '../tireTracks.js';
 
 // 反转线索的场景道具：第二辆车的胎痕、车身右侧黄色刮漆、离开现场的血脚印
 
@@ -15,33 +16,13 @@ function canvasTex(w, h, draw) {
   return t;
 }
 
-// 沿曲线铺一条胎痕带
-function tireTrack(scene, curve, offsets, mat, steps = 30, width = 0.26) {
-  const pts = [];
-  for (let i = 0; i <= steps; i++) pts.push(curve(i / steps));
-  for (const off of offsets) {
-    for (let i = 0; i < steps; i++) {
-      const a = pts[i], b = pts[i + 1];
-      const dir = b.clone().sub(a);
-      const len = dir.length();
-      const seg = new THREE.Mesh(new THREE.PlaneGeometry(width, len + 0.05), mat);
-      const nx = dir.z / len, nz = -dir.x / len;
-      seg.position.set((a.x + b.x) / 2 + nx * off, DECK_Y + 0.021, (a.z + b.z) / 2 + nz * off);
-      seg.rotation.order = 'YXZ';
-      seg.rotation.set(-Math.PI / 2, Math.atan2(dir.x, dir.z), 0);
-      scene.add(seg);
-    }
-  }
-}
-
 export function buildTwistProps(scene, carGroup) {
   // 1. 第二辆车（更宽的轮胎）：从右侧车道向左切入，碰撞后回正离开
-  const skidMat = markKeep(new THREE.MeshBasicMaterial({ color: 0x0a0806, transparent: true, opacity: 0.7, depthWrite: false }));
-  const cutIn = (t) => new THREE.Vector3(-4.9 + Math.sin(Math.min(t, 1) * Math.PI * 0.5) * 1.6, 0, -30 + t * 14);
-  tireTrack(scene, cutIn, [-0.85, 0.85], skidMat, 24, 0.3);
-  const fadeMat = markKeep(new THREE.MeshBasicMaterial({ color: 0x0a0806, transparent: true, opacity: 0.35, depthWrite: false }));
-  const away = (t) => new THREE.Vector3(-3.3 - Math.sin(t * Math.PI * 0.5) * 1.1, 0, -16 + t * 9);
-  tireTrack(scene, away, [-0.85, 0.85], fadeMat, 10, 0.3);
+  const cutIn = new THREE.CubicBezierCurve3(
+    new THREE.Vector3(-4.9, 0, -30), new THREE.Vector3(-2.6, 0, -18),
+    new THREE.Vector3(-3.3, 0, -16), new THREE.Vector3(-4.4, 0, -7),
+  );
+  addTireTracks(scene, cutIn, { offsets: [-0.85, 0.85], width: 0.265, seed: 705, opacity: 0.62, fadeOut: 0.45 });
 
   // 2. 车身右侧（组内 +Z）的黄色刮漆
   const scrapeTex = canvasTex(512, 96, (g, w, h) => {

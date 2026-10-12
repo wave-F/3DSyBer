@@ -180,6 +180,33 @@ export function tickerTexture(text, color) {
   return t;
 }
 
+// 楼顶企业标志：黑底（加法混合 = 透明）+ 霓虹立体字 + 下方细线
+export function logoTexture(text, color, sub = '') {
+  const [m, mg] = canvas(8, 8);
+  mg.font = 'bold 150px "Helvetica Neue", "PingFang SC", sans-serif';
+  const w = Math.ceil(mg.measureText(text).width) + 120;
+  const [c, g] = canvas(w, sub ? 280 : 220);
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, c.width, c.height);
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = 'bold 150px "Helvetica Neue", "PingFang SC", sans-serif';
+  g.shadowColor = color;
+  g.shadowBlur = 40;
+  g.fillStyle = color;
+  g.fillText(text, w / 2, 110);
+  g.shadowBlur = 12;
+  g.fillStyle = `color-mix(in srgb, ${color} 55%, white)`;
+  g.fillText(text, w / 2, 110);
+  if (sub) {
+    g.font = 'bold 44px "Helvetica Neue", "PingFang SC", sans-serif';
+    g.shadowBlur = 16;
+    g.fillStyle = color;
+    g.fillText(sub, w / 2, 230);
+  }
+  return toTexture(c);
+}
+
 // 巨型建筑编号
 export function idTexture(text, color) {
   const [c, g] = canvas(512, 512);

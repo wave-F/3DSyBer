@@ -1,0 +1,68 @@
+{
+ "size": [
+  3072,
+  1872
+ ],
+ "h": {
+  "cell": [
+   768,
+   432
+  ],
+  "cols": 4,
+  "y": 0,
+  "n": 12
+ },
+ "v": {
+  "cell": [
+   384,
+   576
+  ],
+  "cols": 8,
+  "y": 1296,
+  "n": 8
+ },
+ "glow": [
+  "#d3fff8",
+  "#f0ecff",
+  "#fffcfd",
+  "#ff9f4f",
+  "#ffe7b7",
+  "#fff0ee",
+  "#ffbac5",
+  "#84a4ff",
+  "#d7d0ff",
+  "#ff7580",
+  "#65b9ff",
+  "#6dffff",
+  "#fa82ff",
+  "#cdeaff",
+  "#ffd0f0",
+  "#ff6c3d",
+  "#5fffe8",
+  "#7bd0ff",
+  "#ffbb89",
+  "#fff6fe"
+ ],
+ "names": [
+  "h01.png",
+  "h02.png",
+  "h03.png",
+  "h04.png",
+  "h05.png",
+  "h06.png",
+  "h07.png",
+  "h08.png",
+  "h09.png",
+  "h10.png",
+  "h11.png",
+  "h12.png",
+  "v01.png",
+  "v02.png",
+  "v03.png",
+  "v04.png",
+  "v05.png",
+  "v06.png",
+  "v07.png",
+  "v08.png"
+ ]
+}

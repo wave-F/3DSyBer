@@ -1,0 +1,132 @@
+{
+ "bldgLG": {
+  "file": "assets/bldg/bldgLG.glb",
+  "width": 61.6,
+  "depth": 63.2,
+  "height": 135.94,
+  "bounds": [
+   -30.8,
+   30.8,
+   -31.6,
+   31.6
+  ],
+  "range": 4.0
+ },
+ "bldgM": {
+  "file": "assets/bldg/bldgM.glb",
+  "width": 49.0,
+  "depth": 33.06,
+  "height": 50.67,
+  "bounds": [
+   -24.5,
+   24.5,
+   -16.53,
+   16.53
+  ],
+  "range": 4.0
+ },
+ "bldgS": {
+  "file": "assets/bldg/bldgS.glb",
+  "width": 31.39,
+  "depth": 15.58,
+  "height": 25.16,
+  "bounds": [
+   -15.7,
+   15.7,
+   -7.79,
+   7.79
+  ],
+  "range": 4.0
+ },
+ "capsule": {
+  "file": "assets/bldg/capsule.glb",
+  "width": 26.01,
+  "depth": 15.45,
+  "height": 45.78,
+  "bounds": [
+   -13.01,
+   13.01,
+   -7.72,
+   7.72
+  ],
+  "range": 4.0
+ },
+ "midrise": {
+  "file": "assets/bldg/midrise.glb",
+  "width": 26.72,
+  "depth": 21.45,
+  "height": 56.37,
+  "bounds": [
+   -13.36,
+   13.36,
+   -10.73,
+   10.73
+  ],
+  "range": 4.0
+ },
+ "tower02": {
+  "file": "assets/bldg/tower02.glb",
+  "width": 33.65,
+  "depth": 27.81,
+  "height": 61.98,
+  "bounds": [
+   -16.82,
+   16.82,
+   -13.9,
+   13.9
+  ],
+  "range": 4.0
+ },
+ "tower03": {
+  "file": "assets/bldg/tower03.glb",
+  "width": 28.93,
+  "depth": 25.75,
+  "height": 60.42,
+  "bounds": [
+   -14.46,
+   14.46,
+   -12.87,
+   12.87
+  ],
+  "range": 4.0
+ },
+ "tower08": {
+  "file": "assets/bldg/tower08.glb",
+  "width": 38.2,
+  "depth": 16.73,
+  "height": 60.02,
+  "bounds": [
+   -19.1,
+   19.1,
+   -8.36,
+   8.36
+  ],
+  "range": 4.0
+ },
+ "towerC": {
+  "file": "assets/bldg/towerC.glb",
+  "width": 47.55,
+  "depth": 37.41,
+  "height": 159.66,
+  "bounds": [
+   -23.78,
+   23.78,
+   -18.71,
+   18.71
+  ],
+  "range": 4.0
+ },
+ "towerL": {
+  "file": "assets/bldg/towerL.glb",
+  "width": 45.63,
+  "depth": 45.63,
+  "height": 61.93,
+  "bounds": [
+   -22.82,
+   22.82,
+   -22.82,
+   22.82
+  ],
+  "range": 4.0
+ }
+}

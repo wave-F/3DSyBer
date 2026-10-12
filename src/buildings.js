@@ -4,6 +4,7 @@ import {
   texture, float, vec3, triplanarTexture, positionWorld, normalWorld, sin, hash, instanceIndex,
 } from 'three/tsl';
 import { loadTexture, litWindowTextures } from './textures.js';
+import { addLightGroup } from './debugLights.js';
 
 // 模块化楼体：所有构件按材质合批成 InstancedMesh
 // 立面 = 深色玻璃芯体 + 外凸的窗间墙(pier)和窗下墙(spandrel)，窗洞有真实深度
@@ -54,6 +55,7 @@ class Batch {
     mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.c), 3);
     mesh.frustumCulled = false;
     parent.add(mesh);
+    return mesh;
   }
 }
 
@@ -251,10 +253,16 @@ export function createBuildingKit() {
   }
 
   function finish(parent) {
-    for (const b of Object.values(B)) {
-      if (Array.isArray(b)) b.forEach((x) => x.build(parent));
-      else b.build(parent);
+    const glow = [];
+    const keep = (mesh) => { if (mesh) glow.push(mesh); };
+    for (const [key, b] of Object.entries(B)) {
+      const batches = Array.isArray(b) ? b : [b];
+      for (const batch of batches) {
+        const mesh = batch.build(parent);
+        if (key === 'neon' || key === 'lit' || key === 'blink') keep(mesh);
+      }
     }
+    addLightGroup('程序楼窗和灯带', (on) => { for (const mesh of glow) mesh.visible = on; });
   }
 
   return { building, finish };

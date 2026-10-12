@@ -4,6 +4,10 @@ import { HALF_W } from './bridge.js';
 import { createBuildingKit } from './buildings.js';
 import { createSignKit } from './signs.js';
 import { MEGA } from './sky.js';
+import { adGlowAt } from './ads.js';
+import { gameTime } from './investigation/clock.js';
+import { modelFootprints, placeModelSigns, loadModelBuildings, NEAR_Z } from './modelBuildings.js';
+import { addLightGroup } from './debugLights.js';
 
 const NEAR_STYLES = [['resi', 0.38], ['kitsch', 0.27], ['office', 0.25], ['corp', 0.1]];
 const MID_STYLES = [['office', 0.35], ['corp', 0.25], ['resi', 0.3], ['kitsch', 0.1]];
@@ -27,35 +31,57 @@ export function buildCity(scene) {
   const signs = createSignKit(scene, r);
   const screenLights = [];
 
+  // 近景段（Blender 布局覆盖的沿桥范围）只用模型楼；其余地段程序楼避开模型楼占地
+  const taken = modelFootprints();
+  const blocked = (x, z, w, d) => (z > NEAR_Z[0] && z < NEAR_Z[1])
+    || taken.some((f) => x + w / 2 > f.x0 && x - w / 2 < f.x1 && z + d / 2 > f.z0 && z - d / 2 < f.z1);
+  loadModelBuildings(scene);
+
   for (const side of [-1, 1]) {
     // 第一排：紧邻高架，招牌最密
     for (let z = -270; z < 270;) {
       const d = 18 + r() * 16, w = 16 + r() * 12;
       const x0 = HALF_W + 12 + r() * 6;
-      const b = kit.building({ x: side * (x0 + w / 2), z: z + d / 2, w, d, h: 32 + r() * 70, style: weighted(NEAR_STYLES), side, r });
-      decorate(b, side, true);
+      if (!blocked(side * (x0 + w / 2), z + d / 2, w, d)) {
+        const b = kit.building({ x: side * (x0 + w / 2), z: z + d / 2, w, d, h: 32 + r() * 70, style: weighted(NEAR_STYLES), side, r });
+        decorate(b, side, true);
+      }
       z += d + 3 + r() * 9;
     }
     // 第二排：更高，招牌少一些
     for (let z = -280; z < 280;) {
       const d = 22 + r() * 20, w = 20 + r() * 16;
       const x0 = 56 + r() * 14;
-      const b = kit.building({ x: side * (x0 + w / 2), z: z + d / 2, w, d, h: 60 + r() * 110, style: weighted(MID_STYLES), side, r });
-      decorate(b, side, false);
+      if (!blocked(side * (x0 + w / 2), z + d / 2, w, d)) {
+        const b = kit.building({ x: side * (x0 + w / 2), z: z + d / 2, w, d, h: 60 + r() * 110, style: weighted(MID_STYLES), side, r });
+        decorate(b, side, false);
+      }
       z += d + 4 + r() * 14;
     }
   }
+  placeModelSigns(signs, screenLights);   // 放在程序楼之后，不打乱程序楼的随机序列
   kit.finish(scene);
   signs.finish();
   buildFarCity(scene, r);
 
   // 离事故现场最近的几块大屏给桥面投下彩色光
   screenLights.sort((a, b) => Math.abs(a.z) - Math.abs(b.z));
+  const screenPoints = [];
   for (const s of screenLights.slice(0, 6)) {
     const light = new THREE.PointLight(s.color, 100, 45, 2); // 原 260，太强会把桥面整体染色
     light.position.copy(s.pos);
+    light.userData.slot = s.slot;
+    screenPoints.push(light);
     scene.add(light);
   }
+  addLightGroup('城市大屏点光', (on) => {
+    for (const light of screenPoints) light.intensity = on ? 100 : 0;
+  });
+
+  // 灯色跟着大屏当前的广告换
+  return function update() {
+    for (const light of screenPoints) if (light.userData.slot) adGlowAt(light.userData.slot, gameTime.value, light.color);
+  };
 
   function decorate(b, side, near) {
     for (const face of b.faces) {
@@ -86,10 +112,10 @@ export function buildCity(scene) {
           const h = vertical ? w * 1.6 : w * 9 / 16;
           if (h < yMax - yMin) {
             tryPlace(w, h, (u, y) => {
-              signs.screen(face, u, y, w, h);
+              const slot = signs.screen(face, u, y, w, h);
               const pos = face.c.clone().addScaledVector(face.t, u).addScaledVector(face.n, 6);
               pos.y = y;
-              screenLights.push({ pos, z: pos.z, color: new THREE.Color(signs.neonHex[Math.floor(r() * signs.neonHex.length)]) });
+              screenLights.push({ pos, z: pos.z, color: new THREE.Color(), slot });
             });
           }
         }

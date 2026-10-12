@@ -1,12 +1,19 @@
 import * as THREE from 'three/webgpu';
+import { float, mx_noise_float, positionLocal } from 'three/tsl';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { rng, bloodTexture, smokeTexture } from './textures.js';
-import { DECK_Y, HALF_W, concrete as concreteBase, metal as metalBase, lightConeMaterial } from './bridge.js';
+import { rng, bloodTexture } from './textures.js';
+import { DECK_Y, HALF_W, concrete as concreteBase, metal as metalBase } from './bridge.js';
 import { markKeep } from './investigation/mask.js';
+import { addLightGroup } from './debugLights.js';
+import { addTireTracks } from './tireTracks.js';
 
 // 雨夜湿车漆：金属底 + 清漆层（精细曲面车身会映出满车霓虹，金属度与清漆光泽需克制）
-const carPaint = markKeep(new THREE.MeshPhysicalMaterial({ color: 0x2f7f9f, roughness: 0.45, metalness: 0.35, clearcoat: 1, clearcoatRoughness: 0.18 }));
+const carPaint = markKeep(new THREE.MeshPhysicalNodeMaterial({ color: 0x2f7f9f, roughness: 0.38, metalness: 0.35, clearcoat: 0.85, clearcoatRoughness: 0.18 }));
+// Object-space variation stays attached to the car without UV seams or visible tiling.
+const paintVariation = mx_noise_float(positionLocal.mul(5));
+carPaint.roughnessNode = float(0.38).add(paintVariation.mul(0.055)).clamp(0.3, 0.46);
+carPaint.clearcoatRoughnessNode = float(0.18).add(paintVariation.mul(0.035)).clamp(0.13, 0.23);
 
 // 车的位置与朝向（车头为本地 +X）
 export const CAR_POS = new THREE.Vector3(5.5, DECK_Y, 0.2);
@@ -47,15 +54,19 @@ export function buildCrash(scene) {
   hazardLight.position.copy(car.group.localToWorld(new THREE.Vector3(-3.0, 1.2, 0)));
   scene.add(hazardLight);
 
-  const smoke = buildSmoke(scene, car.group.localToWorld(new THREE.Vector3(1.2, 1.0, 0)));
-
+  let fireOn = true;
+  let hazardOn = true;
   function update(dt, t) {
     const on = Math.floor(t * 1.6) % 2 === 0;
-    car.hazardMat.emissiveIntensity = on ? 8 : 0;
-    hazardLight.intensity = on ? 5 : 0;
-    fireLight.intensity = 4 + Math.sin(t * 23) * 1.5 + Math.sin(t * 7.1) * 1.5;
-    smoke(dt);
+    car.hazardMat.emissiveIntensity = hazardOn && on ? 8 : 0;
+    hazardLight.intensity = hazardOn && on ? 5 : 0;
+    fireLight.intensity = fireOn ? 4 + Math.sin(t * 23) * 1.5 + Math.sin(t * 7.1) * 1.5 : 0;
   }
+  addLightGroup('车头火光', (on) => { fireOn = on; if (!on) fireLight.intensity = 0; });
+  addLightGroup('双闪', (on) => {
+    hazardOn = on;
+    if (!on) { hazardLight.intensity = 0; car.hazardMat.emissiveIntensity = 0; }
+  });
   // info: { pristine: 未变形的模型副本（重建前半段用）, crashed: 变形后的模型（重建后半段用） }
   const onCarReady = (cb) => { if (ready) cb(ready); else readyCbs.push(cb); };
   return { update, carGroup: car.group, onCarReady };
@@ -79,9 +90,20 @@ function buildCar(onReady) {
     const mats = carMaterials(hazardMat);
     model.traverse((o) => {
       if (!o.isMesh) return;
-      const key = o.material.name.replace(/^GC_/, '');
-      if (mats[key]) o.material = mats[key];
+      const imported = o.material;
+      const key = imported.name.replace(/^GC_/, '');
+      if (mats[key]) {
+        o.material = mats[key];
+        if (imported.normalMap) {
+          // Shared base materials must not share different parts' normal maps.
+          o.material = o.material.clone();
+          o.material.normalMap = imported.normalMap;
+          o.material.normalScale.copy(imported.normalScale).multiplyScalar(key === 'CarPaint_Main' ? 0.4 : 0.7);
+        }
+      }
       else fixImportedMaterial(o.material);
+      // 大灯玻璃和白色灯腔。灯腔是一整块亮面，关掉自发光后仍会在引擎盖上被打成白光
+      if (key === 'Glass_Headlight' || key === 'LED_WhiteHeadlight') o.visible = false;
     });
 
     // 变形前保留一份独立几何的副本，给重建全息用
@@ -93,30 +115,18 @@ function buildCar(onReady) {
     // 整辆车都是线索，分析模式下保留原色
     model.traverse((o) => { if (o.isMesh) markKeep(o.material); });
 
-    // 左前轮脱落，倒在车头左前方
+    // 左前轮脱落，平躺在车身左侧偏后（车左侧朝向护栏，再往前会出桥面悬空）
     const wheel = model.getObjectByName('Wheel_FL');
     group.attach(wheel);
-    wheel.position.set(2.1, 0.24, -1.75);
-    wheel.rotation.set(0, 0.6, Math.PI / 2 - 0.25); // 轮轴（本地 X）转向接近竖直，轮子侧躺
+    wheel.position.set(-1.9, 0, -1.9);
+    wheel.rotation.set(0, 0.6, Math.PI / 2); // 轮轴（本地 X）转向竖直，轮子平躺
+    // 按包围盒贴地，落在路面上
+    group.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(wheel);
+    wheel.position.y += DECK_Y + 0.01 - box.min.y;
     draco.dispose();
     onReady({ pristine, crashed: model });
   });
-
-  const beam = new THREE.SpotLight(0xdff4ff, 30, 30, 0.45, 0.6, 2);
-  beam.position.set(1.45, 0.55, 0.6);
-  beam.target.position.set(8, -0.5, 2);
-  group.add(beam, beam.target);
-
-  // 车灯在雨雾中的光束
-  const beamGeo = new THREE.ConeGeometry(2.2, 12, 32, 1, true);
-  beamGeo.translate(0, -6, 0);
-  const beamCone = new THREE.Mesh(beamGeo, lightConeMaterial(0xcfe8ff));
-  beamCone.position.copy(beam.position);
-  beamCone.quaternion.setFromUnitVectors(
-    new THREE.Vector3(0, -1, 0),
-    beam.target.position.clone().sub(beam.position).normalize()
-  );
-  group.add(beamCone);
 
   return { group, hazardMat };
 }
@@ -139,9 +149,8 @@ function carMaterials(hazardMat) {
     MetalAccent: std({ color: 0x8e1010, roughness: 0.45, metalness: 0.6 }),
     PlasticMatte: std({ color: 0x0c0c0d, roughness: 0.8, metalness: 0 }),
     GlassWindshield: phys({ color: 0x05080c, roughness: 0.05, metalness: 0.2, clearcoat: 1, transparent: true, opacity: 0.75 }),
-    Glass_Headlight: phys({ color: 0xffffff, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.25, depthWrite: false }),
-    // 该材质覆盖整个大灯内腔（约 0.58m²），强度过高会整片炸成辉光
-    LED_WhiteHeadlight: std({ color: 0x000000, emissive: 0xdff4ff, emissiveIntensity: 1.5 }),
+    Glass_Headlight: phys({ color: 0x050607, roughness: 0.4, metalness: 0, transparent: true, opacity: 0.15, depthWrite: false }),
+    LED_WhiteHeadlight: std({ color: 0x050607, emissive: 0x000000, emissiveIntensity: 0 }),
     LED_OrangeSignle: hazardMat,
   };
 }
@@ -153,9 +162,12 @@ function fixImportedMaterial(m) {
 }
 
 // 车头挤压变形：车头缩短、左前角撞得更深、表面起伏（模型本地坐标，车头 +Z，左侧 +X）
-// 位移只取决于顶点位置，UV/硬边处拆分的重合顶点会同步移动，不会撕裂；保留原法线以免破坏硬表面着色
+// Transform authored normals by the deformation Jacobian, preserving hard edges and UV seams.
 function crumpleFront(geo) {
   const p = geo.attributes.position;
+  const normals = geo.attributes.normal;
+  const normalMatrix = new THREE.Matrix3();
+  const normal = new THREE.Vector3();
   const Z0 = 0.9, Z1 = 2.1;
   let hit = false;
   for (let i = 0; i < p.count; i++) {
@@ -164,13 +176,30 @@ function crumpleFront(geo) {
     hit = true;
     const t = Math.min(1, (z - Z0) / (Z1 - Z0)) * CRUMPLE;
     const left = Math.max(0, x);
+    const dt = z < Z1 ? CRUMPLE / (Z1 - Z0) : 0;
+    const side = x > 0 ? 1 : 0;
+    const dzdx = -side * 0.28 * t;
+    const dzdz = 1 - 0.3 * t - (0.3 * (z - Z0) + left * 0.28) * dt;
     z = Z0 + (z - Z0) * (1 - 0.3 * t) - left * 0.28 * t;
-    y += (Math.sin(x * 6) * 0.04 + Math.sin(z * 13 + x * 7) * 0.015 - left * 0.08) * t;
+    const wave = Math.sin(x * 6) * 0.04 + Math.sin(z * 13 + x * 7) * 0.015 - left * 0.08;
+    if (normals) {
+      const c = Math.cos(z * 13 + x * 7) * 0.015;
+      const dydx = (Math.cos(x * 6) * 0.24 + c * (13 * dzdx + 7) - side * 0.08) * t;
+      const dydz = c * 13 * dzdz * t + wave * dt;
+      normalMatrix.set(1 + 0.05 * t, 0, x * 0.05 * dt, dydx, 1, dydz, dzdx, 0, dzdz).invert().transpose();
+      normal.fromBufferAttribute(normals, i).applyMatrix3(normalMatrix).normalize();
+      normals.setXYZ(i, normal.x, normal.y, normal.z);
+    }
+    y += wave * t;
     x *= 1 + 0.05 * t;
     p.setXYZ(i, x, y, z);
   }
   if (hit) {
     p.needsUpdate = true;
+    if (normals) normals.needsUpdate = true;
+    else geo.computeVertexNormals();
+    // Reconstruct tangent space from the deformed surface instead of stale imported tangents.
+    geo.deleteAttribute('tangent');
     geo.computeBoundingBox();
     geo.computeBoundingSphere();
   }
@@ -243,23 +272,16 @@ function buildDebris(scene, r) {
 
 // 刹车痕：从后方一路拐向护栏
 function buildSkidMarks(scene) {
-  const mat = markKeep(new THREE.MeshBasicMaterial({ color: 0x050505, transparent: true, opacity: 0.75, depthWrite: false }));
-  const curve = (t) => new THREE.Vector3(-1.5 + Math.pow(t, 2.2) * 5.4, 0, -30 + t * 28.7);
-  for (const off of [-0.8, 0.8]) {
-    const pts = [];
-    for (let i = 0; i <= 40; i++) pts.push(curve(i / 40));
-    for (let i = 0; i < 40; i++) {
-      const a = pts[i], b = pts[i + 1];
-      const dir = b.clone().sub(a);
-      const len = dir.length();
-      const seg = new THREE.Mesh(new THREE.PlaneGeometry(0.22, len + 0.05), mat);
-      const nx = dir.z / len, nz = -dir.x / len;
-      seg.position.set((a.x + b.x) / 2 + nx * off, DECK_Y + 0.02, (a.z + b.z) / 2 + nz * off);
-      seg.rotation.order = 'YXZ';
-      seg.rotation.set(-Math.PI / 2, Math.atan2(dir.x, dir.z), 0);
-      scene.add(seg);
-    }
-  }
+  const forward = new THREE.Vector3(Math.cos(CAR_YAW), 0, -Math.sin(CAR_YAW));
+  const end = CAR_POS.clone().addScaledVector(forward, -1.25);
+  end.y = 0;
+  const curve = new THREE.CubicBezierCurve3(
+    new THREE.Vector3(-1.5, 0, -30),
+    new THREE.Vector3(-1.5, 0, -16),
+    end.clone().addScaledVector(forward, -5),
+    end,
+  );
+  addTireTracks(scene, curve, { offsets: [-0.8, 0.8], width: 0.245, seed: 404, slide: 0.45, opacity: 0.78 });
 }
 
 // 盖着白布的遇难者 + 血迹
@@ -310,35 +332,4 @@ function buildVictim(scene) {
   trail.rotation.set(-Math.PI / 2, 0, 0.9);
   trail.position.set(3.4, DECK_Y + 0.017, 3.2);
   scene.add(pool, trail);
-}
-
-// 车头冒烟
-function buildSmoke(scene, origin) {
-  const tex = smokeTexture();
-  const parts = [];
-  for (let i = 0; i < 40; i++) {
-    const mat = new THREE.SpriteMaterial({ map: tex, color: 0x5a5a60, transparent: true, depthWrite: false, opacity: 0 });
-    const s = new THREE.Sprite(mat);
-    s.userData.life = i / 40 * 4;
-    scene.add(s);
-    parts.push(s);
-  }
-  return (dt) => {
-    for (const s of parts) {
-      const d = s.userData;
-      d.life += dt;
-      if (d.life > 4) {
-        d.life -= 4;
-        d.vx = (Math.random() - 0.5) * 0.4;
-        d.vz = (Math.random() - 0.5) * 0.4;
-        s.position.copy(origin);
-      }
-      const t = d.life / 4;
-      s.position.x = origin.x + (d.vx || 0) * d.life + t * 1.5;
-      s.position.z = origin.z + (d.vz || 0) * d.life;
-      s.position.y = origin.y + d.life * 1.4;
-      s.scale.setScalar(0.6 + t * 3.5);
-      s.material.opacity = Math.sin(t * Math.PI) * 0.45;
-    }
-  };
 }
