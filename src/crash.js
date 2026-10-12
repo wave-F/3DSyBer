@@ -2,14 +2,18 @@ import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { rng, bloodTexture, smokeTexture } from './textures.js';
-import { DECK_Y, HALF_W, concrete, metal, lightConeMaterial } from './bridge.js';
+import { DECK_Y, HALF_W, concrete as concreteBase, metal as metalBase, lightConeMaterial } from './bridge.js';
+import { markKeep } from './investigation/mask.js';
 
 // 雨夜湿车漆：金属底 + 清漆层（精细曲面车身会映出满车霓虹，金属度与清漆光泽需克制）
-const carPaint = new THREE.MeshPhysicalMaterial({ color: 0x2f7f9f, roughness: 0.45, metalness: 0.35, clearcoat: 1, clearcoatRoughness: 0.18 });
+const carPaint = markKeep(new THREE.MeshPhysicalMaterial({ color: 0x2f7f9f, roughness: 0.45, metalness: 0.35, clearcoat: 1, clearcoatRoughness: 0.18 }));
 
 // 车的位置与朝向（车头为本地 +X）
-const CAR_POS = new THREE.Vector3(5.5, DECK_Y, 0.2);
-const CAR_YAW = -0.75;
+export const CAR_POS = new THREE.Vector3(5.5, DECK_Y, 0.2);
+export const CAR_YAW = -0.75;
+// 盖布（遇难者）最终位置，重建时被甩出的人形落在这里
+export const SHEET_POS = new THREE.Vector3(1.6, DECK_Y + 0.02, 5.2);
+export const SHEET_YAW = 0.5;
 
 // 供玩家碰撞用的车体包围盒（车本地坐标）
 export const carCollider = {
@@ -19,7 +23,9 @@ export const carCollider = {
 
 export function buildCrash(scene) {
   const r = rng(404);
-  const car = buildCar();
+  const readyCbs = [];
+  let ready = null;
+  const car = buildCar((info) => { ready = info; readyCbs.forEach((cb) => cb(info)); });
   car.group.position.copy(CAR_POS);
   car.group.position.y -= 0.03;
   car.group.rotation.set(-0.02, CAR_YAW, -0.03); // 左前轮脱落：车头下沉、左侧略低
@@ -43,13 +49,16 @@ export function buildCrash(scene) {
 
   const smoke = buildSmoke(scene, car.group.localToWorld(new THREE.Vector3(1.2, 1.0, 0)));
 
-  return function update(dt, t) {
+  function update(dt, t) {
     const on = Math.floor(t * 1.6) % 2 === 0;
     car.hazardMat.emissiveIntensity = on ? 8 : 0;
     hazardLight.intensity = on ? 5 : 0;
     fireLight.intensity = 4 + Math.sin(t * 23) * 1.5 + Math.sin(t * 7.1) * 1.5;
     smoke(dt);
-  };
+  }
+  // info: { pristine: 未变形的模型副本（重建前半段用）, crashed: 变形后的模型（重建后半段用） }
+  const onCarReady = (cb) => { if (ready) cb(ready); else readyCbs.push(cb); };
+  return { update, carGroup: car.group, onCarReady };
 }
 
 // 超跑模型（Blender 导出：Draco 压缩 + WebP 贴图，约 3.5MB）
@@ -57,7 +66,7 @@ export function buildCrash(scene) {
 const CAR_URL = '/assets/supercar.glb';
 const CRUMPLE = 1; // 车头撞击变形强度，0 = 完好无损
 
-function buildCar() {
+function buildCar(onReady) {
   const group = new THREE.Group();
   const hazardMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffa020, emissiveIntensity: 0 });
 
@@ -75,8 +84,14 @@ function buildCar() {
       else fixImportedMaterial(o.material);
     });
 
+    // 变形前保留一份独立几何的副本，给重建全息用
+    const pristine = model.clone(true);
+    pristine.traverse((o) => { if (o.isMesh) o.geometry = o.geometry.clone(); });
+
     const body = model.getObjectByName('Body');
     if (CRUMPLE > 0) body.traverse((o) => { if (o.isMesh) crumpleFront(o.geometry); });
+    // 整辆车都是线索，分析模式下保留原色
+    model.traverse((o) => { if (o.isMesh) markKeep(o.material); });
 
     // 左前轮脱落，倒在车头左前方
     const wheel = model.getObjectByName('Wheel_FL');
@@ -84,6 +99,7 @@ function buildCar() {
     wheel.position.set(2.1, 0.24, -1.75);
     wheel.rotation.set(0, 0.6, Math.PI / 2 - 0.25); // 轮轴（本地 X）转向接近竖直，轮子侧躺
     draco.dispose();
+    onReady({ pristine, crashed: model });
   });
 
   const beam = new THREE.SpotLight(0xdff4ff, 30, 30, 0.45, 0.6, 2);
@@ -173,6 +189,8 @@ function crumpleFront(geo) {
 // 撞断的护栏：一段弯折挂在桥外，一段倒在路面
 function buildBrokenRail(scene) {
   const x = HALF_W - 0.2;
+  const metal = markKeep(metalBase.clone());
+  const concrete = markKeep(concreteBase.clone());
 
   const hanging = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 3.2), metal);
   hanging.position.set(x + 0.9, DECK_Y - 0.5, -2.2);
@@ -205,8 +223,8 @@ function buildBrokenRail(scene) {
 // 车身碎片与玻璃渣
 function buildDebris(scene, r) {
   const paint = carPaint;
-  const dark = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.6 });
-  const glass = new THREE.MeshStandardMaterial({ color: 0xbfe8ff, roughness: 0.05, metalness: 1 });
+  const dark = markKeep(new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.6 }));
+  const glass = markKeep(new THREE.MeshStandardMaterial({ color: 0xbfe8ff, roughness: 0.05, metalness: 1 }));
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const e = new THREE.Euler();
@@ -235,7 +253,7 @@ function buildDebris(scene, r) {
 
 // 刹车痕：从后方一路拐向护栏
 function buildSkidMarks(scene) {
-  const mat = new THREE.MeshBasicMaterial({ color: 0x050505, transparent: true, opacity: 0.75, depthWrite: false });
+  const mat = markKeep(new THREE.MeshBasicMaterial({ color: 0x050505, transparent: true, opacity: 0.75, depthWrite: false }));
   const curve = (t) => new THREE.Vector3(-1.5 + Math.pow(t, 2.2) * 5.4, 0, -30 + t * 28.7);
   for (const off of [-0.8, 0.8]) {
     const pts = [];
@@ -286,15 +304,15 @@ function buildVictim(scene) {
   geo.computeVertexNormals();
   const sheet = new THREE.Mesh(
     geo,
-    new THREE.MeshStandardMaterial({ color: 0xb8b8b2, roughness: 0.75, side: THREE.DoubleSide })
+    markKeep(new THREE.MeshStandardMaterial({ color: 0xb8b8b2, roughness: 0.75, side: THREE.DoubleSide }))
   );
-  sheet.position.set(1.6, DECK_Y + 0.02, 5.2);
-  sheet.rotation.y = 0.5;
+  sheet.position.copy(SHEET_POS);
+  sheet.rotation.y = SHEET_YAW;
   scene.add(sheet);
 
-  const bloodMat = (seed, o) => new THREE.MeshStandardMaterial({
+  const bloodMat = (seed, o) => markKeep(new THREE.MeshStandardMaterial({
     map: bloodTexture(seed), transparent: true, depthWrite: false, roughness: 0.15, metalness: 0.2, opacity: o,
-  });
+  }));
   const pool = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.2), bloodMat(1, 1));
   pool.rotation.set(-Math.PI / 2, 0, 0.3);
   pool.position.set(2.3, DECK_Y + 0.018, 4.4);

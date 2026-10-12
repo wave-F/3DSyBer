@@ -4,6 +4,7 @@ import { HALF_W } from './bridge.js';
 import { createBuildingKit } from './buildings.js';
 import { createSignKit } from './signs.js';
 import { MEGA } from './sky.js';
+import { registerLight } from './lightMode.js';
 
 const NEAR_STYLES = [['resi', 0.38], ['kitsch', 0.27], ['office', 0.25], ['corp', 0.1]];
 const MID_STYLES = [['office', 0.35], ['corp', 0.25], ['resi', 0.3], ['kitsch', 0.1]];
@@ -53,6 +54,7 @@ export function buildCity(scene) {
   for (const s of screenLights.slice(0, 6)) {
     const light = new THREE.PointLight(s.color, 260, 45, 2);
     light.position.copy(s.pos);
+    registerLight(light, 100); // 降光版：260 → 100
     scene.add(light);
   }
 

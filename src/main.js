@@ -9,6 +9,7 @@ import { ssr } from 'three/addons/tsl/display/SSRNode.js';
 import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { film } from 'three/addons/tsl/display/FilmNode.js';
 import { chromaticAberration } from 'three/addons/tsl/display/ChromaticAberrationNode.js';
+import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { buildBridge } from './bridge.js';
 import { buildCity } from './city.js';
@@ -16,6 +17,9 @@ import { buildCrash } from './crash.js';
 import { buildRain } from './rain.js';
 import { createPlayer } from './player.js';
 import { buildSky, FOG_HEX } from './sky.js';
+import { clock, tick } from './investigation/clock.js';
+import { createInvestigation } from './investigation/state.js';
+import { onLightMode } from './lightMode.js';
 
 const renderer = new THREE.WebGPURenderer();
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
@@ -43,16 +47,19 @@ scene.add(moon);
 new HDRLoader().load('/assets/shanghai_bund_1k.hdr', (hdr) => {
   hdr.mapping = THREE.EquirectangularReflectionMapping;
   scene.environment = hdr;
+  inv.tablet.uiScene.environment = hdr;   // 手和设备的金属反射
+  inv.tablet.uiScene.environmentIntensity = 0.35;
   scene.environmentIntensity = 0.12;
 });
 
 buildBridge(scene);
 buildCity(scene);
-const updateCrash = buildCrash(scene);
+const crash = buildCrash(scene);
 const updateSky = buildSky(scene);
 const updateRain = buildRain(scene, camera);
-if (import.meta.env.DEV) window.__cam = camera; // 开发时截图调机位用
 const updatePlayer = createPlayer(camera, document.body, document.getElementById('overlay'));
+const inv = createInvestigation(scene, camera, crash, updatePlayer.controls);
+if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; } // 开发时截图调机位用
 
 // ---------- 后期 ----------
 const scenePass = pass(scene, camera);
@@ -60,9 +67,11 @@ scenePass.setMRT(mrt({
   output,
   normal: packNormalToRGB(normalView),
   metalrough: vec2(metalness, roughness),
+  keep: float(0),   // 分析模式保留原色的遮罩，线索与全息材质写 1
 }));
 scenePass.getTexture('normal').type = THREE.UnsignedByteType;
 scenePass.getTexture('metalrough').type = THREE.UnsignedByteType;
+scenePass.getTexture('keep').type = THREE.UnsignedByteType;
 
 const sceneColor = scenePass.getTextureNode('output');
 const sceneDepth = scenePass.getTextureNode('depth');
@@ -80,8 +89,28 @@ ssrPass.thickness.value = 0.6;
 ssrPass.quality.value = 0.5;
 let hdr = sceneColor.add(ssrPass.rgb);
 
+// 1.5 平板：举起时背景压暗虚化，叠加单独渲染的平板界面（独立场景，不会被场景遮挡）
+const tabletAmt = uniform(0);
+// 叠加场景（平板 + 第一人称手和扫描设备）：mask 通道标记不透明的手/设备，用来遮住背后的世界
+const uiPass = pass(inv.tablet.uiScene, camera);
+uiPass.setMRT(mrt({ output, mask: float(1) }));
+uiPass.getTexture('mask').type = THREE.UnsignedByteType;
+const uiMask = uiPass.getTextureNode('mask').r;
+const blurred = gaussianBlur(hdr, null, 4, { resolutionScale: 0.25 });
+hdr = mix(hdr, blurred.rgb.mul(0.16), tabletAmt);
+hdr = hdr.mul(float(1).sub(uiMask)).add(uiPass.getTextureNode('output').rgb);
+
 // 2. 辉光
-hdr = hdr.add(bloom(hdr, 0.8, 0.35, 0.85));
+const bloomPass = bloom(hdr, 0.8, 0.35, 0.85);
+hdr = hdr.add(bloomPass);
+// 降光版：阈值 0.85 → 1.3、强度 0.8 → 0.5，只让真正的光源发光晕
+onLightMode((low) => {
+  bloomPass.threshold.value = low ? 1.3 : 0.85;
+  bloomPass.strength.value = low ? 0.5 : 0.8;
+});
+
+// 2.5 分析模式：灰蓝去饱和 + 世界网格 + 扫描波
+hdr = inv.fx.apply(hdr, sceneDepth, scenePass.getTextureNode('keep'), uiMask);
 
 // 3. 调色：灰绿青色调，暗部压深，霓虹保持高饱和
 const lum = luminance(hdr.rgb);
@@ -109,9 +138,12 @@ renderer.setAnimationLoop(() => {
   const now = performance.now();
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
-  updatePlayer(dt);
-  updateCrash(dt, now / 1000);
-  updateRain(dt);
-  updateSky(dt, now / 1000);
+  tick(dt);
+  updatePlayer(dt * inv.moveScale);
+  crash.update(clock.dt, clock.elapsed);
+  updateRain(clock.dt);
+  updateSky(clock.dt, clock.elapsed);
+  inv.update(dt);
+  tabletAmt.value = Math.min(1, inv.tablet.amount * 1.4);
   pipeline.render();
 });

@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
+import { gameTime } from './investigation/clock.js';
 import {
-  texture, uv, vec2, vec3, float, time, sin, smoothstep, mix, positionWorld, positionWorldDirection,
+  texture, uv, vec2, vec3, float, sin, smoothstep, mix, positionWorld, positionWorldDirection,
   mx_fractal_noise_float, color, hash, instanceIndex,
 } from 'three/tsl';
 import { loadTexture, farWindowTexture, idTexture } from './textures.js';
@@ -21,8 +22,8 @@ export function buildSky(scene) {
   // 被城市灯光从下方照亮的低云
   const cloudMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
   cloudMat.fog = false;
-  const p = positionWorld.xz.mul(0.0025).add(vec2(time.mul(0.004), time.mul(0.0015)));
-  const n = mx_fractal_noise_float(vec3(p, time.mul(0.003)), 4, 2.0, 0.5);
+  const p = positionWorld.xz.mul(0.0025).add(vec2(gameTime.mul(0.004), gameTime.mul(0.0015)));
+  const n = mx_fractal_noise_float(vec3(p, gameTime.mul(0.003)), 4, 2.0, 0.5);
   const dist = positionWorld.xz.length();
   cloudMat.colorNode = mix(color(0x0b1212), color(0x3a2a38), smoothstep(-0.1, 0.5, n));
   cloudMat.opacityNode = smoothstep(-0.25, 0.45, n).mul(smoothstep(2200, 600, dist)).mul(0.9);
@@ -45,7 +46,7 @@ function buildMegabuildings(scene) {
   const bandMat = new THREE.MeshBasicMaterial({ color: 0x20e8ff });
   bandMat.color.multiplyScalar(3);
   const redMat = new THREE.MeshBasicNodeMaterial();
-  redMat.colorNode = vec3(10, 0.4, 0.3).mul(sin(time.mul(1.8)).mul(0.5).add(0.5).pow(4));
+  redMat.colorNode = vec3(10, 0.4, 0.3).mul(sin(gameTime.mul(1.8)).mul(0.5).add(0.5).pow(4));
 
   for (const m of MEGA) {
     let y = 0, w = m.w, d = m.d;
@@ -81,8 +82,8 @@ function buildMegabuildings(scene) {
 const holos = [];
 function holoMaterial(file) {
   const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
-  const scan = sin(uv().y.mul(260).add(time.mul(6))).mul(0.25).add(0.75);
-  const flick = sin(time.mul(23)).mul(0.06).add(0.94).mul(sin(time.mul(3.1)).mul(0.1).add(0.9));
+  const scan = sin(uv().y.mul(260).add(gameTime.mul(6))).mul(0.25).add(0.75);
+  const flick = sin(gameTime.mul(23)).mul(0.06).add(0.94).mul(sin(gameTime.mul(3.1)).mul(0.1).add(0.9));
   const img = texture(loadTexture(file), uv()).rgb;
   // 压掉 JPG 底色噪点，避免出现方框
   const mask = smoothstep(0.05, 0.18, img.r.max(img.g).max(img.b));

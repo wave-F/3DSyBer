@@ -1,10 +1,11 @@
 import * as THREE from 'three/webgpu';
+import { gameTime } from './investigation/clock.js';
 import {
   texture, uv, vec2, vec3, float, mix, smoothstep, max, normalMap,
   triplanarTexture, positionWorld, normalWorld, normalView, positionViewDirection, color,
 } from 'three/tsl';
+import { lowLight } from './lightMode.js';
 import { laneTexture, puddleTexture, loadTexture, highwaySignTexture, tickerTexture } from './textures.js';
-import { time } from 'three/tsl';
 
 export const DECK_Y = 20;     // 桥面高度
 export const HALF_W = 7;      // 桥面半宽
@@ -140,7 +141,7 @@ function addGantry(parent, zPos, flip, signA, signB, ticker, tickerColor) {
   // 跑马灯挂在路牌下方
   const tex = tickerTexture(ticker, tickerColor);
   const tMat = new THREE.MeshBasicNodeMaterial();
-  tMat.colorNode = texture(tex, uv().mul(vec2(0.5, 1)).add(vec2(time.mul(0.04), 0))).rgb.mul(3);
+  tMat.colorNode = texture(tex, uv().mul(vec2(0.5, 1)).add(vec2(gameTime.mul(0.04), 0))).rgb.mul(3);
   const strip = new THREE.Mesh(new THREE.PlaneGeometry(span - 1, 0.7), tMat);
   strip.position.set(0, y - 1.5, z + 0.6);
   group.add(strip);
@@ -163,7 +164,8 @@ function roadMaterial() {
   const base = mix(texture(diff, aUV).rgb.mul(0.5), lane.rgb.mul(0.7), lane.a);
   mat.colorNode = base.mul(mix(float(0.5), float(0.3), puddle));
   mat.roughnessNode = max(mix(texture(rough, aUV).r.mul(0.35), float(0.04), puddle), lane.a.mul(0.3));
-  mat.metalnessNode = mix(float(0.55), float(0.9), puddle).mul(lane.a.mul(-0.5).add(1));
+  // 降光版：0.55/0.9 → 0.15/0.5，路面不再像镜子一样把所有霓虹再反射一遍
+  mat.metalnessNode = mix(float(0.55), float(0.9), puddle).sub(lowLight.mul(0.4)).mul(lane.a.mul(-0.5).add(1));
   mat.envMapIntensity = 0.3;
   mat.normalNode = normalMap(texture(nor, aUV), vec2(puddle.oneMinus().mul(0.8).add(0.05)));
   return mat;

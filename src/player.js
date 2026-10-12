@@ -20,7 +20,7 @@ export function createPlayer(camera, domElement, overlay) {
   addEventListener('keydown', (e) => { keys[e.code] = true; });
   addEventListener('keyup', (e) => { keys[e.code] = false; });
 
-  return function update(dt) {
+  function update(dt) {
     if (!controls.isLocked) return;
     const speed = (keys.ShiftLeft || keys.ShiftRight ? RUN : WALK) * dt;
     const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
@@ -36,7 +36,9 @@ export function createPlayer(camera, domElement, overlay) {
     p.z = Math.min(HALF_L - 1, Math.max(-HALF_L + 1, p.z));
     p.y = DECK_Y + EYE;
     pushOutOfCar(p);
-  };
+  }
+  update.controls = controls;
+  return update;
 }
 
 // 将玩家从车体旋转包围盒中推出

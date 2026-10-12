@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
-import { texture, uv, vec2, float, time, sin, fract, floor, hash, step } from 'three/tsl';
+import { gameTime } from './investigation/clock.js';
+import { texture, uv, vec2, float, sin, fract, floor, hash, step } from 'three/tsl';
 import { neonSignTexture, lightboxTexture, loadTexture } from './textures.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -83,7 +84,7 @@ export function createSignKit(scene, r) {
     // 居中裁切到屏幕比例
     if (aspect > ad.aspect) tuv = vec2(tuv.x, tuv.y.sub(0.5).mul(ad.aspect / aspect).add(0.5));
     else tuv = vec2(tuv.x.sub(0.5).mul(aspect / ad.aspect).add(0.5), tuv.y);
-    const t = time.add(phase);
+    const t = gameTime.add(phase);
     const glitchOn = step(fract(t.mul(0.13)), float(0.025));
     const band = hash(floor(tuv.y.mul(24)).add(floor(t.mul(30))));
     const guv = vec2(tuv.x.add(band.sub(0.5).mul(0.08).mul(glitchOn)), tuv.y);

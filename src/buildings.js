@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
+import { gameTime } from './investigation/clock.js';
 import {
-  texture, float, vec3, triplanarTexture, positionWorld, normalWorld, time, sin, hash, instanceIndex,
+  texture, float, vec3, triplanarTexture, positionWorld, normalWorld, sin, hash, instanceIndex,
 } from 'three/tsl';
 import { loadTexture, litWindowTextures } from './textures.js';
 
@@ -79,7 +80,7 @@ export function createBuildingKit() {
 
   // 航空障碍灯：按实例错开相位闪烁
   const blinkMat = new THREE.MeshBasicNodeMaterial();
-  blinkMat.colorNode = vec3(8, 0.3, 0.2).mul(sin(time.mul(2.2).add(hash(instanceIndex).mul(6.28))).mul(0.5).add(0.5).pow(6));
+  blinkMat.colorNode = vec3(8, 0.3, 0.2).mul(sin(gameTime.mul(2.2).add(hash(instanceIndex).mul(6.28))).mul(0.5).add(0.5).pow(6));
 
   const B = {
     wall: new Batch(box, wallMat),
