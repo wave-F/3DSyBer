@@ -229,12 +229,12 @@ export function createInvestigation(scene, camera, crash, controls) {
     else if (reconReady()) ui.setPrompt('线索充足 · 按 R 开始事件重建', true);
     else ui.setPrompt(null);
 
-    ui.updateMarkers(clues.map((c, i) => {
+    ui.updateMarkers(clues.map((c) => {
       const s = project(c.p);
       const d = c.p.distanceTo(camera.position);
       return {
-        id: c.id, x: s.x, y: s.y, show: s.front && (d < NEAR_RANGE || c === aimed || (!c.done && c.reveal > 0)), done: c.done, aim: c === aimed,
-        label: c.done ? (c === aimed ? c.name : '') : (c === aimed || d < 8 ? `${String(i + 1).padStart(2, '0')} · ${d.toFixed(1)} m` : String(i + 1).padStart(2, '0')),
+        id: c.id, x: s.x, y: s.y, front: s.front, show: s.front && (d < NEAR_RANGE || c === aimed || (!c.done && c.reveal > 0)), done: c.done, aim: c === aimed,
+        label: c.done ? (c === aimed ? c.name : '') : (c === aimed || d < 8 ? `${d.toFixed(1)} m` : ''),
       };
     }));
   }

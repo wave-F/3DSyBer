@@ -1,100 +1,4 @@
 {
- "tower02": {
-  "file": "assets/bldg/tower02.glb",
-  "width": 33.65,
-  "depth": 27.81,
-  "height": 61.91,
-  "bounds": [
-   -16.82,
-   16.82,
-   -13.9,
-   13.9
-  ],
-  "core": [
-   -13.84,
-   11.65,
-   -6.92,
-   13.36
-  ],
-  "slots": [
-   {
-    "type": "screen",
-    "x": -1.5,
-    "z": 37,
-    "w": 14,
-    "h": 8,
-    "ad": "ramen",
-    "y": -6.299
-   },
-   {
-    "type": "blade",
-    "x": -13.0,
-    "z": 20,
-    "w": 1.8,
-    "h": 10,
-    "color": "pink",
-    "y": -5.484
-   },
-   {
-    "type": "blade",
-    "x": 10.3,
-    "z": 27,
-    "w": 1.8,
-    "h": 9,
-    "color": "cyan",
-    "y": -5.484
-   }
-  ],
-  "range": 4.0
- },
- "capsule": {
-  "file": "assets/bldg/capsule.glb",
-  "width": 26.01,
-  "depth": 15.45,
-  "height": 45.78,
-  "bounds": [
-   -13.01,
-   13.01,
-   -7.72,
-   7.72
-  ],
-  "core": [
-   -12.04,
-   12.37,
-   -6.91,
-   6.87
-  ],
-  "slots": [
-   {
-    "type": "hflat",
-    "x": 0,
-    "z": 4.3,
-    "w": 12,
-    "h": 1.6,
-    "color": "yellow",
-    "y": -7.597
-   },
-   {
-    "type": "blade",
-    "x": 11.8,
-    "z": 20,
-    "w": 1.8,
-    "h": 10,
-    "color": "cyan",
-    "y": -2.594
-   },
-   {
-    "type": "blade",
-    "x": -11.5,
-    "z": 14,
-    "w": 1.6,
-    "h": 8,
-    "color": "red",
-    "y": 0.115
-   }
-  ],
-  "range": 4.0
- },
  "bldgLG": {
   "file": "assets/bldg/bldgLG.glb",
   "width": 61.6,
@@ -105,41 +9,6 @@
    30.8,
    -31.6,
    31.6
-  ],
-  "core": [
-   -26.7,
-   24.37,
-   -25.34,
-   25.03
-  ],
-  "slots": [
-   {
-    "type": "screen",
-    "x": -1.5,
-    "z": 30,
-    "w": 6.5,
-    "h": 11,
-    "ad": "idol",
-    "y": 1.102
-   },
-   {
-    "type": "blade",
-    "x": 21.0,
-    "z": 42,
-    "w": 2.0,
-    "h": 12,
-    "color": "violet",
-    "y": 1.428
-   },
-   {
-    "type": "hflat",
-    "x": 8,
-    "z": 11,
-    "w": 10,
-    "h": 2,
-    "color": "cyan",
-    "y": -7.865
-   }
   ],
   "range": 4.0
  },
@@ -154,40 +23,109 @@
    -16.53,
    16.53
   ],
-  "core": [
-   -21.34,
-   23.83,
-   -15.67,
-   15.4
+  "range": 4.0
+ },
+ "bldgS": {
+  "file": "assets/bldg/bldgS.glb",
+  "width": 31.39,
+  "depth": 15.58,
+  "height": 25.16,
+  "bounds": [
+   -15.7,
+   15.7,
+   -7.79,
+   7.79
   ],
-  "slots": [
-   {
-    "type": "screen",
-    "x": 1.6,
-    "z": 22,
-    "w": 5.5,
-    "h": 9,
-    "ad": "arm",
-    "y": -8.22
-   },
-   {
-    "type": "hflat",
-    "x": -16.3,
-    "z": 4.8,
-    "w": 7.7,
-    "h": 1.6,
-    "color": "pink",
-    "y": -8.077
-   },
-   {
-    "type": "blade",
-    "x": -2.8,
-    "z": 30,
-    "w": 1.6,
-    "h": 8,
-    "color": "yellow",
-    "y": -8.025
-   }
+  "range": 4.0
+ },
+ "capsule": {
+  "file": "assets/bldg/capsule.glb",
+  "width": 26.01,
+  "depth": 15.45,
+  "height": 45.78,
+  "bounds": [
+   -13.01,
+   13.01,
+   -7.72,
+   7.72
+  ],
+  "range": 4.0
+ },
+ "midrise": {
+  "file": "assets/bldg/midrise.glb",
+  "width": 26.72,
+  "depth": 21.45,
+  "height": 56.37,
+  "bounds": [
+   -13.36,
+   13.36,
+   -10.73,
+   10.73
+  ],
+  "range": 4.0
+ },
+ "tower02": {
+  "file": "assets/bldg/tower02.glb",
+  "width": 33.65,
+  "depth": 27.81,
+  "height": 61.98,
+  "bounds": [
+   -16.82,
+   16.82,
+   -13.9,
+   13.9
+  ],
+  "range": 4.0
+ },
+ "tower03": {
+  "file": "assets/bldg/tower03.glb",
+  "width": 28.93,
+  "depth": 25.75,
+  "height": 60.42,
+  "bounds": [
+   -14.46,
+   14.46,
+   -12.87,
+   12.87
+  ],
+  "range": 4.0
+ },
+ "tower08": {
+  "file": "assets/bldg/tower08.glb",
+  "width": 38.2,
+  "depth": 16.73,
+  "height": 60.02,
+  "bounds": [
+   -19.1,
+   19.1,
+   -8.36,
+   8.36
+  ],
+  "range": 4.0
+ },
+ "towerC": {
+  "file": "assets/bldg/towerC.glb",
+  "width": 47.55,
+  "depth": 37.41,
+  "height": 159.66,
+  "bounds": [
+   -23.78,
+   23.78,
+   -18.71,
+   18.71
+  ],
+  "range": 4.0
+ },
+ "towerL": {
+  "file": "assets/bldg/towerL.glb",
+  "width": 45.63,
+  "depth": 45.63,
+  "height": 61.93,
+  "bounds": [
+   -22.82,
+   22.82,
+   -22.82,
+   22.82
   ],
   "range": 4.0
  }

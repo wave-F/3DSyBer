@@ -4,7 +4,7 @@ import { HALF_W } from './bridge.js';
 import { createBuildingKit } from './buildings.js';
 import { createSignKit } from './signs.js';
 import { MEGA } from './sky.js';
-import { modelFootprints, placeModelSigns, loadModelBuildings } from './modelBuildings.js';
+import { modelFootprints, placeModelSigns, loadModelBuildings, NEAR_Z } from './modelBuildings.js';
 
 const NEAR_STYLES = [['resi', 0.38], ['kitsch', 0.27], ['office', 0.25], ['corp', 0.1]];
 const MID_STYLES = [['office', 0.35], ['corp', 0.25], ['resi', 0.3], ['kitsch', 0.1]];
@@ -28,9 +28,10 @@ export function buildCity(scene) {
   const signs = createSignKit(scene, r);
   const screenLights = [];
 
-  // 模型楼占住的地块，程序楼让开
+  // 近景段（Blender 布局覆盖的沿桥范围）只用模型楼；其余地段程序楼避开模型楼占地
   const taken = modelFootprints();
-  const blocked = (x, z, w, d) => taken.some((f) => x + w / 2 > f.x0 && x - w / 2 < f.x1 && z + d / 2 > f.z0 && z - d / 2 < f.z1);
+  const blocked = (x, z, w, d) => (z > NEAR_Z[0] && z < NEAR_Z[1])
+    || taken.some((f) => x + w / 2 > f.x0 && x - w / 2 < f.x1 && z + d / 2 > f.z0 && z - d / 2 < f.z1);
   loadModelBuildings(scene);
 
   for (const side of [-1, 1]) {
