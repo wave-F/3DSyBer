@@ -11,16 +11,20 @@ import { film } from 'three/addons/tsl/display/FilmNode.js';
 import { chromaticAberration } from 'three/addons/tsl/display/ChromaticAberrationNode.js';
 import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
 import { buildBridge } from './bridge.js';
 import { buildCity } from './city.js';
 import { buildCrash } from './crash.js';
 import { buildRain } from './rain.js';
+import { buildCordon } from './cordon.js';
 import { createPlayer } from './player.js';
 import { buildSky, FOG_HEX } from './sky.js';
 import { clock, tick } from './investigation/clock.js';
 import { createInvestigation } from './investigation/state.js';
 
 const renderer = new THREE.WebGPURenderer();
+// Forward+ 分簇光照：每个像素只计算真正照到它的点光源（灯一盏不少，开销按覆盖范围算）
+renderer.lighting = new ClusteredLighting(64, 32, 24, 16);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -56,9 +60,10 @@ buildCity(scene);
 const crash = buildCrash(scene);
 const updateSky = buildSky(scene);
 const updateRain = buildRain(scene, camera);
+const updateCordon = buildCordon(scene);
 const updatePlayer = createPlayer(camera, document.body, document.getElementById('overlay'));
 const inv = createInvestigation(scene, camera, crash, updatePlayer.controls);
-if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; } // 开发时截图调机位用
+if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; window.__renderer = renderer; window.__scene = scene; } // 开发时截图调机位用
 
 // ---------- 后期 ----------
 const scenePass = pass(scene, camera);
@@ -136,6 +141,7 @@ renderer.setAnimationLoop(() => {
   updatePlayer(dt * inv.moveScale);
   crash.update(clock.dt, clock.elapsed);
   updateRain(clock.dt);
+  updateCordon(dt, camera.position);
   updateSky(clock.dt, clock.elapsed);
   inv.update(dt);
   tabletAmt.value = Math.min(1, inv.tablet.amount * 1.4);

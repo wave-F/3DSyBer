@@ -46,6 +46,7 @@ export function buildCity(scene) {
     }
   }
   kit.finish(scene);
+  signs.finish();
   buildFarCity(scene, r);
 
   // 离事故现场最近的几块大屏给桥面投下彩色光

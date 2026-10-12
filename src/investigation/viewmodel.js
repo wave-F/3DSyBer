@@ -1,7 +1,8 @@
 import * as THREE from 'three/webgpu';
-import { mrt, float, uv, color, smoothstep, sin, fract } from 'three/tsl';
+import { mrt, float, uv, color, smoothstep, sin, mx_noise_float, positionLocal } from 'three/tsl';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { uiTime } from './clock.js';
 
 // 第一人称右手 + 手持法医扫描仪
@@ -19,7 +20,7 @@ const glowMat = (hex, k = 1) => {
 // 相机空间中的几个持握姿态（握把位置 + 朝向）
 const POSE = {
   // 待机：随手垂握，枪口朝下、略向内侧、手腕外翻，不像端枪
-  idle: { pos: new THREE.Vector3(0.22, -0.235, -0.4), rot: new THREE.Euler(-0.42, 0.38, 0.42) },
+  idle: { pos: new THREE.Vector3(0.21, -0.215, -0.42), rot: new THREE.Euler(-0.36, 0.38, 0.4) },
   scan: { pos: new THREE.Vector3(0.11, -0.13, -0.46), rot: new THREE.Euler(0.1, 0.03, 0) },
   hidden: { pos: new THREE.Vector3(0.24, -0.55, -0.3), rot: new THREE.Euler(-0.9, 0.2, 0.3) },
 };
@@ -291,7 +292,8 @@ function buildDevice() {
 }
 
 // ---------- 手 ----------
-// 只保留右前臂 + 手 + 手指的三角面；以手腕为基准放到握把位置
+// 人偶（CC0）的右手，用手枪握持动作的第一帧摆出握姿；只保留手掌和手指，换成黑色皮手套材质
+// 前臂不用人偶的，改为代码生成的风衣袖子 + 手套袖口
 function loadHand(holder) {
   new GLTFLoader().load('/assets/mannequin.glb', (gltf) => {
     const model = gltf.scene;
@@ -301,8 +303,8 @@ function loadHand(holder) {
     mixer.update(0);
     model.updateMatrixWorld(true);
 
-    const keep = /^DEF-(forearm|hand|f_|thumb).*R$/;
-    const skin = new THREE.MeshStandardMaterial({ color: 0xaab1b8, roughness: 0.45, metalness: 0.05 });
+    const keep = /^DEF-(hand|f_|thumb).*R$/;
+    const glove = gloveMaterial();
     model.traverse((o) => {
       if (!o.isSkinnedMesh) return;
       const bones = o.skeleton.bones;
@@ -317,18 +319,85 @@ function loadHand(holder) {
       const tris = [];
       for (let i = 0; i < idx.length; i += 3) if (ok[idx[i]] && ok[idx[i + 1]] && ok[idx[i + 2]]) tris.push(idx[i], idx[i + 1], idx[i + 2]);
       o.geometry.setIndex(tris);
-      o.material = skin;
+      o.material = glove;
       o.frustumCulled = false;
     });
 
-    // 人偶面朝 +Z，转 180° 让手臂指向相机前方（-Z）；手腕放到握把后下方
+    // 人偶面朝 +Z，转 180° 让手指向相机前方（-Z）；手腕放到握把后下方
     const wrap = new THREE.Group();
     wrap.rotation.y = Math.PI;
     wrap.add(model);
     holder.add(wrap);
     wrap.updateMatrixWorld(true);
-    const wrist = model.getObjectByName('DEF-handR').getWorldPosition(new THREE.Vector3());
-    holder.worldToLocal(wrist);
-    wrap.position.sub(wrist).add(new THREE.Vector3(0.004, -0.035, 0.045));
+    const handBone = model.getObjectByName('DEF-handR');
+    const wrist = holder.worldToLocal(handBone.getWorldPosition(new THREE.Vector3()));
+    const elbow = holder.worldToLocal(model.getObjectByName('DEF-forearmR').getWorldPosition(new THREE.Vector3()));
+    const shift = new THREE.Vector3(0.004, -0.035, 0.045).sub(wrist);
+    wrap.position.add(shift);
+    wrist.add(shift);
+    elbow.add(shift);
+
+    // 袖子沿前臂方向：从手腕往肘部延伸并伸出画面
+    const axis = elbow.clone().sub(wrist).normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
+    // 袖口用哑光皮革，避免清漆在大曲面上反光成金属感
+    const cuff = new THREE.Mesh(gloveCuffGeometry(), new THREE.MeshStandardMaterial({ color: 0x0e0f11, roughness: 0.7, metalness: 0, side: THREE.DoubleSide }));
+    cuff.position.copy(wrist).addScaledVector(axis, 0.01);
+    cuff.quaternion.copy(q);
+    const sleeve = new THREE.Mesh(sleeveGeometry(), sleeveMaterial());
+    sleeve.position.copy(wrist).addScaledVector(axis, 0.055);
+    sleeve.quaternion.copy(q);
+    holder.add(cuff, sleeve);
+
+    // 手背上一枚很小的指示灯
+    const led = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.003, 0.004), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x52d8ff, emissiveIntensity: 2 }));
+    led.position.set(0, 0.045, 0.024);
+    handBone.add(led);
   });
+}
+
+// 黑色皮手套：低饱和深色、细密皮纹（粗糙度噪声）、清漆层带出湿润的霓虹高光
+function gloveMaterial() {
+  const m = new THREE.MeshPhysicalNodeMaterial({ color: 0x121214, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.35, sheen: 0.4, sheenColor: new THREE.Color(0x30343a), sheenRoughness: 0.6 });
+  const grain = mx_noise_float(positionLocal.mul(900)).mul(0.5).add(0.5);
+  m.roughnessNode = grain.mul(0.25).add(0.42);
+  return m;
+}
+
+// 深色风衣面料：哑光、带一点绒面光泽
+function sleeveMaterial() {
+  return new THREE.MeshPhysicalMaterial({ color: 0x15171a, roughness: 0.95, metalness: 0, sheen: 0.35, sheenColor: new THREE.Color(0x2a2e34), sheenRoughness: 0.8, side: THREE.DoubleSide });
+}
+
+// 袖子：沿 +Y 延伸的锥形筒，袖口外翻一圈，表面有随机褶皱
+function sleeveGeometry() {
+  const L = 0.42;
+  const geo = new THREE.CylinderGeometry(0.052, 0.066, L, 28, 24, true);
+  geo.translate(0, L / 2, 0);
+  const p = geo.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const a = Math.atan2(v.z, v.x);
+    const y = v.y;
+    let k = 1 + Math.sin(a * 3 + y * 28) * 0.05 * Math.min(1, y / 0.08) + Math.sin(a * 7 - y * 40) * 0.025;
+    k += Math.exp(-((y - 0.06) ** 2) / 0.0008) * 0.06;
+    if (y < 0.012) k += 0.06;
+    v.x *= k; v.z *= k;
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  geo.computeVertexNormals();
+  const inner = geo.clone();
+  inner.scale(0.96, 1, 0.96);
+  const idx = inner.index.array;
+  for (let i = 0; i < idx.length; i += 3) { const t = idx[i]; idx[i] = idx[i + 2]; idx[i + 2] = t; }
+  inner.computeVertexNormals();
+  return mergeGeometries([geo, inner]);
+}
+
+// 手套袖口：贴着手腕的短筒，比袖子细
+function gloveCuffGeometry() {
+  const geo = new THREE.CylinderGeometry(0.036, 0.043, 0.075, 24, 1, true);
+  geo.translate(0, 0.0375, 0);
+  return geo;
 }
