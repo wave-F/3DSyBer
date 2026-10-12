@@ -19,7 +19,6 @@ import { createPlayer } from './player.js';
 import { buildSky, FOG_HEX } from './sky.js';
 import { clock, tick } from './investigation/clock.js';
 import { createInvestigation } from './investigation/state.js';
-import { onLightMode } from './lightMode.js';
 
 const renderer = new THREE.WebGPURenderer();
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
@@ -101,13 +100,8 @@ hdr = mix(hdr, blurred.rgb.mul(0.16), tabletAmt);
 hdr = hdr.mul(float(1).sub(uiMask)).add(uiPass.getTextureNode('output').rgb);
 
 // 2. 辉光
-const bloomPass = bloom(hdr, 0.8, 0.35, 0.85);
-hdr = hdr.add(bloomPass);
-// 降光版：阈值 0.85 → 1.3、强度 0.8 → 0.5，只让真正的光源发光晕
-onLightMode((low) => {
-  bloomPass.threshold.value = low ? 1.3 : 0.85;
-  bloomPass.strength.value = low ? 0.5 : 0.8;
-});
+// 阈值 1.3：只让真正的光源发光晕，被照亮的地面和高光不再泛白
+hdr = hdr.add(bloom(hdr, 0.5, 0.35, 1.3));
 
 // 2.5 分析模式：灰蓝去饱和 + 世界网格 + 扫描波
 hdr = inv.fx.apply(hdr, sceneDepth, scenePass.getTextureNode('keep'), uiMask);

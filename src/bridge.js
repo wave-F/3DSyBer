@@ -4,7 +4,6 @@ import {
   texture, uv, vec2, vec3, float, mix, smoothstep, max, normalMap,
   triplanarTexture, positionWorld, normalWorld, normalView, positionViewDirection, color,
 } from 'three/tsl';
-import { lowLight } from './lightMode.js';
 import { laneTexture, puddleTexture, loadTexture, highwaySignTexture, tickerTexture } from './textures.js';
 
 export const DECK_Y = 20;     // 桥面高度
@@ -164,8 +163,8 @@ function roadMaterial() {
   const base = mix(texture(diff, aUV).rgb.mul(0.5), lane.rgb.mul(0.7), lane.a);
   mat.colorNode = base.mul(mix(float(0.5), float(0.3), puddle));
   mat.roughnessNode = max(mix(texture(rough, aUV).r.mul(0.35), float(0.04), puddle), lane.a.mul(0.3));
-  // 降光版：0.55/0.9 → 0.15/0.5，路面不再像镜子一样把所有霓虹再反射一遍
-  mat.metalnessNode = mix(float(0.55), float(0.9), puddle).sub(lowLight.mul(0.4)).mul(lane.a.mul(-0.5).add(1));
+  // 金属度压低（原 0.55/0.9），避免路面像镜子一样把所有霓虹再反射一遍
+  mat.metalnessNode = mix(float(0.15), float(0.5), puddle).mul(lane.a.mul(-0.5).add(1));
   mat.envMapIntensity = 0.3;
   mat.normalNode = normalMap(texture(nor, aUV), vec2(puddle.oneMinus().mul(0.8).add(0.05)));
   return mat;
