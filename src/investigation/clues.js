@@ -59,6 +59,33 @@ export const EVENTS = [
   { t: 7.0, label: '有人返回', fact: '约 1 分钟后，一名人员返回现场并打开双闪，随后向北离开' },
 ];
 
+// 结案报告（平板「结论」页）：玩家根据线索填写，盖章结案
+// type：text 打字（确定信息）、radio 勾选、choice 下拉选择（需要描述的信息）
+// 剧情未定，以下选项均为占位，后续随剧情修改
+export const REPORT = [
+  {
+    title: '基础信息',
+    fields: [
+      { id: 'name', label: '姓名', type: 'text', max: 10 },
+      { id: 'gender', label: '性别', type: 'radio', options: ['男', '女'] },
+      { id: 'age', label: '年龄', type: 'text', max: 3 },
+      { id: 'idType', label: '身份证明', type: 'radio', options: ['身份证', '护照', '驾驶证', '无'] },
+      { id: 'idNo', label: '证件号码', type: 'text', max: 18 },
+    ],
+  },
+  {
+    title: '事件',
+    fields: [
+      { id: 'date', label: '日期', type: 'text', max: 16 },
+      { id: 'place', label: '地点', type: 'text', max: 14 },
+      { id: 'category', label: '事故类别', type: 'radio', options: ['交通事故', '刑事案件', '意外', '自杀'] },
+      { id: 'cause', label: '引起原因', type: 'choice', options: ['超速行驶', '路面湿滑', '车辆故障', '被他车刮擦后失控', '驾驶员疲劳驾驶'] },
+      { id: 'casualty', label: '伤亡情况', type: 'choice', options: ['1 人死亡', '1 人重伤', '1 死 1 伤', '无人员伤亡'] },
+      { id: 'injury', label: '受伤位置', type: 'choice', options: ['头部', '颈椎', '胸腔', '四肢'] },
+    ],
+  },
+];
+
 export const CONCLUSION = {
   title: '事故重建完成',
   verdict: '非意外事故 · 肇事逃逸',

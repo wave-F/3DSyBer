@@ -23,13 +23,27 @@ export function hologramMaterial(hex, strength = 1) {
   return m;
 }
 
+// 只写深度的遮挡材质：先画一遍模型外壳的深度，全息层只显示最外层表面
+// 放在透明队列（transparent），保证在不透明场景之后绘制，不会把背后的场景挖成黑洞
+const depthOnly = new THREE.MeshBasicNodeMaterial({ colorWrite: false, depthWrite: true, transparent: true, side: THREE.DoubleSide });
+depthOnly.fog = false;
+
 // 把任意模型克隆成全息版本（几何共享，只替换材质）
-export function hologramize(source, hex, strength = 1) {
+// shell：只显示外壳。精细模型（车内饰、引擎、底盘）层层叠加时轮廓线过多、加法混合过曝，开启后被外壳挡住的部分不再显示
+export function hologramize(source, hex, strength = 1, { shell = false } = {}) {
   const holo = source.clone(true);
   const mat = hologramMaterial(hex, strength);
   holo.traverse((o) => {
-    if (o.isMesh) { o.material = mat; o.castShadow = false; }
+    if (o.isMesh) { o.material = mat; o.castShadow = false; if (shell) o.renderOrder = 2; }
     if (o.isLight) o.visible = false;
   });
-  return holo;
+  if (!shell) return holo;
+  const mask = source.clone(true);
+  mask.traverse((o) => {
+    if (o.isMesh) { o.material = depthOnly; o.castShadow = false; o.renderOrder = 1; }
+    if (o.isLight) o.visible = false;
+  });
+  const g = new THREE.Group();
+  g.add(mask, holo);
+  return g;
 }

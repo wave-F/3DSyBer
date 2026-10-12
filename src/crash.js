@@ -93,11 +93,15 @@ function buildCar(onReady) {
     // 整辆车都是线索，分析模式下保留原色
     model.traverse((o) => { if (o.isMesh) markKeep(o.material); });
 
-    // 左前轮脱落，倒在车头左前方
+    // 左前轮脱落，平躺在车身左侧偏后（车左侧朝向护栏，再往前会出桥面悬空）
     const wheel = model.getObjectByName('Wheel_FL');
     group.attach(wheel);
-    wheel.position.set(2.1, 0.24, -1.75);
-    wheel.rotation.set(0, 0.6, Math.PI / 2 - 0.25); // 轮轴（本地 X）转向接近竖直，轮子侧躺
+    wheel.position.set(-1.9, 0, -1.9);
+    wheel.rotation.set(0, 0.6, Math.PI / 2); // 轮轴（本地 X）转向竖直，轮子平躺
+    // 按包围盒贴地，落在路面上
+    group.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(wheel);
+    wheel.position.y += DECK_Y + 0.01 - box.min.y;
     draco.dispose();
     onReady({ pristine, crashed: model });
   });

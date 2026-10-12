@@ -184,10 +184,9 @@ export function lightConeMaterial(hex) {
   return mat;
 }
 
-const railNeonR = new THREE.MeshBasicMaterial({ color: 0x20f0ff });
-railNeonR.color.multiplyScalar(5);
-const railNeonL = new THREE.MeshBasicMaterial({ color: 0xff2a9a });
-railNeonL.color.multiplyScalar(5);
+// 护栏灯带两侧统一青色；原 ×5（亮度≈3.5）过曝，现 ×0.9（亮度≈0.63），低于辉光阈值 1.3，只是一根不发光晕的细亮线
+const railNeon = new THREE.MeshBasicMaterial({ color: 0x20f0ff });
+railNeon.color.multiplyScalar(0.9);
 
 function addRailing(group, s, z0, z1) {
   const len = z1 - z0;
@@ -204,8 +203,8 @@ function addRailing(group, s, z0, z1) {
     group.add(rail);
   }
 
-  // 护栏顶部霓虹灯带（左品红、右青）
-  const neon = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, len), s > 0 ? railNeonR : railNeonL);
+  // 护栏顶部霓虹灯带（两侧同色）
+  const neon = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, len), railNeon);
   neon.position.set(x, DECK_Y + 1.22, cz);
   group.add(neon);
 

@@ -3,7 +3,7 @@
 const CSS = `
 .inv { position: fixed; pointer-events: none; font-family: "PingFang SC", "Helvetica Neue", sans-serif; color: #dff2ff; user-select: none; }
 .inv-mono { font-family: "SF Mono", Menlo, monospace; letter-spacing: 0.04em; }
-#inv-hud { left: 32px; top: 28px; opacity: 0; transition: opacity .4s; }
+#inv-hud { left: 32px; top: 25%; transform: translateY(-6px) scale(1.5); transform-origin: left bottom; opacity: 0; transition: opacity .4s; }
 #inv-hud.on { opacity: 1; }
 #inv-hud .mode { font-size: 13px; letter-spacing: .32em; color: #6cc8ff; display: flex; align-items: center; gap: 10px; }
 #inv-hud .mode::before { content: ''; width: 8px; height: 8px; border: 1px solid #6cc8ff; transform: rotate(45deg); }
@@ -11,12 +11,12 @@ const CSS = `
 #inv-hud .count small { font-size: 12px; opacity: .6; margin-left: 8px; letter-spacing: .2em; }
 #inv-hud .bar { margin-top: 8px; width: 220px; height: 2px; background: rgba(108,200,255,.2); }
 #inv-hud .bar i { display: block; height: 100%; width: 0; background: #6cc8ff; transition: width .4s; }
-#inv-solved { left: 32px; top: 28px; font-size: 12px; letter-spacing: .3em; color: #ffb35c; opacity: 0; transition: opacity .4s; }
+#inv-solved { left: 32px; top: 25%; transform: translateY(-6px) scale(1.5); transform-origin: left bottom; font-size: 12px; letter-spacing: .3em; color: #ffb35c; opacity: 0; transition: opacity .4s; }
 #inv-solved.on { opacity: .9; }
 #inv-hint { left: 32px; bottom: 28px; font-size: 12px; opacity: .55; letter-spacing: .08em; line-height: 1.9; }
 #inv-hint b { display: inline-block; min-width: 18px; padding: 0 5px; margin-right: 6px; border: 1px solid rgba(223,242,255,.5); text-align: center; font-weight: 400; }
 #inv-markers { inset: 0; }
-.inv-mk { position: absolute; transform: translate(-50%, -50%); transition: opacity .3s; }
+.inv-mk { position: absolute; transform: translate(-50%, -50%) scale(1.5); transition: opacity .3s; }
 .inv-mk .d { width: 16px; height: 16px; border: 1.5px solid #ffcf4a; transform: rotate(45deg); background: rgba(255,207,74,.12); box-shadow: 0 0 10px rgba(255,207,74,.5); }
 .inv-mk .n { position: absolute; left: 22px; top: -3px; font-size: 11px; color: #ffcf4a; white-space: nowrap; letter-spacing: .1em; }
 .inv-mk.done .d { border-color: #e8f6ff; background: rgba(232,246,255,.15); box-shadow: none; }

@@ -8,6 +8,7 @@ import { EVENTS } from './clues.js';
 
 const BLUE = 0x3fb8ff;
 const ORANGE = 0xff8a1a;
+const CAR_HOLO = 0.55; // 车辆全息亮度
 const UP = new THREE.Vector3(0, 1, 0);
 
 // 关键帧轨迹：位置用 Catmull-Rom 平滑插值，朝向线性插值
@@ -153,9 +154,10 @@ export function createRecon(scene, crash) {
   const hazards = [];
 
   crash.onCarReady(({ pristine, crashed }) => {
-    carA = wrap(hologramize(pristine, BLUE));
-    carAc = wrap(hologramize(crashed, BLUE));
-    carB = wrap(hologramize(pristine, ORANGE));
+    // 车辆只显示外壳（去掉内饰、底盘的轮廓线），亮度压低避免过曝
+    carA = wrap(hologramize(pristine, BLUE, CAR_HOLO, { shell: true }));
+    carAc = wrap(hologramize(crashed, BLUE, CAR_HOLO, { shell: true }));
+    carB = wrap(hologramize(pristine, ORANGE, CAR_HOLO, { shell: true }));
     for (const z of [-0.95, 0.95]) {
       const h = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.25), hazardMat);
       h.position.set(-2.05, 0.65, z);

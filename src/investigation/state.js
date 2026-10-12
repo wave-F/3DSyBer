@@ -30,13 +30,20 @@ export function createInvestigation(scene, camera, crash, controls) {
   const ui = createUI();
   preloadClueImages(CLUES);
   const recon = createRecon(scene, crash);
-  const tablet = createTablet(camera);
+  const tablet = createTablet(camera, {
+    onStamp: () => ui.toast('案件已结案', '调查报告已提交归档', 4000),
+  });
   const vm = createViewmodel(tablet.uiScene, camera);
-  const baseSpeed = controls.pointerSpeed;
-  function setTablet(on) {
+  // 打开平板：释放鼠标用来点击界面，视角固定；收起：重新锁定鼠标
+  // relock = false 时（Esc 收起）不重新锁定，回到暂停层
+  function setTablet(on, relock = true) {
     tablet.toggle(on);
-    controls.pointerSpeed = on ? baseSpeed * 0.15 : baseSpeed;
-    if (on) { holdKey = false; vm.analyze(null, 0); ui.setPrompt(null); ui.hidePanel(); syncTablet(); }
+    if (on) {
+      holdKey = false; vm.analyze(null, 0); ui.setPrompt(null); ui.hidePanel(); syncTablet();
+      controls.keepOverlayHidden = true;
+      controls.unlock();
+    } else if (relock) controls.lock();
+    else controls.showPause();
   }
   // 把当前调查进度同步给平板
   function syncTablet() {
@@ -65,6 +72,26 @@ export function createInvestigation(scene, camera, crash, controls) {
   setMode('explore');
 
   const locked = () => document.pointerLockElement != null;
+
+  // 测试按钮：跳过探索，标记全部线索已分析并直接进入事件重建
+  // 只在鼠标未锁定时显示（暂停画面、平板打开时）
+  const testBtn = document.createElement('button');
+  testBtn.textContent = '测试 · 直接重建';
+  testBtn.style.cssText = 'position:fixed;right:24px;top:20px;transform:scale(1.5);transform-origin:right top;z-index:10;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#ffcf6a;background:rgba(5,12,20,.7);border:1px solid rgba(255,207,106,.6);cursor:pointer;';
+  document.body.appendChild(testBtn);
+  const syncTestBtn = () => { testBtn.style.display = locked() || mode === 'end' ? 'none' : ''; };
+  document.addEventListener('pointerlockchange', syncTestBtn);
+  testBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clues.forEach((c) => { c.done = true; });
+    ui.setHint(true);
+    if (tablet.open) tablet.toggle(false);
+    ui.hideConclusion();
+    setMode('recon');
+    controls.lock();
+    testBtn.blur();
+  });
+  syncTestBtn();
   const keyDone = () => clues.filter((c) => c.key && c.done).length;
   const reconReady = () => keyDone() >= keyTotal;
 
@@ -86,10 +113,14 @@ export function createInvestigation(scene, camera, crash, controls) {
 
   addEventListener('keydown', (e) => {
     if (e.code === 'Tab') e.preventDefault();
-    if (!locked() && mode !== 'end') return;
+    // 平板打开时鼠标已释放，按键照常处理
+    if (!locked() && mode !== 'end' && !tablet.open) return;
     // 平板只在探索时可用；打开期间按键都交给平板
-    if (e.code === 'Tab' && mode === 'explore') { setTablet(!tablet.open); return; }
-    if (tablet.open) { tablet.nav(e.code); return; }
+    if (e.code === 'Tab' && mode === 'explore') { if (!e.repeat) setTablet(!tablet.open); return; }
+    if (tablet.open) {
+      if (!tablet.nav(e.code) && e.code === 'Escape') setTablet(false, false);
+      return;
+    }
     if (e.code === 'KeyQ') {
       if (mode === 'explore') scan();
       else if (mode === 'recon') setMode('explore');

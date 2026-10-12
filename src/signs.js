@@ -30,8 +30,8 @@ export function createSignKit(scene, r) {
   const vBox = V_WORDS.slice(0, 10).map((w, i) => { const [b, t] = BOX_COLORS[i % BOX_COLORS.length]; return signMat(lightboxTexture(w, b, t, true), 1.2); });
   const edgeMats = NEON_HEX.map((h) => { const m = new THREE.MeshBasicMaterial({ color: h }); m.color.multiplyScalar(4); return m; });
 
-  const adsH = ADS_H.map(([f, a]) => ({ tex: loadTexture(`gen/${f}`), aspect: a }));
-  const adsV = ADS_V.map(([f, a]) => ({ tex: loadTexture(`gen/${f}`), aspect: a }));
+  const adsH = ADS_H.map(([f, a]) => ({ tex: loadTexture(`gen/${f}`), aspect: a, file: f }));
+  const adsV = ADS_V.map(([f, a]) => ({ tex: loadTexture(`gen/${f}`), aspect: a, file: f }));
 
   const box = new THREE.BoxGeometry(1, 1, 1);
   const plane = new THREE.PlaneGeometry(1, 1);
@@ -47,13 +47,16 @@ export function createSignKit(scene, r) {
     return mesh;
   }
 
+  // 指定颜色时只从该色的霓虹字里挑（模型楼的招牌位颜色要和烘焙进墙面的补光一致）
+  const byHex = (mats, offset, hex) => mats.filter((_, i) => NEON_HEX[(i + offset) % NEON_HEX.length] === hex);
+
   // 竖向挑牌：垂直于立面伸出，两面发光，侧边是霓虹色灯管
-  function blade(face, u, y, w, h) {
+  function blade(face, u, y, w, h, hex) {
     const vertical = r() < 0.7 ? (r() < 0.65 ? vNeon : vBox) : null;
-    const mat = vertical ? pick(vertical) : pick(vNeon);
+    const mat = hex ? pick(byHex(vNeon, 0, hex)) : vertical ? pick(vertical) : pick(vNeon);
     const img = mat.map.image;
     const hh = Math.min(h, w * (img.height / img.width) * 1.0);
-    const edge = pick(edgeMats);
+    const edge = hex ? edgeMats[NEON_HEX.indexOf(hex)] : pick(edgeMats);
     const mesh = new THREE.Mesh(box, [edge, edge, edge, edge, mat, mat]);
     mesh.scale.set(w, hh, 0.35);
     const z = new THREE.Vector3().crossVectors(face.n, UP);
@@ -66,8 +69,9 @@ export function createSignKit(scene, r) {
   }
 
   // 平贴招牌：底板 + 发光面 + 外框灯管
-  function flat(face, u, y, maxW, maxH, vertical) {
-    const mat = vertical ? pick(r() < 0.5 ? vNeon : vBox) : pick(hNeon);
+  function flat(face, u, y, maxW, maxH, vertical, hex) {
+    const mat = hex ? pick(vertical ? byHex(vNeon, 0, hex) : byHex(hNeon, 2, hex))
+      : vertical ? pick(r() < 0.5 ? vNeon : vBox) : pick(hNeon);
     const img = mat.map.image;
     let w = maxW, h = w * img.height / img.width;
     if (h > maxH) { h = maxH; w = h * img.width / img.height; }
@@ -98,9 +102,9 @@ export function createSignKit(scene, r) {
     return m;
   }
 
-  function screen(face, u, y, w, h) {
+  function screen(face, u, y, w, h, adFile) {
     const vertical = h > w;
-    const ad = pick(vertical ? adsV : adsH);
+    const ad = adFile ? [...adsH, ...adsV].find((a) => a.file === adFile) : pick(vertical ? adsV : adsH);
     const panel = new THREE.Mesh(plane, screenMaterial(ad, w / h));
     panel.scale.set(w, h, 1);
     place(panel, face, u, y, face.dep + 0.32, [face.t, UP, face.n]);
