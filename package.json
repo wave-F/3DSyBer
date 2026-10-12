@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "audio:create-test": "node scripts/generate-test-tone.mjs && node scripts/fmod.mjs create-test",
+    "audio:build": "node scripts/fmod.mjs build"
   },
   "dependencies": {
     "three": "^0.186.1"

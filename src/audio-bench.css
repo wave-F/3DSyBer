@@ -1,0 +1,57 @@
+:root { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif; color: #dce8ed; background: #0b1117; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(ellipse at 85% 0%, #14303a66, transparent 55%); min-height: 100vh; }
+.bench { width: min(960px, calc(100% - 48px)); margin: 0 auto; padding: 64px 0 32px; }
+header { position: relative; margin-bottom: 36px; }
+.eyebrow, .section-heading > span, footer, dt, .number { font-family: 'SFMono-Regular', Consolas, monospace; letter-spacing: 0.12em; }
+.eyebrow { color: #68dacc; font-size: 12px; margin: 0 0 24px; }
+.back { float: right; color: #93a9b6; text-decoration: none; font-size: 13px; }
+h1 { font-size: 36px; font-weight: 550; margin: 0; letter-spacing: 0.04em; }
+h1 span { display: block; color: #546f7f; font: 12px monospace; letter-spacing: 0.24em; margin-top: 12px; }
+.intro { color: #8ea3b0; margin-top: 24px; font-size: 14px; }
+.transport, .project { padding: 24px; border: 1px solid #263843; background: #111c24bb; border-radius: 12px; }
+.status-row, .controls, .volume, .section-heading { display: flex; align-items: center; gap: 14px; }
+.status-row { min-height: 28px; margin-bottom: 22px; }
+#status { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.indicator { width: 8px; height: 8px; border-radius: 50%; background: #ad9b63; flex-shrink: 0; }
+.indicator.ready { background: #68dacc; box-shadow: 0 0 12px #68dacc44; }
+.indicator.error { background: #fa8282; }
+button { font: inherit; font-size: 14px; padding: 11px 19px; border-radius: 6px; border: 1px solid #35505e; color: #bed0db; background: #1a2934; cursor: pointer; transition: background 0.15s; }
+button:hover { background: #293e4c; }
+button.primary { background: #73dccc; color: #102d2d; border-color: #73dccc; font-weight: 600; }
+button.primary:hover { background: #a1f1e4; }
+button:disabled { cursor: default; opacity: 0.4; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid #d5fff8; outline-offset: 4px; }
+.volume { margin-left: auto; color: #91a8b6; font-size: 13px; }
+input[type='range'] { accent-color: #73dccc; width: 125px; }
+output { width: 36px; font-variant-numeric: tabular-nums; }
+.hint { color: #708995; font-size: 12px; line-height: 1.8; margin: 18px 0 0; }
+.section-heading { justify-content: space-between; margin: 36px 0 16px; }
+h2 { font-size: 15px; font-weight: 500; margin: 0; }
+.section-heading > span { font-size: 11px; color: #6b8796; }
+.event { display: grid; grid-template-columns: 40px 1fr auto; gap: 18px; align-items: center; padding: 28px 24px; border: 1px solid #2b4653; border-radius: 12px; background: linear-gradient(120deg, #162833, #111b23); }
+.number { font-size: 20px; color: #4e737f; align-self: start; padding-top: 3px; }
+h3 { margin: 0 0 10px; font-size: 19px; font-weight: 500; }
+code { font-family: 'SFMono-Regular', Consolas, monospace; color: #73dccc; font-size: 12px; overflow-wrap: anywhere; }
+.event p { font-size: 13px; color: #829dab; margin: 12px 0; }
+.tag { display: inline-block; border: 1px solid #304b58; padding: 4px 8px; border-radius: 4px; color: #8da8b7; font: 11px monospace; }
+.events { display: grid; gap: 14px; }
+.play { min-width: 100px; }
+.project { margin-top: 32px; background: #10192088; border-color: #1e303b; }
+dl { display: grid; grid-template-columns: 155px 1fr; gap: 14px; margin: 24px 0 0; }
+dt { font-size: 10px; color: #617e8f; padding-top: 3px; }
+dd { margin: 0; font: 12px/1.6 monospace; color: #9bb0bb; overflow-wrap: anywhere; }
+footer { display: flex; justify-content: space-between; gap: 20px; color: #48616f; font-size: 10px; margin-top: 32px; }
+@media (max-width: 640px) {
+  .bench { width: calc(100% - 32px); padding-top: 32px; }
+  h1 { font-size: 28px; }
+  .controls { flex-wrap: wrap; }
+  .volume { margin: 8px 0 0; width: 100%; }
+  .volume input { flex: 1; }
+  .event { grid-template-columns: 1fr auto; gap: 12px; padding: 22px 18px; }
+  .number { display: none; }
+  .play { min-width: 80px; padding: 10px; }
+  dl { grid-template-columns: 1fr; gap: 8px; }
+  dd { margin-bottom: 8px; }
+  footer { flex-direction: column; }
+}

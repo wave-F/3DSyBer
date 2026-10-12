@@ -4,3 +4,7 @@ dist/
 *.local
 .env
 .env.*
+Fmod/**/.cache/
+Fmod/**/.user/
+Fmod/**/.unsaved/
+Fmod/**/Build/

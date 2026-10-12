@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>3DSyBer · 声音实验室</title>
+  </head>
+  <body>
+    <main class="bench">
+      <header>
+        <p class="eyebrow">3DSYBER / FMOD STUDIO</p>
+        <a class="back" href="./">返回游戏 ↗</a>
+        <h1>声音实验室<span>AUDIO LAB / 001</span></h1>
+        <p class="intro">独立试听 · 从 Studio 工程到浏览器的声音工作台</p>
+      </header>
+      <section class="transport" aria-label="播放控制">
+        <div class="status-row"><span id="indicator" class="indicator"></span><p id="status" role="status" aria-live="polite">正在预载 FMOD…</p></div>
+        <div class="controls">
+          <button id="initialize" class="primary" type="button">启用音频</button>
+          <button id="stop" type="button" disabled>停止全部</button>
+          <label class="volume">主音量 <input id="volume" type="range" min="0" max="1" step="0.01" value="0.65" /><output id="volume-value" for="volume">65%</output></label>
+        </div>
+        <p class="hint">首次点击启用音频；页面不会自动播放。切换到后台会停止试听。</p>
+      </section>
+      <section aria-labelledby="events-heading">
+        <div class="section-heading"><h2 id="events-heading">事件预览</h2><span id="event-count"></span></div>
+        <div id="events" class="events"></div>
+      </section>
+      <section class="project" aria-labelledby="project-heading">
+        <h2 id="project-heading">工程与 Bank</h2>
+        <dl><dt>STUDIO PROJECT</dt><dd>Fmod/3DSyBer/3DSyBer.fspro</dd><dt>LOADED BANKS</dt><dd id="banks"></dd><dt>BUILD & SYNC</dt><dd><code>npm run audio:build</code></dd></dl>
+        <p class="hint">在 Studio 中保存修改，重新导出后刷新本页，即可试听最新版本。</p>
+      </section>
+      <footer><span>FMOD STUDIO → BANK → WASM</span><span>3DSyBer · Audio workspace</span></footer>
+    </main>
+    <script type="module" src="/src/audio-bench.js"></script>
+  </body>
+</html>
