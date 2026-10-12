@@ -4,6 +4,7 @@ import {
   texture, uv, vec2, vec3, float, mix, smoothstep, max, normalMap,
   triplanarTexture, positionWorld, normalWorld, normalView, positionViewDirection, color,
 } from 'three/tsl';
+import { mergeStatic } from './merge.js';
 import { laneTexture, puddleTexture, loadTexture, highwaySignTexture, tickerTexture } from './textures.js';
 
 export const DECK_Y = 20;     // 桥面高度
@@ -89,6 +90,7 @@ export function buildBridge(scene) {
   addGantry(group, -48, false, ['湾岸線', 'BAYSHORE  ROUTE', 'B7'], ['出口 新宿', 'EXIT  SHINJUKU', '2km'], '前方事故 减速慢行  ACCIDENT AHEAD  SLOW DOWN  雨天路滑  RAIN  ', '#ffb020');
   addGantry(group, 70, true, ['夜城中心', 'CITY  CENTER', 'C1'], ['港区', 'HARBOR', '5km'], '欢迎来到夜城  WELCOME TO NIGHT CITY  限速 80  SPEED LIMIT 80  ', '#ff3030');
 
+  mergeStatic(group);
   scene.add(group);
 }
 

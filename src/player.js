@@ -1,6 +1,7 @@
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { DECK_Y, HALF_W, HALF_L } from './bridge.js';
+import { DECK_Y, HALF_W } from './bridge.js';
 import { carCollider } from './crash.js';
+import { CORDON, CORDON_MARGIN } from './cordon.js';
 
 const EYE = 1.7;
 const RADIUS = 0.35;
@@ -33,7 +34,8 @@ export function createPlayer(camera, domElement, overlay) {
     // 限制在桥面护栏以内
     const limit = HALF_W - 0.4 - RADIUS;
     p.x = Math.min(limit, Math.max(-limit, p.x));
-    p.z = Math.min(HALF_L - 1, Math.max(-HALF_L + 1, p.z));
+    // 前后限制在两道警戒线之间
+    p.z = Math.min(CORDON.z1 - CORDON_MARGIN, Math.max(CORDON.z0 + CORDON_MARGIN, p.z));
     p.y = DECK_Y + EYE;
     pushOutOfCar(p);
   }

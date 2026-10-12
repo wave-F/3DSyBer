@@ -118,16 +118,6 @@ function buildCar(onReady) {
   );
   group.add(beamCone);
 
-  // 尾灯 + 双闪（模型本身没有红色尾灯材质，补两条发光灯带）
-  const tailMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xff1030, emissiveIntensity: 4 });
-  for (const z of [-0.62, 0.62]) {
-    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.5), tailMat);
-    tail.position.set(-2.03, 0.62, z);
-    const hz = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.14), hazardMat);
-    hz.position.set(-2.0, 0.62, z * 1.55);
-    group.add(tail, hz);
-  }
-
   return { group, hazardMat };
 }
 

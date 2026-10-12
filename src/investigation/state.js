@@ -98,6 +98,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     if (e.code === 'KeyE') {
       holdKey = true;
       if (mode === 'recon') tryRecord();
+      else if (mode === 'explore' && !e.repeat && aimed && aimed.done) ui.showClue(aimed, clues.indexOf(aimed));
     }
     if (e.code === 'KeyR' && mode === 'explore' && reconReady()) setMode('recon');
     if (e.code === 'Space' && mode === 'recon') {
@@ -193,7 +194,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     if (dbgAim >= 0) vm.analyze(clues[dbgAim].p, 0.6);
 
     if (aimed && !aimed.done) ui.setPrompt(`按住 E 分析：${aimed.name}`);
-    else if (aimed && aimed.done) ui.setPrompt(`已分析：${aimed.name}`);
+    else if (aimed && aimed.done) ui.setPrompt(`按 E 查看：${aimed.name}`);
     else if (reconReady()) ui.setPrompt('线索充足 · 按 R 开始事件重建', true);
     else ui.setPrompt(null);
 

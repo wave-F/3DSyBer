@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { gameTime } from './investigation/clock.js';
 import { texture, uv, vec2, float, sin, fract, floor, hash, step } from 'three/tsl';
 import { neonSignTexture, lightboxTexture, loadTexture } from './textures.js';
+import { mergeStatic } from './merge.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -14,6 +15,8 @@ const ADS_V = [['ad_idol.jpg', 1], ['ad_arm.jpg', 1]];
 
 export function createSignKit(scene, r) {
   const pick = (a) => a[Math.floor(r() * a.length)];
+  const group = new THREE.Group(); // 所有招牌先放这里，finish() 时按材质合批
+  scene.add(group);
   const signMat = (tex, k = 1.8) => {
     const m = new THREE.MeshBasicMaterial({ map: tex });
     m.color.setScalar(k);
@@ -40,7 +43,7 @@ export function createSignKit(scene, r) {
     _p.y = y;
     _m.makeBasis(...basis).setPosition(_p);
     mesh.applyMatrix4(_m);
-    scene.add(mesh);
+    group.add(mesh);
     return mesh;
   }
 
@@ -129,5 +132,7 @@ export function createSignKit(scene, r) {
     }
   }
 
-  return { blade, flat, screen, rooftop, neonHex: NEON_HEX };
+  const finish = () => mergeStatic(group);
+
+  return { blade, flat, screen, rooftop, finish, neonHex: NEON_HEX };
 }
