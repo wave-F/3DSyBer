@@ -1,10 +1,11 @@
 import * as THREE from 'three/webgpu';
 import { gameTime } from './investigation/clock.js';
 import {
-  texture, uv, vec2, vec3, float, mix, smoothstep, max, normalMap,
+  texture, uv, vec2, vec3, float, mix, smoothstep, max, normalMap, uniform,
   triplanarTexture, positionWorld, normalWorld, normalView, positionViewDirection, color,
 } from 'three/tsl';
 import { mergeStatic } from './merge.js';
+import { addLightGroup } from './debugLights.js';
 import { laneTexture, puddleTexture, loadTexture, highwaySignTexture, tickerTexture } from './textures.js';
 
 export const DECK_Y = 20;     // 桥面高度
@@ -61,10 +62,9 @@ export function buildBridge(scene) {
   const poleGeo = new THREE.CylinderGeometry(0.08, 0.12, 8, 8);
   const armGeo = new THREE.BoxGeometry(1.6, 0.1, 0.1);
   const headGeo = new THREE.BoxGeometry(0.7, 0.12, 0.3);
-  const headMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffe2b0, emissiveIntensity: 8 });
-  const coneGeo = new THREE.ConeGeometry(3.2, 7.8, 32, 1, true);
-  coneGeo.translate(0, -3.9, 0);
-  const coneMat = lightConeMaterial(0xffd6a0);
+  // 灯头只要略高于辉光阈值 1.3，保留暖色光晕。原 8 会在色调映射前剪成纯白
+  const headMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffe2b0, emissiveIntensity: 2.2 });
+  const streetLights = [];
   for (let z = -240; z <= 240; z += 30) {
     for (const s of [-1, 1]) {
       const zz = z + (s > 0 ? 15 : 0);
@@ -75,16 +75,19 @@ export function buildBridge(scene) {
       arm.position.set(s * (HALF_W - 1.0), DECK_Y + 7.95, zz);
       const head = new THREE.Mesh(headGeo, headMat);
       head.position.set(hx, DECK_Y + 7.85, zz);
-      const cone = new THREE.Mesh(coneGeo, coneMat);
-      cone.position.set(hx, DECK_Y + 7.8, zz);
-      group.add(pole, arm, head, cone);
+      group.add(pole, arm, head);
       if (Math.abs(zz) <= 75) {
-        const light = new THREE.PointLight(0xffd6a0, 90, 28, 2);
+        const light = new THREE.PointLight(0xffd6a0, 48, 28, 2);
         light.position.set(hx, DECK_Y + 7.5, zz);
+        streetLights.push(light);
         group.add(light);
       }
     }
   }
+  addLightGroup('路灯（灯头、照地）', (on) => {
+    headMat.emissiveIntensity = on ? 2.2 : 0;
+    for (const light of streetLights) light.intensity = on ? 48 : 0;
+  });
 
   // 跨桥龙门架：高速路牌 + LED 跑马灯
   addGantry(group, -48, false, ['湾岸線', 'BAYSHORE  ROUTE', 'B7'], ['出口 新宿', 'EXIT  SHINJUKU', '2km'], '前方事故 减速慢行  ACCIDENT AHEAD  SLOW DOWN  雨天路滑  RAIN  ', '#ffb020');
@@ -173,14 +176,16 @@ function roadMaterial() {
 }
 
 // 假体积光：加法混合的圆锥，边缘与底部渐隐
-export function lightConeMaterial(hex) {
+export function lightConeMaterial(hex, strength = 0.07) {
   const mat = new THREE.MeshBasicNodeMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   });
   const facing = normalView.dot(positionViewDirection).abs();
+  const amount = uniform(strength);
+  mat.userData.strength = amount;
   mat.fog = false;
   mat.colorNode = color(hex);
-  mat.opacityNode = uv().y.pow(1.6).mul(facing.pow(2)).mul(0.07);
+  mat.opacityNode = uv().y.pow(1.6).mul(facing.pow(2)).mul(amount);
   return mat;
 }
 

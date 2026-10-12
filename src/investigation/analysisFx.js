@@ -7,13 +7,14 @@ import {
 // keep 通道为 1 的像素（线索、重建全息）保留原色
 export function createAnalysisFx(camera) {
   const amount = uniform(0);
+  const focus = uniform(0);
   const pulseR = uniform(0);
   const pulseA = uniform(0);
   const camPos = uniform(new THREE.Vector3());
   const pulseCenter = uniform(new THREE.Vector3());   // 扫描波中心（扫描设备位置）
   const camWorld = uniform(new THREE.Matrix4());
   const projInv = uniform(new THREE.Matrix4());
-  const state = { target: 0, pulsing: false };
+  const state = { target: 0, focus: false, pulsing: false };
   const PULSE_MAX = 70;
 
   // uiMask：第一人称手和设备所在像素，不做灰蓝化、不画网格
@@ -42,10 +43,14 @@ export function createAnalysisFx(camera) {
     const fx = base
       .add(vec3(0.12, 0.5, 1.0).mul(grid).mul(0.3))
       .add(vec3(0.35, 0.8, 1.0).mul(ring.mul(2.2).add(wake)));
-    return mix(hdr.rgb, fx, amount.mul(float(1).sub(uiMask)));
+    // E analysis only subdues the background; it does not enable the Q/reconstruction grid.
+    const focused = mix(hdr.rgb, vec3(lum), 0.28).mul(0.86);
+    const scene = mix(hdr.rgb, focused, focus.mul(float(1).sub(keep)).mul(float(1).sub(uiMask)));
+    return mix(scene, fx, amount.mul(float(1).sub(uiMask)));
   }
 
   function update(dt) {
+    focus.value += ((state.focus ? 1 : 0) - focus.value) * Math.min(1, dt * 8);
     camera.updateMatrixWorld();
     camWorld.value.copy(camera.matrixWorld);
     projInv.value.copy(camera.projectionMatrixInverse);
@@ -65,6 +70,7 @@ export function createAnalysisFx(camera) {
     apply,
     update,
     setActive(on) { state.target = on ? 1 : 0; },
+    setFocus(on) { state.focus = on; },
     pulse(origin) {
       pulseCenter.value.copy(origin ?? camera.position);
       pulseR.value = 0; pulseA.value = 1; state.pulsing = true;

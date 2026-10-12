@@ -10,3 +10,7 @@ dist/
 art/*.blend
 art/*.blend1
 art/tex/
+
+art/ads_src/
+art/bake_tex/
+art/holo_src/

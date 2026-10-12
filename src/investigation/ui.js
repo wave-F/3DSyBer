@@ -27,8 +27,26 @@ const CSS = `
 #inv-prompt { left: 50%; bottom: 190px; transform: translateX(-50%); font-size: 14px; letter-spacing: .12em; padding: 8px 18px; border: 1px solid rgba(108,200,255,.5); background: rgba(4,12,20,.55); opacity: 0; transition: opacity .2s; white-space: nowrap; }
 #inv-prompt.on { opacity: 1; }
 #inv-prompt.gold { border-color: rgba(255,179,92,.7); color: #ffd9a8; }
-#inv-hold { left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px; opacity: 0; }
-#inv-hold.on { opacity: 1; }
+#inv-analysis { inset: 0; opacity: 0; transition: opacity .18s; z-index: 2; }
+#inv-analysis.on { opacity: 1; }
+#inv-analysis .target { position: absolute; width: 136px; height: 108px; transform: translate(-50%, -50%); color: #eac65a; transition: width .2s, height .2s; }
+#inv-analysis.working .target, #inv-analysis.complete .target { width: 116px; height: 92px; }
+#inv-analysis .corner { position: absolute; width: 10px; height: 10px; border: 0 solid currentColor; }
+#inv-analysis .a { left: 0; top: 0; border-top-width: 2px; border-left-width: 2px; }
+#inv-analysis .b { right: 0; top: 0; border-top-width: 2px; border-right-width: 2px; }
+#inv-analysis .c { left: 0; bottom: 0; border-bottom-width: 2px; border-left-width: 2px; }
+#inv-analysis .d { right: 0; bottom: 0; border-bottom-width: 2px; border-right-width: 2px; }
+#inv-analysis .readout { position: absolute; width: 310px; color: #ffcf4a; transform: perspective(850px) rotateY(-9deg) rotateZ(2deg); transform-origin: left center; text-shadow: 0 1px 5px rgba(0,10,20,.9); }
+#inv-analysis .readout::before { content: ''; position: absolute; left: -12px; top: -14px; bottom: -10px; width: 1px; background: linear-gradient(transparent, rgba(255,207,74,.45), transparent); }
+#inv-analysis .heading { display: flex; align-items: center; gap: 18px; min-height: 54px; }
+#inv-analysis .percent { font-size: 25px; font-weight: 300; font-variant-numeric: tabular-nums; }
+#inv-analysis .status { margin-top: 2px; font-size: 16px; letter-spacing: .14em; }
+#inv-analysis .track { margin-top: 12px; height: 2px; background: rgba(255,207,74,.22); }
+#inv-analysis .fill { display: block; width: 100%; height: 100%; background: #ffcf4a; transform: scaleX(0); transform-origin: left; }
+#inv-analysis .caption { margin-top: 9px; color: rgba(255,214,120,.9); font-size: 11px; letter-spacing: .12em; }
+#inv-analysis:not(.working):not(.complete) .percent, #inv-analysis:not(.working):not(.complete) .track { display: none; }
+#inv-analysis.complete .target { color: #90dcff; }
+#inv-analysis.complete .fill { background: #cff0ff; }
 #inv-panel { left: 0; top: 0; width: min(560px, 44vw); display: flex; gap: 22px; align-items: flex-start; opacity: 0; transition: opacity .35s; border-left: 2px solid #6cc8ff; padding: 18px 22px; background: linear-gradient(90deg, rgba(6,18,30,.82), rgba(6,18,30,.35)); z-index: 3; }
 #inv-panel.on { opacity: 1; }
 #inv-panel .txt { flex: 1; min-width: 0; }
@@ -117,8 +135,16 @@ export function createUI() {
   const markers = el('inv-markers');
   const evlabels = el('inv-evlabels');
   const prompt = el('inv-prompt');
-  const hold = el('inv-hold', '', `<svg viewBox="0 0 44 44" width="44" height="44"><circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,207,74,.25)" stroke-width="2"/><circle id="inv-hold-c" cx="22" cy="22" r="18" fill="none" stroke="#ffcf4a" stroke-width="2.5" stroke-dasharray="113.1" stroke-dashoffset="113.1" transform="rotate(-90 22 22)"/></svg>`);
-  const holdC = hold.querySelector('#inv-hold-c');
+  const analysis = el('inv-analysis', '', `<div class="target"><i class="corner a"></i><i class="corner b"></i><i class="corner c"></i><i class="corner d"></i></div>
+    <div class="readout"><div class="heading"><div><div class="percent inv-mono"></div><div class="status"></div></div></div>
+    <div class="track" role="progressbar" aria-label="线索分析" aria-valuemin="0" aria-valuemax="100"><i class="fill"></i></div><div class="caption"></div></div>`);
+  const analysisTarget = analysis.querySelector('.target');
+  const readout = analysis.querySelector('.readout');
+  const analysisPercent = analysis.querySelector('.percent');
+  const analysisStatus = analysis.querySelector('.status');
+  const analysisFill = analysis.querySelector('.fill');
+  const analysisTrack = analysis.querySelector('.track');
+  const analysisCaption = analysis.querySelector('.caption');
   const panel = el('inv-panel');
   const toast = el('inv-toast', '', '<div class="t1"></div><div class="t2"></div>');
   const tl = el('inv-tl');
@@ -156,7 +182,7 @@ export function createUI() {
       hud.classList.toggle('on', mode === 'explore' || mode === 'recon');
       hud.querySelector('.mode').textContent = label;
       hint.innerHTML = HINTS[mode === 'explore' && this._ready ? 'exploreReady' : mode] ?? '';
-      if (mode !== 'explore') { markers.style.opacity = 0; this.setHold(0); this.hidePanel(); }
+      if (mode !== 'explore') { markers.style.opacity = 0; this.setAnalysis(null); this.hidePanel(); }
       else markers.style.opacity = 1;
       evlabels.style.opacity = mode === 'recon' ? 1 : 0;
       tl.classList.toggle('on', mode === 'recon');
@@ -168,7 +194,7 @@ export function createUI() {
     // 平板举起时隐藏屏幕上的常驻界面
     setTabletOpen(on) {
       for (const e of [hud, hint, markers, solved, document.getElementById('crosshair')]) if (e) e.style.visibility = on ? 'hidden' : '';
-      if (on) { prompt.classList.remove('on'); this.setHold(0); }
+      if (on) { prompt.classList.remove('on'); this.setAnalysis(null); }
     },
     setSolved(on) { solved.classList.toggle('on', on); },
     setCounter(done, total, label = '线索') {
@@ -207,9 +233,27 @@ export function createUI() {
       prompt.classList.toggle('on', !!text);
       prompt.classList.toggle('gold', gold);
     },
-    setHold(p) {
-      hold.classList.toggle('on', p > 0);
-      holdC.setAttribute('stroke-dashoffset', String(113.1 * (1 - p)));
+    setAnalysis(target, p = 0, phase = 'ready') {
+      const visible = target?.front && target.x > 0 && target.x < innerWidth && target.y > 0 && target.y < innerHeight;
+      analysis.classList.toggle('on', !!visible);
+      if (!visible) return;
+      analysis.classList.toggle('working', phase === 'working');
+      analysis.classList.toggle('complete', phase === 'complete');
+      analysisTarget.style.left = `${target.x}px`;
+      analysisTarget.style.top = `${target.y}px`;
+      // Keep the readout beside the evidence, with a fixed readable size and edge clearance.
+      const width = 310, height = 122, margin = 32;
+      let x = target.x + 92;
+      if (x + width > innerWidth - margin) x = target.x - width - 92;
+      readout.style.left = `${Math.max(margin, Math.min(innerWidth - width - margin, x))}px`;
+      readout.style.top = `${Math.max(margin, Math.min(innerHeight - height - margin, target.y - 142))}px`;
+      const progress = Math.max(0, Math.min(1, p));
+      const percent = phase === 'complete' ? 100 : Math.min(99, Math.floor(progress * 100));
+      analysisPercent.textContent = `${percent}%`;
+      analysisStatus.textContent = phase === 'complete' ? '分析完成' : phase === 'working' ? '扫描中' : '按住 E 分析';
+      analysisCaption.textContent = phase === 'complete' ? target.name : '';
+      analysisFill.style.transform = `scaleX(${progress})`;
+      analysisTrack.setAttribute('aria-valuenow', String(percent));
     },
     showClue(c, index) {
       clearTimeout(panelTimer);

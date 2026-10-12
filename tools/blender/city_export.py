@@ -14,6 +14,8 @@ SIGN_COL = '招牌（导出）'
 REPO = os.path.dirname(os.path.dirname(bpy.path.abspath('//')))   # art/city.blend → 仓库根目录
 OUT = os.path.join(REPO, 'src', 'data', 'cityLayout.json')
 BAKED = json.load(open(os.path.join(REPO, 'src', 'data', 'buildings.json')))
+# 发光面离安装面的距离（与 city_signs.py / src/signs.js 一致）
+MOUNT = {'screen': 0.32, 'vscreen': 0.62, 'hflat': 0.22, 'vflat': 0.22, 'ticker': 0.22, 'holo': 0.0, 'logo': 0.3, 'board': 0.2}
 
 def walk(c):
     objs = list(c.objects)
@@ -25,6 +27,7 @@ def g(v):          # Blender 坐标 → 游戏 three.js 坐标
 
 def r3(x): return round(x, 3)
 
+bpy.context.view_layer.update()   # 同一次运行里刚创建 / 挪动的物体，matrix_world 要刷新后才对
 buildings, footprints, index = [], [], {}
 for o in sorted(walk(bpy.data.collections[EXPORT_COL]), key=lambda o: o.name):
     if o.type != 'MESH' or o.hide_render: continue
@@ -58,11 +61,11 @@ for s in sorted(col.objects if col else [], key=lambda o: o.name):
     else:
         n = az.normalized()
         if n.dot(Vector((-p.x, 0, 0))) < 0: n = -n        # 平贴类法线朝桥
-        c = p - n * 0.3
+        c = p - n * MOUNT.get(kind, 0.3)
     n.z = 0; n.normalize()
     item = dict(b=index[s.parent], type=kind, c=[r3(c.x), r3(-c.y)], y=r3(p.z), n=[r3(n.x), r3(-n.y)], w=r3(w), h=r3(h))
-    if kind == 'screen': item['ad'] = s.get('ad', 'ramen')
-    else: item['color'] = s.get('color', 'cyan')
+    for k in ('gap', 'color', 'box', 'dim', 'idx'):
+        if k in s: item[k] = r3(s[k]) if isinstance(s[k], float) else s[k]
     signs.append(item)
 
 zs = [f[2] for f in footprints] + [f[3] for f in footprints]

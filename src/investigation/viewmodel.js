@@ -1,7 +1,6 @@
 import * as THREE from 'three/webgpu';
-import { mrt, float, uv, color, smoothstep, sin } from 'three/tsl';
+import { mrt, float } from 'three/tsl';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { uiTime } from './clock.js';
 
 // 第一人称一体模型：扫描枪、手套和前臂
 // 手和设备放在叠加场景（与平板同一个），单独渲染，不会插进场景物体
@@ -17,8 +16,10 @@ const glowMat = (hex, k = 1) => {
 // 相机空间中的几个持握姿态（握把位置 + 朝向）
 const POSE = {
   // 待机：比扫描姿态更低，枪口朝下，不像一直端着
-  idle: { pos: new THREE.Vector3(0.22, -0.32, -0.40), rot: new THREE.Euler(-0.48, 0.14, -0.10) },
+  idle: { pos: new THREE.Vector3(0.21, -0.24, -0.42), rot: new THREE.Euler(-0.34, 0.12, -0.08) },
   scan: { pos: new THREE.Vector3(0.12, -0.15, -0.45), rot: new THREE.Euler(0.035, 0.05, -0.03) },
+  // 分析沿用扫描的举起，手再往前伸一截
+  reach: { pos: new THREE.Vector3(0.12, -0.15, -0.55), rot: new THREE.Euler(0.035, 0.05, -0.03) },
   hidden: { pos: new THREE.Vector3(0.24, -0.55, -0.3), rot: new THREE.Euler(-0.9, 0.2, 0.3) },
 };
 
@@ -44,31 +45,18 @@ export function createViewmodel(overlayScene, camera) {
   const device = buildDevice();
   holder.add(device.group);
 
-  // 分析扫光：设备发射头 → 线索的扇形光面，远端扫描线在目标上来回扫动
-  const fanGeo = new THREE.BufferGeometry();
-  fanGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
-  fanGeo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0.5, 0, 0, 1, 1, 1]), 2));
-  const fanMat = new THREE.MeshBasicNodeMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
-  const v = uv().y;
-  const lines = sin(v.mul(60).sub(uiTime.mul(18))).mul(0.5).add(0.5).pow(4);
-  fanMat.colorNode = color(0x52d8ff).mul(v.pow(1.2).mul(0.9).add(0.06).add(lines.mul(v).mul(0.4)).add(smoothstep(0.95, 1, v).mul(5)));
-  fanMat.mrtNode = NO_MASK;
-  const fan = new THREE.Mesh(fanGeo, fanMat);
-  fan.frustumCulled = false;
-  fan.visible = false;
-  overlayScene.add(fan);
-
   const st = {
     hide: 1,                 // 0 显示，1 收起
     scanT: -1,               // 扫描动作计时，-1 表示未在扫描
-    aim: 0,                  // 指向线索的权重
+    aim: 0,                  // 指向线索的权重，松开后沿同一条曲线收回
+    aimDir: new THREE.Vector3(0, 0, -1),
     target: null, progress: 0,
     bob: 0, lastPos: new THREE.Vector3(), speed: 0,
     sway: { y: 0, p: 0, vy: 0, vp: 0 }, lastYaw: 0, lastPitch: 0,
     onFire: null,
   };
   const qA = new THREE.Quaternion(), qB = new THREE.Quaternion(), qC = new THREE.Quaternion();
-  const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3();
+  const vA = new THREE.Vector3(), vB = new THREE.Vector3();
   const eA = new THREE.Euler();
 
   // 开始扫描动作：0.5 秒举起，发射，保持，再用同样的 0.5 秒放下
@@ -142,16 +130,21 @@ export function createViewmodel(overlayScene, camera) {
     vB.lerp(POSE.hidden.pos, h);
     qA.slerp(qB.setFromEuler(POSE.hidden.rot), h);
 
-    // 分析时设备转向线索（相机空间方向，限制最大偏转角）
-    st.aim += ((st.target ? 1 : 0) - st.aim) * Math.min(1, dt * 10);
-    if (st.target && st.aim > 0.01) {
-      vC.copy(st.target).applyMatrix4(camera.matrixWorldInverse);
-      vC.sub(vB).normalize();
-      const yaw = THREE.MathUtils.clamp(Math.atan2(-vC.x, -vC.z), -0.9, 0.6);
-      const pitch = THREE.MathUtils.clamp(Math.asin(vC.y), -0.6, 0.4);
+    // 分析时举起并转向线索。结束后目标会被清掉，沿最后的方向用 0.5 秒放下，避免弹 UI 时闪回待机
+    const AIM_TIME = 0.5;
+    st.aim = THREE.MathUtils.clamp(st.aim + (st.target ? dt : -dt) / AIM_TIME, 0, 1);
+    const aimW = THREE.MathUtils.smootherstep(st.aim, 0, 1);
+    if (st.target) {
+      st.aimDir.copy(st.target).applyMatrix4(camera.matrixWorldInverse).sub(vB);
+      if (st.aimDir.lengthSq() > 1e-6) st.aimDir.normalize();
+    }
+    if (aimW > 0.001) {
+      vB.lerp(POSE.reach.pos, aimW);
+      qA.slerp(qB.setFromEuler(POSE.reach.rot), aimW);
+      const yaw = THREE.MathUtils.clamp(Math.atan2(-st.aimDir.x, -st.aimDir.z), -0.9, 0.6);
+      const pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(st.aimDir.y, -1, 1)), -0.6, 0.4);
       qC.setFromEuler(eA.set(pitch, yaw, 0, 'YXZ'));
-      qA.slerp(qC, st.aim);
-      vB.lerp(POSE.scan.pos, st.aim * 0.35);
+      qA.slerp(qC, aimW * 0.55);
     }
 
     // 走路晃动（8 字形）+ 呼吸 + 视角滞后
@@ -165,26 +158,7 @@ export function createViewmodel(overlayScene, camera) {
 
     // 发射头闪光
     device.flash = Math.max(0, device.flash - dt * 1.5);
-    device.update(dt, st.target ? st.progress : -1, st.scanT >= 0);
-
-    // 扇形扫光
-    fan.visible = !!st.target && st.aim > 0.5 && rig.visible;
-    if (fan.visible) {
-      const tip = emitterWorld(vA);
-      const dir = vC.copy(st.target).sub(tip);
-      const len = dir.length();
-      dir.normalize();
-      const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize();
-      const up = new THREE.Vector3().crossVectors(right, dir);
-      const r = Math.min(1.0, 0.35 + len * 0.09);
-      const sweep = Math.sin(performance.now() / 1000 * 5) * r * 0.8;
-      const center = st.target.clone().addScaledVector(up, sweep);
-      const p = fanGeo.attributes.position;
-      p.setXYZ(0, tip.x, tip.y, tip.z);
-      p.setXYZ(1, center.x - right.x * r, center.y - right.y * r, center.z - right.z * r);
-      p.setXYZ(2, center.x + right.x * r, center.y + right.y * r, center.z + right.z * r);
-      p.needsUpdate = true;
-    }
+    device.update();
   }
 
   return { update, scan, analyze, emitterWorld, get scanning() { return st.scanT >= 0; } };
@@ -213,8 +187,8 @@ function buildDevice() {
   }, undefined, (error) => console.error('Failed to load scanner arm:', error));
   const dev = {
     group: g, emitter, flash: 0,
-    update(dt, progress) {
-      glow.material.opacity = ready ? dev.flash + (progress >= 0 ? 0.35 : 0) : 0;
+    update() {
+      glow.material.opacity = ready ? dev.flash : 0;
       glow.scale.setScalar(1 + dev.flash * 1.5);
     },
   };
