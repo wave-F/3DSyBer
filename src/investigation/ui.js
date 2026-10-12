@@ -29,8 +29,8 @@ const CSS = `
 #inv-prompt.gold { border-color: rgba(255,179,92,.7); color: #ffd9a8; }
 #inv-hold { left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px; opacity: 0; }
 #inv-hold.on { opacity: 1; }
-#inv-panel { right: 40px; top: 50%; width: 640px; display: flex; gap: 22px; align-items: flex-start; transform: translateY(-50%) translateX(20px); opacity: 0; transition: opacity .35s, transform .35s; border-left: 2px solid #6cc8ff; padding: 18px 22px; background: linear-gradient(90deg, rgba(6,18,30,.82), rgba(6,18,30,.35)); }
-#inv-panel.on { opacity: 1; transform: translateY(-50%); }
+#inv-panel { left: 0; top: 0; width: min(560px, 44vw); display: flex; gap: 22px; align-items: flex-start; opacity: 0; transition: opacity .35s; border-left: 2px solid #6cc8ff; padding: 18px 22px; background: linear-gradient(90deg, rgba(6,18,30,.82), rgba(6,18,30,.35)); z-index: 3; }
+#inv-panel.on { opacity: 1; }
 #inv-panel .txt { flex: 1; min-width: 0; }
 #inv-panel .pic { position: relative; width: 250px; height: 250px; flex: none; margin-top: 4px; }
 #inv-panel .pic .img { position: absolute; inset: 0; background-size: cover; background-position: center; clip-path: inset(0 0 100% 0); animation: inv-wipe .9s .25s cubic-bezier(.2,.7,.2,1) forwards; filter: saturate(.85) contrast(1.05); }
@@ -134,6 +134,21 @@ export function createUI() {
 
   const markerEls = new Map();
   const evEls = [];
+  const markPos = new Map();
+  let clueId = null;
+
+  // 分析面板挂在探索点所在的世界位置右侧。离开画面或走到点后面就看不见，不拉回屏幕内
+  function placePanel(x, y, front) {
+    const gap = 200;
+    const pw = panel.offsetWidth || 560;
+    const ph = panel.offsetHeight || 280;
+    const left = x + gap;
+    const top = y - ph * 0.4;
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+    const onScreen = front && left + pw > 0 && left < innerWidth && top + ph > 0 && top < innerHeight;
+    panel.style.visibility = onScreen ? '' : 'hidden';
+  }
 
   return {
     setMode(mode, label) {
@@ -180,6 +195,11 @@ export function createUI() {
         e.classList.toggle('done', m.done);
         e.classList.toggle('aim', m.aim);
         e.querySelector('.n').textContent = m.label;
+        markPos.set(m.id, m);
+      }
+      if (clueId) {
+        const m = markPos.get(clueId);
+        if (m) placePanel(m.x, m.y, m.front);
       }
     },
     setPrompt(text, gold = false) {
@@ -193,6 +213,7 @@ export function createUI() {
     },
     showClue(c, index) {
       clearTimeout(panelTimer);
+      clueId = c.id;
       const lines = c.lines.map((l, i) => `<div class="ln" style="animation-delay:${0.15 + i * 0.35}s">${l}</div>`).join('');
       const dl = 0.15 + c.lines.length * 0.35;
       const no = String(index + 1).padStart(2, '0');
@@ -203,10 +224,12 @@ export function createUI() {
         <div class="box"></div><i class="cn a"></i><i class="cn b"></i><i class="cn c"></i><i class="cn d"></i>
         <div class="cap inv-mono">影像记录 · EV-${no}</div></div>`;
       panel.classList.add('on');
+      const m = markPos.get(c.id);
+      if (m) placePanel(m.x, m.y, m.front);
       setTimeout(() => { const i = panel.querySelector('.pb i'); if (i) i.style.width = `${c.prob * 100}%`; }, (dl + 0.3) * 1000);
-      panelTimer = setTimeout(() => panel.classList.remove('on'), 9000);
+      panelTimer = setTimeout(() => { panel.classList.remove('on'); panel.style.visibility = ''; clueId = null; }, 4000);
     },
-    hidePanel() { clearTimeout(panelTimer); panel.classList.remove('on'); },
+    hidePanel() { clearTimeout(panelTimer); panel.classList.remove('on'); panel.style.visibility = ''; clueId = null; },
     toast(t1, t2, ms = 3200) {
       clearTimeout(toastTimer);
       toast.querySelector('.t1').textContent = t1;
