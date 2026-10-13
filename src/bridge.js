@@ -194,31 +194,42 @@ const railNeon = new THREE.MeshBasicMaterial({ color: 0x20f0ff });
 railNeon.color.multiplyScalar(0.9);
 
 function addRailing(group, s, z0, z1) {
-  const len = z1 - z0;
-  const cz = (z0 + z1) / 2;
   const x = s * (HALF_W - 0.2);
 
-  const curb = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, len), concrete);
-  curb.position.set(x, DECK_Y + 0.25, cz);
+  const brokenStart = s === BREAK.side && z0 === BREAK.z1;
+  const brokenEnd = s === BREAK.side && z1 === BREAK.z0;
+  const curbStart = z0 + (brokenStart ? 0.7 : 0);
+  const curbEnd = z1 - (brokenEnd ? 0.7 : 0);
+  const curb = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, curbEnd - curbStart), concrete);
+  curb.position.set(x, DECK_Y + 0.25, (curbStart + curbEnd) / 2);
   group.add(curb);
 
+  // Damaged spans continue from these cut points in buildBrokenRail.
+  const railStart = z0 + (brokenStart ? 1.2 : 0);
+  const railEnd = z1 - (brokenEnd ? 1.2 : 0);
   for (const y of [0.85, 1.15]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, len), metal);
-    rail.position.set(x, DECK_Y + y, cz);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, railEnd - railStart), metal);
+    rail.position.set(x, DECK_Y + y, (railStart + railEnd) / 2);
     group.add(rail);
   }
 
   // 护栏顶部霓虹灯带（两侧同色）
-  const neon = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, len), railNeon);
-  neon.position.set(x, DECK_Y + 1.22, cz);
+  const neon = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, railEnd - railStart), railNeon);
+  neon.position.set(x, DECK_Y + 1.22, (railStart + railEnd) / 2);
   group.add(neon);
 
-  const count = Math.floor(len / 2) + 1;
+  const postStart = z0 + (brokenStart ? 2 : 0);
+  const postEnd = z1 - (brokenEnd ? 2 : 0);
+  const count = Math.floor((postEnd - postStart) / 2) + 1;
   const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 0.7, 0.08), metal, count);
+  const feet = new THREE.InstancedMesh(new THREE.BoxGeometry(0.2, 0.035, 0.24), metal, count);
   const m = new THREE.Matrix4();
   for (let i = 0; i < count; i++) {
-    m.makeTranslation(x, DECK_Y + 0.85, z0 + Math.min(i * 2, len));
+    const z = postStart + i * 2;
+    m.makeTranslation(x, DECK_Y + 0.85, z);
     posts.setMatrixAt(i, m);
+    m.makeTranslation(x, DECK_Y + 0.5175, z);
+    feet.setMatrixAt(i, m);
   }
-  group.add(posts);
+  group.add(posts, feet);
 }

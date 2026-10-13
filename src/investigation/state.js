@@ -8,7 +8,7 @@ import { createTablet } from './tablet.js';
 import { createViewmodel } from './viewmodel.js';
 import { CLUES, EVENTS, RECON_DURATION, TIME_JUMP, CONCLUSION } from './clues.js';
 
-const HOLD_TIME = 0.8;      // 按住 E 分析所需秒数
+const HOLD_TIME = 1.4;      // Includes raising the instrument and one readable scan pass.
 const AIM_RANGE = 6;        // 准星可分析距离
 const NEAR_RANGE = 5;       // 走近到此距离内自动发现线索
 const SCAN_RANGE = 40;      // Q 扫描可发现的范围
@@ -26,7 +26,7 @@ function clockText(t) {
 
 export function createInvestigation(scene, camera, crash, controls) {
   buildTwistProps(scene, crash.carGroup);
-  const fx = createAnalysisFx(camera);
+  const fx = createAnalysisFx(scene, camera);
   const ui = createUI();
   preloadClueImages(CLUES);
   const recon = createRecon(scene, crash);
@@ -34,6 +34,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     onStamp: () => ui.toast('案件已结案', '调查报告已提交归档', 4000),
   });
   const vm = createViewmodel(tablet.uiScene, camera);
+  const emitter = new THREE.Vector3();
   // 打开平板：释放鼠标用来点击界面，视角固定；收起：重新锁定鼠标
   // relock = false 时（Esc 收起）不重新锁定，回到暂停层
   function setTablet(on, relock = true) {
@@ -247,8 +248,14 @@ export function createInvestigation(scene, camera, crash, controls) {
     ui.setAnalysis(analysisClue ? { ...project(analysisClue.p), name: analysisClue.name } : null,
       finishedAnalysis ? 1 : holdT / HOLD_TIME, finishedAnalysis ? 'complete' : analyzing ? 'working' : 'ready');
     fx.setFocus(analyzing || !!finishedAnalysis);
-    vm.analyze(analyzing ? aimed.p : finishedAnalysis?.clue.p ?? null, finishedAnalysis ? 1 : holdT / HOLD_TIME);
-    if (dbgAim >= 0) vm.analyze(clues[dbgAim].p, 0.6);
+    const reading = analyzing ? aimed : finishedAnalysis?.clue;
+    const progress = finishedAnalysis ? 1 : holdT / HOLD_TIME;
+    vm.analyze(reading?.p ?? null, progress);
+    fx.analyze(reading?.p ?? null, reading?.radius ?? 1, progress);
+    if (dbgAim >= 0) {
+      vm.analyze(clues[dbgAim].p, 0.6);
+      fx.analyze(clues[dbgAim].p, clues[dbgAim].radius, 0.6);
+    }
 
     if (analysisClue) ui.setPrompt(null);
     else if (aimed && aimed.done) ui.setPrompt(`按 E 查看：${aimed.name}`);
@@ -291,14 +298,17 @@ export function createInvestigation(scene, camera, crash, controls) {
     tablet,
     get moveScale() { return mode === 'end' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
     update(realDt) {
-      fx.update(realDt);
       tablet.update(realDt);
-      if (mode !== 'explore') vm.analyze(null, 0);
-      vm.update(realDt, mode === 'explore' && !tablet.open && tablet.amount < 0.02);
       ui.setTabletOpen(tablet.amount > 0.05);
-      if (tablet.open || tablet.amount > 0.05) return;
-      if (mode === 'explore') updateExplore(realDt);
-      else if (mode === 'recon') updateRecon(realDt);
+      const available = !tablet.open && tablet.amount <= 0.05;
+      if (mode === 'explore' && available) updateExplore(realDt);
+      else {
+        vm.analyze(null, 0);
+        fx.analyze(null);
+        if (mode === 'recon' && available) updateRecon(realDt);
+      }
+      vm.update(realDt, mode === 'explore' && !tablet.open && tablet.amount < 0.02);
+      fx.update(realDt, vm.emitterWorld(emitter));
     },
     // 开发调试：直接切换状态 / 设置时间轴
     debug: {

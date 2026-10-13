@@ -69,6 +69,8 @@ export function createViewmodel(overlayScene, camera) {
 
   // 正在分析的目标（null 表示不在分析）与进度
   function analyze(target, progress) {
+    if (target && target !== st.target) device.flash = Math.max(device.flash, 0.25);
+    if (target && progress >= 1 && st.progress < 1) device.flash = 0.8;
     st.target = target;
     st.progress = progress;
   }
@@ -156,9 +158,8 @@ export function createViewmodel(overlayScene, camera) {
     holder.quaternion.copy(qA).multiply(qB);
     if (dbg.on) { holder.position.copy(dbg.pos); holder.quaternion.setFromEuler(dbg.rot); }
 
-    // 发射头闪光
-    device.flash = Math.max(0, device.flash - dt * 1.5);
-    device.update();
+    device.flash = Math.max(0, device.flash - dt * 4);
+    device.update(dt, visible && !!st.target, st.progress);
   }
 
   return { update, scan, analyze, emitterWorld, get scanning() { return st.scanT >= 0; } };
@@ -169,10 +170,15 @@ export function createViewmodel(overlayScene, camera) {
 function buildDevice() {
   const g = new THREE.Group();
   const emitter = new THREE.Object3D();
-  const glow = new THREE.Mesh(new THREE.CircleGeometry(0.035, 24), glowMat(0x52d8ff, 2));
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(0.014, 32), glowMat(0x9edeea, 0.8));
   glow.rotation.y = Math.PI;
   glow.material.opacity = 0;
-  emitter.add(glow);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.0016, 6, 48), glowMat(0x9edeea, 1.2));
+  ring.position.z = -0.003;
+  ring.material.opacity = 0;
+  const spill = new THREE.PointLight(0x9edeea, 0, 0.18, 2);
+  spill.position.z = 0.025;
+  emitter.add(glow, ring, spill);
   g.add(emitter);
   let ready = false;
   new GLTFLoader().load('/assets/scanner-arm.glb', (gltf) => {
@@ -186,10 +192,14 @@ function buildDevice() {
     ready = true;
   }, undefined, (error) => console.error('Failed to load scanner arm:', error));
   const dev = {
-    group: g, emitter, flash: 0,
-    update() {
-      glow.material.opacity = ready ? dev.flash : 0;
-      glow.scale.setScalar(1 + dev.flash * 1.5);
+    group: g, emitter, flash: 0, power: 0,
+    update(dt, analyzing, progress) {
+      const target = analyzing ? (progress >= 1 ? 0.28 : 0.7) : 0;
+      dev.power = THREE.MathUtils.damp(dev.power, target, analyzing ? 12 : 22, dt);
+      const power = ready ? Math.min(1, dev.power + dev.flash) : 0;
+      ring.material.opacity = ready ? 0.07 + power * 0.75 : 0;
+      glow.material.opacity = power * 0.24;
+      spill.intensity = power * 0.004;
     },
   };
   return dev;

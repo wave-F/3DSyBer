@@ -1,9 +1,11 @@
 import * as THREE from 'three/webgpu';
-import { float, mx_noise_float, positionLocal } from 'three/tsl';
+import { float, mx_noise_float, positionLocal, positionWorld, vec3 } from 'three/tsl';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { rng, bloodTexture } from './textures.js';
-import { DECK_Y, HALF_W, concrete as concreteBase, metal as metalBase } from './bridge.js';
+import { DECK_Y, HALF_W, BREAK, concrete as concreteBase, metal as metalBase } from './bridge.js';
+import { mergeStatic } from './merge.js';
 import { markKeep } from './investigation/mask.js';
 import { addLightGroup } from './debugLights.js';
 import { addTireTracks } from './tireTracks.js';
@@ -75,6 +77,7 @@ export function buildCrash(scene) {
 // 超跑模型（Blender 导出：Draco 压缩 + WebP 贴图，约 3.5MB）
 // 模型本地坐标：地面 y=0，车头朝 +Z，车身左侧在 +X；节点 Body + Wheel_FL/FR/RL/RR
 const CAR_URL = '/assets/supercar.glb';
+const CAR_GLASS_URL = '/assets/supercar_glass_damage.glb';
 const CRUMPLE = 1; // 车头撞击变形强度，0 = 完好无损
 
 function buildCar(onReady) {
@@ -82,16 +85,19 @@ function buildCar(onReady) {
   const hazardMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffa020, emissiveIntensity: 0 });
 
   const draco = new DRACOLoader().setDecoderPath('/draco/');
-  new GLTFLoader().setDRACOLoader(draco).load(CAR_URL, (gltf) => {
+  const loader = new GLTFLoader().setDRACOLoader(draco);
+  Promise.all([loader.loadAsync(CAR_URL), loader.loadAsync(CAR_GLASS_URL)]).then(([gltf, glass]) => {
     const model = gltf.scene;
     model.rotation.y = Math.PI / 2; // 车头 +Z → 组内 +X
     group.add(model);
 
     const mats = carMaterials(hazardMat);
+    const originalGlass = [];
     model.traverse((o) => {
       if (!o.isMesh) return;
       const imported = o.material;
       const key = imported.name.replace(/^GC_/, '');
+      if (key === 'GlassWindshield') originalGlass.push(o);
       if (mats[key]) {
         o.material = mats[key];
         if (imported.normalMap) {
@@ -111,6 +117,19 @@ function buildCar(onReady) {
     pristine.traverse((o) => { if (o.isMesh) o.geometry = o.geometry.clone(); });
 
     const body = model.getObjectByName('Body');
+    // The source shares one material across all windows. Replace that whole set
+    // with the exported intact side/rear glass plus the damaged front windshield.
+    for (const mesh of originalGlass) {
+      mesh.removeFromParent();
+      mesh.geometry.dispose();
+    }
+    glass.scene.name = 'CrashGlazing';
+    glass.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const key = o.material.name.replace(/^GC_/, '');
+      o.material = mats[key];
+    });
+    body.add(glass.scene);
     if (CRUMPLE > 0) body.traverse((o) => { if (o.isMesh) crumpleFront(o.geometry); });
     // 整辆车都是线索，分析模式下保留原色
     model.traverse((o) => { if (o.isMesh) markKeep(o.material); });
@@ -124,9 +143,10 @@ function buildCar(onReady) {
     group.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(wheel);
     wheel.position.y += DECK_Y + 0.01 - box.min.y;
-    draco.dispose();
     onReady({ pristine, crashed: model });
-  });
+  }).catch((error) => {
+    console.error('Failed to load the crash vehicle and replacement glazing', error);
+  }).finally(() => draco.dispose());
 
   return { group, hazardMat };
 }
@@ -149,6 +169,8 @@ function carMaterials(hazardMat) {
     MetalAccent: std({ color: 0x8e1010, roughness: 0.45, metalness: 0.6 }),
     PlasticMatte: std({ color: 0x0c0c0d, roughness: 0.8, metalness: 0 }),
     GlassWindshield: phys({ color: 0x05080c, roughness: 0.05, metalness: 0.2, clearcoat: 1, transparent: true, opacity: 0.75 }),
+    Damage_Laminated_Glass: phys({ color: 0x344e56, roughness: 0.16, metalness: 0.1, clearcoat: 0.8, clearcoatRoughness: 0.14, transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide }),
+    Damage_Fracture_Edges: std({ color: 0x8babb4, roughness: 0.3, metalness: 0.15, side: THREE.DoubleSide }),
     Glass_Headlight: phys({ color: 0x050607, roughness: 0.4, metalness: 0, transparent: true, opacity: 0.15, depthWrite: false }),
     LED_WhiteHeadlight: std({ color: 0x050607, emissive: 0x000000, emissiveIntensity: 0 }),
     LED_OrangeSignle: hazardMat,
@@ -205,67 +227,166 @@ function crumpleFront(geo) {
   }
 }
 
-// 撞断的护栏：一段弯折挂在桥外，一段倒在路面
+// Angular fracture fragments, not randomly rotated rectangular bricks.
+function fragmentGeometry(r, width, height, depth) {
+  const points = [];
+  const count = 5 + Math.floor(r() * 3);
+  const offset = r() * Math.PI * 2;
+  for (let layer = 0; layer < 2; layer++) {
+    for (let i = 0; i < count; i++) {
+      const angle = offset + (i + (r() - 0.5) * 0.45) * Math.PI * 2 / count;
+      const radius = 0.32 + r() * 0.22;
+      points.push(new THREE.Vector3(
+        Math.cos(angle) * width * radius + layer * width * 0.12,
+        layer ? height * (0.45 + r() * 0.55) : 0,
+        Math.sin(angle) * depth * radius,
+      ));
+    }
+  }
+  return new ConvexGeometry(points);
+}
+
+function settleFragment(mesh, x, z, r) {
+  mesh.rotation.set((r() - 0.5) * 0.8, r() * Math.PI * 2, (r() - 0.5) * 0.8);
+  // Measure after rotation so every piece actually touches the asphalt.
+  mesh.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(mesh, true);
+  mesh.position.set(x, DECK_Y + 0.012 - box.min.y, z);
+}
+
+// Connected bent rails, torn curb ends and a graded field of rubble.
 function buildBrokenRail(scene) {
   const x = HALF_W - 0.2;
+  const group = new THREE.Group();
+  group.name = 'Crash_Rail_Damage';
   const metal = markKeep(metalBase.clone());
+  metal.roughness = 0.58;
   const concrete = markKeep(concreteBase.clone());
-
-  const hanging = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 3.2), metal);
-  hanging.position.set(x + 0.9, DECK_Y - 0.5, -2.2);
-  hanging.rotation.set(0.25, 0.4, 0.9);
-  const hanging2 = hanging.clone();
-  hanging2.position.set(x + 0.7, DECK_Y - 0.2, 1.2);
-  hanging2.rotation.set(-0.3, -0.5, 0.7);
-
-  const lying = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 2.6), metal);
-  lying.position.set(x - 1.4, DECK_Y + 0.06, -4.6);
-  lying.rotation.set(0, 0.6, Math.PI / 2);
-
-  const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.7, 0.08), metal);
-  post.position.set(x - 0.6, DECK_Y + 0.05, -3.0);
-  post.rotation.set(Math.PI / 2, 0, 0.8);
-
-  scene.add(hanging, hanging2, lying, post);
-
-  // 路缘断口的混凝土碎块
+  const fracture = markKeep(new THREE.MeshStandardNodeMaterial({ roughness: 0.94 }));
+  const grain = mx_noise_float(positionWorld.mul(65));
+  fracture.colorNode = vec3(0.16, 0.165, 0.16).mul(grain.mul(0.65).add(0.85));
+  const rebar = markKeep(new THREE.MeshStandardMaterial({ color: 0x493a2c, roughness: 0.83, metalness: 0.45 }));
   const r = rng(9);
-  for (let i = 0; i < 14; i++) {
-    const s = 0.1 + r() * 0.3;
-    const chunk = new THREE.Mesh(new THREE.BoxGeometry(s, s * 0.8, s * 1.2), concrete);
-    chunk.position.set(x - r() * 2.5, DECK_Y + s * 0.4, -3.5 + r() * 6);
-    chunk.rotation.set(r() * 3, r() * 3, r() * 3);
-    scene.add(chunk);
+
+  const railSection = new THREE.Shape();
+  railSection.moveTo(-0.04, -0.05);
+  railSection.lineTo(0.04, -0.05);
+  railSection.lineTo(0.04, 0.05);
+  railSection.lineTo(-0.04, 0.05);
+  railSection.closePath();
+  for (const [edge, direction] of [[BREAK.z0, 1], [BREAK.z1, -1]]) {
+    const anchor = edge - direction * 0.7;
+    // The intact rear profile joins the curb exactly; the front is a torn surface.
+    const outline = [[-0.2, 0], [0, 0], [0.2, 0], [0.2, 0.25], [0.2, 0.5], [0, 0.5], [-0.2, 0.5], [-0.2, 0.25]];
+    const points = [];
+    const ends = [0.74, 0.88, 0.67, 0.51, 0.2, 0.39, 0.28, 0.6].map((depth) => depth + (r() - 0.5) * 0.14);
+    for (let ring = 0; ring < 2; ring++) {
+      outline.forEach(([dx, y], i) => points.push(new THREE.Vector3(x + dx, DECK_Y + y, anchor + direction * (ring ? ends[i] : 0))));
+    }
+    points.push(new THREE.Vector3(x + 0.025, DECK_Y + 0.23, anchor + direction * 0.38));
+    const vertices = [];
+    const materialIndices = [];
+    const triangle = (a, b, c, material) => {
+      const indices = direction === -1 ? [a, b, c] : [a, c, b];
+      for (const index of indices) vertices.push(...points[index].toArray());
+      materialIndices.push(material);
+    };
+    for (let i = 0; i < 8; i++) {
+      const j = (i + 1) % 8;
+      triangle(i, i + 8, j + 8, 0);
+      triangle(i, j + 8, j, 0);
+      triangle(i + 8, 16, j + 8, 1);
+    }
+    const curbGeo = new THREE.BufferGeometry();
+    curbGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    curbGeo.setIndex(Array.from({ length: vertices.length / 3 }, (_, i) => i));
+    materialIndices.forEach((material, i) => curbGeo.addGroup(i * 3, 3, material));
+    curbGeo.computeVertexNormals();
+    group.add(new THREE.Mesh(curbGeo, [concrete, fracture]));
+
+    for (const height of [0.85, 1.15]) {
+      const upper = height > 1;
+      const reach = direction === 1 ? 1.15 : 0.85;
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(x, DECK_Y + height, edge - direction * 1.2),
+        new THREE.Vector3(x, DECK_Y + height, edge - direction * 0.95),
+        new THREE.Vector3(x + 0.12, DECK_Y + height - 0.06, edge - direction * 0.4),
+        new THREE.Vector3(x + 0.55 * reach, DECK_Y + height - 0.24, edge + direction * 0.2),
+        new THREE.Vector3(x + (upper ? 1.0 : 0.72) * reach, DECK_Y + height - (upper ? 1.35 : 0.85) * reach, edge + direction * (upper ? 1.2 : 0.85) * reach),
+      ]);
+      group.add(new THREE.Mesh(new THREE.ExtrudeGeometry(railSection, { steps: 20, bevelEnabled: false, extrudePath: curve }), metal));
+    }
+
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.72, 0.08), metal);
+    post.position.set(x + 0.18, DECK_Y + 0.79, edge - direction * 0.45);
+    post.rotation.set(direction * 0.18, 0, -0.46);
+    group.add(post);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.035, 0.25), metal);
+    foot.position.set(x + 0.025, DECK_Y + 0.52, edge - direction * 0.51);
+    foot.rotation.z = -0.22;
+    group.add(foot);
+
+    for (let i = 0; i < 3; i++) {
+      const dx = (i - 1) * 0.12;
+      const y = DECK_Y + 0.13 + i * 0.065;
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(x + dx, y, anchor + direction * 0.24),
+        new THREE.Vector3(x + dx, y, edge + direction * 0.1),
+        new THREE.Vector3(x + dx + 0.09, y - 0.035, edge + direction * (0.4 + r() * 0.25)),
+      ]);
+      group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 8, 0.012, 5, false), rebar));
+    }
   }
+
+  for (let i = 0; i < 125; i++) {
+    const large = i < 10;
+    const size = large ? 0.18 + r() * 0.36 : i < 40 ? 0.065 + r() * 0.15 : 0.015 + r() * 0.055;
+    const edge = i % 2 ? BREAK.z0 : BREAK.z1;
+    const direction = i % 2 ? 1 : -1;
+    const spread = large ? 0.9 : 2.1;
+    const px = x - 0.12 - Math.pow(r(), 1.8) * spread;
+    const pz = edge + direction * r() * (large ? 1.25 : 2.5) + (r() - 0.5) * 0.7;
+    const chunk = new THREE.Mesh(fragmentGeometry(r, size, size * (0.35 + r() * 0.5), size * (0.7 + r() * 0.7)), fracture);
+    settleFragment(chunk, px, pz, r);
+    group.add(chunk);
+  }
+  const sourceGeometries = new Set();
+  group.traverse((o) => { if (o.isMesh) sourceGeometries.add(o.geometry); });
+  mergeStatic(group);
+  sourceGeometries.forEach((geometry) => geometry.dispose());
+  scene.add(group);
 }
 
 // 车身碎片与玻璃渣
 function buildDebris(scene, r) {
   const paint = carPaint;
   const dark = markKeep(new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.6 }));
-  const glass = markKeep(new THREE.MeshStandardMaterial({ color: 0xbfe8ff, roughness: 0.05, metalness: 1 }));
+  const glass = markKeep(new THREE.MeshPhysicalMaterial({ color: 0x8ca5a7, roughness: 0.18, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08 }));
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const e = new THREE.Euler();
   const s = new THREE.Vector3();
   const v = new THREE.Vector3();
 
-  const shards = new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.01, 0.05), glass, 260);
+  const glassGeo = fragmentGeometry(r, 0.065, 0.008, 0.05);
+  const shards = new THREE.InstancedMesh(glassGeo, glass, 260);
   for (let i = 0; i < shards.count; i++) {
-    v.set(2 + r() * 4.8, DECK_Y + 0.015, -5 + r() * 9);
+    const radius = Math.pow(r(), 1.6) * 3.3;
+    const angle = r() * Math.PI * 2;
+    v.set(4.8 + Math.cos(angle) * radius * 0.52, DECK_Y + 0.012, -0.8 + Math.sin(angle) * radius);
     q.setFromEuler(e.set(0, r() * 6, 0));
-    s.setScalar(0.5 + r() * 1.5);
+    s.set(0.4 + r() * 1.3, 0.6 + r() * 0.5, 0.4 + r() * 1.6);
     shards.setMatrixAt(i, m.compose(v, q, s));
   }
   scene.add(shards);
 
   for (let i = 0; i < 18; i++) {
     const piece = new THREE.Mesh(
-      new THREE.BoxGeometry(0.2 + r() * 0.6, 0.03, 0.15 + r() * 0.4),
+      fragmentGeometry(r, 0.12 + r() * 0.48, 0.015 + r() * 0.045, 0.1 + r() * 0.35),
       r() < 0.6 ? paint : dark
     );
-    piece.position.set(1 + r() * 5.5, DECK_Y + 0.03, -6 + r() * 11);
-    piece.rotation.set((r() - 0.5) * 0.3, r() * 6, (r() - 0.5) * 0.3);
+    const travel = r();
+    settleFragment(piece, 3.0 + travel * 3.1 + (r() - 0.5) * 0.7, -4.5 + travel * 6 + (r() - 0.5) * 2.5, r);
     scene.add(piece);
   }
 }
@@ -284,44 +405,8 @@ function buildSkidMarks(scene) {
   addTireTracks(scene, curve, { offsets: [-0.8, 0.8], width: 0.245, seed: 404, slide: 0.45, opacity: 0.78 });
 }
 
-// 盖着白布的遇难者 + 血迹
+// 桥面上的盖布尸体已去掉，只留血迹
 function buildVictim(scene) {
-  const W = 2.2, D = 0.95;
-  const geo = new THREE.PlaneGeometry(W, D, 70, 34);
-  geo.rotateX(-Math.PI / 2);
-  const p = geo.attributes.position;
-  // 柔和的隆起，布料在身体部位之间自然撑起
-  const bump = (x, z, cx, cz, rx, rz, h) => {
-    const d = ((x - cx) / rx) ** 2 + ((z - cz) / rz) ** 2;
-    return h * Math.max(0, 1 - d / 2.4) ** 1.4;
-  };
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), z = p.getZ(i);
-    let h = Math.max(
-      bump(x, z, 0.78, 0, 0.14, 0.13, 0.2),       // 头
-      bump(x, z, 0.3, 0, 0.36, 0.25, 0.22),       // 躯干
-      bump(x, z, 0.25, 0.3, 0.3, 0.08, 0.1),      // 手臂
-      bump(x, z, 0.25, -0.3, 0.3, 0.08, 0.1),
-      bump(x, z, -0.45, 0.12, 0.45, 0.1, 0.14),   // 腿
-      bump(x, z, -0.42, -0.14, 0.45, 0.1, 0.14),
-      bump(x, z, -0.85, 0.2, 0.08, 0.06, 0.16),   // 脚
-      bump(x, z, -0.82, -0.18, 0.08, 0.06, 0.16)
-    );
-    // 布料向边缘垂落并带一点褶皱
-    const edge = Math.min(W / 2 - Math.abs(x), D / 2 - Math.abs(z));
-    h = Math.max(h * 0.95, 0) + 0.015 + Math.sin(x * 9 + z * 4) * 0.008;
-    h *= Math.min(1, edge / 0.12 + 0.15);
-    p.setY(i, h);
-  }
-  geo.computeVertexNormals();
-  const sheet = new THREE.Mesh(
-    geo,
-    markKeep(new THREE.MeshStandardMaterial({ color: 0xb8b8b2, roughness: 0.75, side: THREE.DoubleSide }))
-  );
-  sheet.position.copy(SHEET_POS);
-  sheet.rotation.y = SHEET_YAW;
-  scene.add(sheet);
-
   const bloodMat = (seed, o) => markKeep(new THREE.MeshStandardMaterial({
     map: bloodTexture(seed), transparent: true, depthWrite: false, roughness: 0.15, metalness: 0.2, opacity: o,
   }));

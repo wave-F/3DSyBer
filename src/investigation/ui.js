@@ -250,8 +250,10 @@ export function createUI() {
       const progress = Math.max(0, Math.min(1, p));
       const percent = phase === 'complete' ? 100 : Math.min(99, Math.floor(progress * 100));
       analysisPercent.textContent = `${percent}%`;
-      analysisStatus.textContent = phase === 'complete' ? '分析完成' : phase === 'working' ? '扫描中' : '按住 E 分析';
-      analysisCaption.textContent = phase === 'complete' ? target.name : '';
+      analysisStatus.textContent = phase === 'complete' ? '分析完成' : phase === 'working'
+        ? progress < 0.3 ? '探头接通' : progress < 0.85 ? '读取表面特征' : '证据比对'
+        : '按住 E 分析';
+      analysisCaption.textContent = phase === 'ready' ? '' : target.name;
       analysisFill.style.transform = `scaleX(${progress})`;
       analysisTrack.setAttribute('aria-valuenow', String(percent));
     },
