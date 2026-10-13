@@ -4,6 +4,10 @@ dist/
 *.local
 .env
 .env.*
+Fmod/**/.cache/
+Fmod/**/.user/
+Fmod/**/.unsaved/
+Fmod/**/Build/
 \[\]/
 
 # Blender 场景源文件（体积大，不提交）
