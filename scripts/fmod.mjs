@@ -7,10 +7,10 @@ const root = new URL('../', import.meta.url);
 const project = fileURLToPath(new URL('Fmod/3DSyBer/3DSyBer.fspro', root));
 const executable = process.env.FMOD_STUDIO_BIN || '/Applications/FMOD Studio.app/Contents/MacOS/fmodstudio';
 const mode = process.argv[2];
-if (!['create-test', 'build'].includes(mode)) throw new Error('Usage: node scripts/fmod.mjs create-test|build');
+if (!['create-test', 'events', 'build'].includes(mode)) throw new Error('Usage: node scripts/fmod.mjs create-test|events|build');
 const args = mode === 'build'
   ? ['-build', '-platforms', 'Desktop', '-export-guids', project]
-  : ['-script', fileURLToPath(new URL('Fmod/create-test-event.js', root)), project];
+  : ['-script', fileURLToPath(new URL(mode === 'events' ? 'Fmod/build-events.js' : 'Fmod/create-test-event.js', root)), project];
 // macOS 官方 fmodstudiocl 包装器依赖 tty；直接启动同一二进制的命令行模式。
 const result = spawnSync(executable, ['--platform', 'minimal', ...args], {
   cwd: fileURLToPath(root),

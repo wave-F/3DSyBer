@@ -24,6 +24,10 @@ import { buildSky, FOG_HEX } from './sky.js';
 import { clock, tick } from './investigation/clock.js';
 import { createInvestigation } from './investigation/state.js';
 import { addLightGroup } from './debugLights.js';
+import { sound } from './audio/sound.js';
+
+sound.preload();
+document.getElementById('overlay').addEventListener('click', () => sound.start());
 
 const renderer = new THREE.WebGPURenderer();
 // Forward+ 分簇光照：每个像素只计算真正照到它的点光源（灯一盏不少，开销按覆盖范围算）
@@ -179,6 +183,7 @@ renderer.setAnimationLoop(() => {
   updateSky(clock.dt, clock.elapsed);
   updateCity();
   inv.update(dt);
+  sound.update(dt);
   tabletAmt.value = Math.min(1, inv.tablet.amount * 1.4);
   pipeline.render();
 });

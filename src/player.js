@@ -2,11 +2,14 @@ import { PointerLockControls } from 'three/addons/controls/PointerLockControls.j
 import { DECK_Y, HALF_W } from './bridge.js';
 import { carCollider } from './crash.js';
 import { CORDON, CORDON_MARGIN } from './cordon.js';
+import { sound } from './audio/sound.js';
 
 const EYE = 1.7;
 const RADIUS = 0.35;
 const WALK = 4;
 const RUN = 8;
+const STRIDE_WALK = 1.9;   // 每步距离（米）
+const STRIDE_RUN = 3.0;
 
 export function createPlayer(camera, domElement, overlay) {
   const controls = new PointerLockControls(camera, domElement);
@@ -27,8 +30,23 @@ export function createPlayer(camera, domElement, overlay) {
   addEventListener('keydown', (e) => { keys[e.code] = true; });
   addEventListener('keyup', (e) => { keys[e.code] = false; });
 
+  let stride = 0, moving = 0;
+  const last = camera.position.clone();
+  // 脚步：按走过的距离触发；停下时补一声衣物摆动
+  function footsteps(dt, running) {
+    const d = Math.hypot(camera.position.x - last.x, camera.position.z - last.z);
+    last.copy(camera.position);
+    if (d > 0.002) {
+      if (moving <= 0) stride = (running ? STRIDE_RUN : STRIDE_WALK) * 0.6;   // 起步第一步来得快一些
+      moving = 0.15;
+      stride += d;
+      const len = running ? STRIDE_RUN : STRIDE_WALK;
+      if (stride >= len) { stride -= len; sound.play(running ? 'foley/step_run' : 'foley/step_walk'); }
+    } else if (moving > 0 && (moving -= dt) <= 0) sound.play('foley/cloth_move', { volume: 0.7 });
+  }
+
   function update(dt) {
-    if (!controls.isLocked) return;
+    if (!controls.isLocked) { last.copy(camera.position); return; }
     const speed = (keys.ShiftLeft || keys.ShiftRight ? RUN : WALK) * dt;
     const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
     const s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
@@ -44,6 +62,8 @@ export function createPlayer(camera, domElement, overlay) {
     p.z = Math.min(CORDON.z1 - CORDON_MARGIN, Math.max(CORDON.z0 + CORDON_MARGIN, p.z));
     p.y = DECK_Y + EYE;
     pushOutOfCar(p);
+    if (dt > 0) footsteps(dt, keys.ShiftLeft || keys.ShiftRight);
+    else last.copy(p);
   }
   update.controls = controls;
   return update;

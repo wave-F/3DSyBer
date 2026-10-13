@@ -8,6 +8,7 @@ import { createTablet } from './tablet.js';
 import { createViewmodel } from './viewmodel.js';
 import { createCutscene } from './cutscene.js';
 import { CLUES, PROBES, ROUNDS, REPORTS, LINES } from './clues.js';
+import { sound } from '../audio/sound.js';
 
 const HOLD_TIME = 1.4;      // Includes raising the instrument and one readable scan pass.
 const AIM_RANGE = 6;        // 准星可分析距离
@@ -61,6 +62,7 @@ export function createInvestigation(scene, camera, crash, controls) {
   let dbgAim = -1;
   let started = false;
   let cutFrozen = false;       // 调试：冻结过场，逐步查看镜头
+  let wasHolding = false, analysisDone = false, deviceShown = false;
 
   const R = () => ROUNDS[round];
   const unlocked = () => clues.filter((c) => c.unlocked);
@@ -87,6 +89,10 @@ export function createInvestigation(scene, camera, crash, controls) {
   // 打开平板：释放鼠标用来点击界面，视角固定；收起：重新锁定鼠标
   // relock = false 时（Esc 收起）不重新锁定，回到暂停层
   function setTablet(on, relock = true) {
+    if (on !== tablet.open) {
+      sound.play(on ? 'foley/tablet_raise' : 'foley/tablet_lower');
+      sound.play(on ? 'ui/panel_open' : 'ui/panel_close', { volume: 0.8 });
+    }
     tablet.toggle(on);
     if (on) {
       holdT = 0; finishedAnalysis = null; fx.setFocus(false); ui.setAnalysis(null);
@@ -121,6 +127,7 @@ export function createInvestigation(scene, camera, crash, controls) {
   document.addEventListener('pointerlockchange', syncTestBtn);
   testBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    sound.play('ui/click');
     if (lead) unlockRound2();
     clues.forEach((c) => { if (c.round === round) c.done = true; });
     ui.setHint(true);
@@ -132,6 +139,9 @@ export function createInvestigation(scene, camera, crash, controls) {
   syncTestBtn();
 
   function setMode(m) {
+    if (m === 'recon' && mode !== 'recon') sound.play('scifi/dream_enter');
+    if (m !== 'recon' && mode === 'recon') sound.play('scifi/dream_exit');
+    sound.setDream(m === 'recon');
     mode = m;
     holdT = 0; holdKey = false; finishedAnalysis = null;
     fx.setFocus(false);
@@ -237,6 +247,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     const rec = recorded[round];
     if (i < 0 || rec[i]) return false;
     rec[i] = true;
+    sound.play('ui/record');
     const ev = events()[i];
     ui.toast(`事件已记录 · ${clockText(ev.t)}`, ev.fact);
     ui.setCounter(rec.filter(Boolean).length, rec.length, '事件');
@@ -411,6 +422,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     if (scanCd > 0) return;
     // 手持设备举起对准前方，发射瞬间从设备位置放出扫描波
     if (!vm.scan((origin) => { clues.forEach((c) => { c.hit = false; }); fx.pulse(origin); })) return;
+    sound.play('scifi/scan_pulse');   // 前 0.5 秒充能，与举枪同长，脉冲落在发射瞬间
     scanCd = SCAN_COOLDOWN;
   }
 
@@ -423,6 +435,8 @@ export function createInvestigation(scene, camera, crash, controls) {
         target.done = true;
         holdT = 0;
         finishedAnalysis = { clue: target, remaining: 0.45 };
+        analysisDone = true;
+        sound.play('scifi/analyze_complete');
         onDone(target);
       }
     } else holdT = 0;
@@ -563,6 +577,7 @@ export function createInvestigation(scene, camera, crash, controls) {
       ui.setTabletOpen(tablet.amount > 0.05);
       if (mode === 'cut') {
         cut.update(cutFrozen ? 0 : realDt);
+        if (wasHolding) { wasHolding = false; sound.analyze(null); }
         vm.analyze(null, 0);
         fx.analyze(null);
         vm.update(realDt, false);
@@ -577,7 +592,16 @@ export function createInvestigation(scene, camera, crash, controls) {
         fx.analyze(null);
         if (mode === 'report') updateReport(realDt);
       }
-      vm.update(realDt, mode === 'explore' && !tablet.open && tablet.amount < 0.02);
+      const showDevice = mode === 'explore' && !tablet.open && tablet.amount < 0.02;
+      if (showDevice !== deviceShown) { deviceShown = showDevice; sound.play(showDevice ? 'foley/scanner_draw' : 'foley/scanner_holster', { volume: 0.8 }); }
+      // 分析持续音：按住期间音高随进度上升；中途松开 / 移开准星时播放断电声
+      if (holdT > 0) { sound.analyze(holdT / HOLD_TIME); wasHolding = true; analysisDone = false; }
+      else if (wasHolding) {
+        wasHolding = false;
+        sound.analyze(null);
+        if (!analysisDone) sound.play('scifi/analyze_cancel');
+      }
+      vm.update(realDt, showDevice);
       fx.update(realDt, vm.emitterWorld(emitter));
     },
     // 开发调试：直接切换状态 / 设置时间轴

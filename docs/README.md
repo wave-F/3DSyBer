@@ -24,6 +24,7 @@ npm run build
 | 线索、重建、平板 | [systems/investigation.md](systems/investigation.md) |
 | 雾、光、后期、雨 | [systems/render.md](systems/render.md) |
 | 文件一句职责 | [reference/file-map.md](reference/file-map.md) |
+| 声音、FMOD | [audio-fmod.md](audio-fmod.md) |
 | 剧情哪句已定、哪句是占位 | [design/case.md](design/case.md) |
 | 新功能该动哪层 | [dev/architecture.md](dev/architecture.md) |
 
