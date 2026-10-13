@@ -15,10 +15,6 @@
       #overlay h1 { margin: 0; font-size: 36px; color: #3ff; text-shadow: 0 0 12px #3ff; }
       #overlay p { margin: 0; opacity: 0.8; }
       #overlay.hidden { display: none; }
-      #crosshair {
-        position: fixed; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px;
-        border-radius: 50%; background: rgba(255, 255, 255, 0.6); pointer-events: none;
-      }
     </style>
   </head>
   <body>
@@ -27,7 +23,6 @@
       <p>WASD 移动 · Shift 奔跑 · 鼠标环顾 · Esc 暂停</p>
       <p>靠近可疑处按住 E 分析 · 找不到线索时按 Q 扫描</p>
     </div>
-    <div id="crosshair"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

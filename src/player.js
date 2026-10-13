@@ -1,6 +1,7 @@
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { DECK_Y, HALF_W } from './bridge.js';
 import { carCollider } from './crash.js';
+import { policeCollider } from './policeCar.js';
 import { CORDON, CORDON_MARGIN } from './cordon.js';
 
 const EYE = 1.7;
@@ -43,15 +44,16 @@ export function createPlayer(camera, domElement, overlay) {
     // 前后限制在两道警戒线之间
     p.z = Math.min(CORDON.z1 - CORDON_MARGIN, Math.max(CORDON.z0 + CORDON_MARGIN, p.z));
     p.y = DECK_Y + EYE;
-    pushOutOfCar(p);
+    for (const c of COLLIDERS) pushOutOfBox(p, c);
   }
   update.controls = controls;
   return update;
 }
 
+const COLLIDERS = [carCollider, policeCollider];
+
 // 将玩家从车体旋转包围盒中推出
-function pushOutOfCar(p) {
-  const c = carCollider;
+function pushOutOfBox(p, c) {
   const cos = Math.cos(c.yaw), sin = Math.sin(c.yaw);
   const wx = p.x - c.x, wz = p.z - c.z;
   let lx = cos * wx - sin * wz;

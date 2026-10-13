@@ -17,6 +17,7 @@ import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
 import { buildBridge } from './bridge.js';
 import { buildCity } from './city.js';
 import { buildCrash } from './crash.js';
+import { buildPoliceCar } from './policeCar.js';
 import { buildRain } from './rain.js';
 import { buildCordon } from './cordon.js';
 import { createPlayer } from './player.js';
@@ -70,6 +71,7 @@ new HDRLoader().load('/assets/shanghai_bund_1k.hdr', (hdr) => {
 buildBridge(scene);
 const updateCity = buildCity(scene);
 const crash = buildCrash(scene);
+const police = buildPoliceCar(scene);
 const updateSky = buildSky(scene);
 const updateRain = buildRain(scene, camera);
 const updateCordon = buildCordon(scene);
@@ -174,6 +176,7 @@ renderer.setAnimationLoop(() => {
   tick(dt);
   updatePlayer(dt * inv.moveScale);
   crash.update(clock.dt, clock.elapsed);
+  police.update(clock.dt, clock.elapsed);
   updateRain(clock.dt);
   updateCordon(dt, camera.position);
   updateSky(clock.dt, clock.elapsed);

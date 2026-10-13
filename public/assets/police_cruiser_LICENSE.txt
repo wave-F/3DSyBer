@@ -1,0 +1,8 @@
+police_cruiser.glb
+
+"NCPD Villefort Police Cruiser" by valvetin
+https://sketchfab.com/3d-models/ncpd-villefort-police-cruiser-d631f59c77654ae58bb77cf0442a62e4
+Licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+
+Changes: engine bay parts removed, materials split (glass / light covers / light bar),
+meshes joined, textures resized to 1024 and converted to WebP, Draco compressed.

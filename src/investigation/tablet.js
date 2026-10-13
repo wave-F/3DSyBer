@@ -163,7 +163,7 @@ export function createTablet(camera) {
     // 鼠标交互：hover 为画布坐标；regions 为本帧可点击区域（绘制时重建）
     hover: null, regions: [],
     repSel: 0,                    // 报告页选中的报告
-    glitch: 0,                    // 强干扰剩余时间（双闪打断确认时）
+    glitch: 0,                    // 强干扰剩余时间（报告被质疑改写、接入画面开始时）
     hack: null,                   // 插卡接入画面：{ t, cfg, onDone }
   };
   const sway = { yaw: 0, pitch: 0, vx: 0, vy: 0 };
@@ -274,11 +274,11 @@ export function createTablet(camera) {
   }
   function drawHack() {
     const { t, cfg } = state.hack;
-    text('CARD LINK · FIELD FORENSICS', 70, 104, 26, C.dim, 400, 'left', true);
+    text(cfg.head ?? 'CARD LINK · FIELD FORENSICS', 70, 104, 26, C.dim, 400, 'left', true);
     text(cfg.title, 70, 150, 40, C.white, 500);
     // 右上角：接入状态
     const blink = Math.floor(t * 4) % 2 === 0;
-    const done = t >= cfg.scan[1];
+    const done = t >= (cfg.scan ? cfg.scan[1] : cfg.done);
     text(done ? '● 已接入' : blink ? '● 接入中' : '○ 接入中', CW - 70, 150, 32, done ? '#40ff90' : C.gold, 500, 'right');
     g.fillStyle = C.faint;
     g.fillRect(70, 190, CW - 140, 2);
@@ -294,8 +294,10 @@ export function createTablet(camera) {
       text(s.text.slice(0, n), 104, y, 28, color, s.tone ? 500 : 400);
       y += 56;
     }
+    if (state.hack.held) text('TAB 收起', CW - 70, CH - 70, 24, C.dim, 400, 'right');
 
-    // 右侧：十六进制滚屏
+    // 右侧：十六进制滚屏（没有 scan 段的画面只有日志）
+    if (!cfg.scan) return;
     const [s0, s1] = cfg.scan;
     const x0 = 940, top = 240, rows = 10;
     if (t >= s0) {
@@ -317,8 +319,9 @@ export function createTablet(camera) {
       text(`${Math.floor(p * 100)}%`, CW - 70, by + 46, 24, p < 1 ? C.cyan : '#40ff90', 400, 'right', true);
     }
   }
+  // cfg.hold：走完后停在最后一帧，直到平板收起
   function hack(cfg, onDone) {
-    state.hack = { t: 0, cfg, onDone };
+    state.hack = { t: 0, cfg, onDone, held: false };
     state.glitch = 0.35;
     state.dirty = true;
   }
@@ -364,7 +367,7 @@ export function createTablet(camera) {
       text('该线索尚未分析。靠近可疑位置按住 E，或按 Q 扫描周围。', x, 420, 26, C.dim);
       return;
     }
-    const head = c.probe ? '黑梦分析' : c.data ? (c.locked ? '车载数据 · 权限不足' : '车载数据 · 执行器缓存') : `证据 #${String(state.sel + 1).padStart(2, '0')}`;
+    const head = c.probe ? '黑梦分析' : c.data ? (c.locked ? '车载数据 · 权限不足' : c.src ?? '车载数据 · 执行器缓存') : `证据 #${String(state.sel + 1).padStart(2, '0')}`;
     text(head, x, 336, 22, c.probe ? C.gold : c.locked ? C.red : c.data ? '#40ff90' : C.cyan, 400, 'left', true);
     text(c.name, x, 392, 46, C.white, 500);
     // 打字机效果：切换线索后逐行出现
@@ -387,6 +390,8 @@ export function createTablet(camera) {
       g.fillStyle = 'rgba(255,207,106,0.35)';
       g.fillRect(x, ry - 34, 400, 2);
       text(c.result, x, ry + 12, 32, c.locked ? C.red : C.gold, 500);
+      if (c.action) drawAction(c.action, x, ry + 60);
+      if (c.timeline) drawTimeline(c.timeline, x, ry + 112, Math.min(1, (state.typeT * 6 - c.lines.length - 1) / 3));
       if (c.prob == null) return;
       text('概率', x, ry + 66, 22, C.dim);
       g.fillStyle = 'rgba(255,207,106,0.2)';
@@ -408,6 +413,39 @@ export function createTablet(camera) {
     }
     corners(ix - 10, iy - 10, is + 20, is + 20, 26, C.cyan, 3);
     text(`影像记录 · EV-${String(state.sel + 1).padStart(2, '0')}`, ix, iy + is + 44, 20, C.dim, 400, 'left', true);
+  }
+
+  // 线索详情下方的操作按钮（例如插入根钥）：点击或按 E
+  function drawAction(a, x, y) {
+    const w = 560, h = 76;
+    const hot = inside(x, y, w, h);
+    const pulse = 0.12 + 0.08 * Math.sin(performance.now() / 260);
+    g.fillStyle = hot ? 'rgba(255,207,106,0.28)' : `rgba(255,207,106,${pulse})`;
+    g.fillRect(x, y, w, h);
+    corners(x, y, w, h, 16, C.gold, 3);
+    text(a.label, x + w / 2, y + h / 2 + 11, 30, hot ? C.white : C.gold, 500, 'center');
+    region(x, y, w, h, () => a.fn());
+  }
+
+  // 时间轴：按真实间隔排开各时刻，p 为绘制进度（0~1）
+  function drawTimeline(marks, x, y, p) {
+    if (p <= 0) return;
+    const w = CW - 70 - x - 40;
+    const t0 = marks[0].t, t1 = marks[marks.length - 1].t;
+    const px = (t) => x + 20 + ((t - t0) / (t1 - t0)) * (w - 40);
+    g.fillStyle = C.dim;
+    g.fillRect(x, y, w * p, 3);
+    marks.forEach((m, i) => {
+      const mx = px(m.t);
+      if (mx > x + w * p) return;
+      const col = m.tone === 'red' ? C.red : C.cyan;
+      g.fillStyle = col;
+      g.fillRect(mx - 2, y - 18, 4, 39);
+      // 标签上下交错，挨得近的时刻不会叠在一起
+      const up = i % 2 === 0;
+      text(m.label, mx, up ? y - 30 : y + 58, 24, m.tone === 'red' ? C.red : '#d6effc', 500, 'center');
+      text(m.t.toFixed(3).padStart(6, '0'), mx, up ? y - 62 : y + 90, 20, C.dim, 400, 'center', true);
+    });
   }
 
   // ---------- 报告 ----------
@@ -471,7 +509,7 @@ export function createTablet(camera) {
         if (r.note) text(r.note, x, vy + 72, 24, C.dim);
       }
     }
-    if (r.confirm && shown > lines.length + 1) drawConfirm(x, !!rv);
+    if (r.confirm && shown > lines.length + 1) drawConfirm(x, !!rv, r.confirm);
   }
 
   function strike(x, y, w) {
@@ -479,9 +517,9 @@ export function createTablet(camera) {
     g.fillRect(x - 4, y, w + 8, 3);
   }
 
-  // 「按住 E 确认归档」：确认进度条；被打断后显示挂起
-  // 报告 02（cf.onDecline）：左侧确认条 + 右侧「TAB 暂不归档」；cf.text 为非待确认状态下的文字
-  function drawConfirm(x, low = false) {
+  // 「按住 E 确认」：左侧确认条 + 右侧「TAB 暂不确认」；文字来自报告的 confirm 配置（lb）
+  // cf.text 为非待确认状态下的文字
+  function drawConfirm(x, low, lb) {
     const cf = state.data.confirm;
     if (!cf) return;
     const by = low ? 870 : 820, bh = low ? 76 : 92;
@@ -499,16 +537,15 @@ export function createTablet(camera) {
     }
     corners(bx, by, bw, bh, 18, warn ? '#ff9a3a' : C.gold, 3);
     const ty = by + bh / 2 + 12;
-    if (idle) text(cf.p > 0 ? '确认归档中…' : '按住 E 确认归档', bx + bw / 2, ty, 34, C.gold, 500, 'center');
+    if (idle) text(cf.p > 0 ? lb.holding : lb.hold, bx + bw / 2, ty, 34, C.gold, 500, 'center');
     else if (cf.text) text(cf.text, bx + bw / 2, ty, 30, warn ? '#ffb066' : C.gold, 500, 'center');
-    else text('复核挂起 · 现场出现未登记色值', bx + bw / 2, ty, 32, '#ffb066', 500, 'center');
     if (!split) return;
     const dx = bx + bw + 24, dw = full - bw - 24;
     const hot = inside(dx, by, dw, bh);
     g.fillStyle = hot ? 'rgba(127,214,255,0.16)' : 'rgba(127,214,255,0.06)';
     g.fillRect(dx, by, dw, bh);
     corners(dx, by, dw, bh, 14, C.dim, 2);
-    text('TAB 暂不归档', dx + dw / 2, ty, 28, hot ? C.white : C.cyan, 500, 'center');
+    text(lb.decline, dx + dw / 2, ty, 28, hot ? C.white : C.cyan, 500, 'center');
     region(dx, by, dw, bh, () => cf.onDecline());
   }
 
@@ -583,6 +620,7 @@ export function createTablet(camera) {
     else if (code === 'KeyS' && state.tab === 0) { state.sel = (state.sel + 1) % n; state.typeT = 0; }
     else if (code === 'KeyW' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + m - 1) % m; state.typeT = 0; }
     else if (code === 'KeyS' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + 1) % m; state.typeT = 0; }
+    else if (code === 'KeyE' && state.tab === 0 && state.data.clues[state.sel]?.action) state.data.clues[state.sel].action.fn();
     else return false;
     state.dirty = true;
     return true;
@@ -593,6 +631,7 @@ export function createTablet(camera) {
     if (on) { state.boot = 0; state.typeT = 0; state.dirty = true; }
     else {
       state.hover = null;
+      state.hack = null;
       document.body.style.cursor = '';
     }
   }
@@ -634,14 +673,15 @@ export function createTablet(camera) {
     // 内容：举到位后开机，界面动画期间逐帧重绘
     if (state.open && state.k > 0.6) state.boot = Math.min(1, state.boot + dt * 1.8);
     // 开机、打字、确认进度、干扰期间逐帧重绘
-    const animating = state.open && (state.boot < 1 || state.typeT < 2.5 || state.data.confirm?.p > 0 || state.glitch > 0 || !!state.hack);
+    const animating = state.open && (state.boot < 1 || state.typeT < 2.5 || state.data.confirm?.p > 0 || state.glitch > 0 || (!!state.hack && !state.hack.held));
     if (state.open && state.boot >= 1) state.typeT += dt;
     // 接入画面：开机后计时，走完回调并回到普通页面
-    if (state.hack && state.open && state.boot >= 1) {
+    if (state.hack && !state.hack.held && state.open && state.boot >= 1) {
       state.hack.t += dt;
       if (state.hack.t >= state.hack.cfg.done) {
         const f = state.hack.onDone;
-        state.hack = null;
+        if (state.hack.cfg.hold) state.hack.held = true;
+        else state.hack = null;
         state.typeT = 0;
         state.dirty = true;
         f?.();
@@ -660,7 +700,7 @@ export function createTablet(camera) {
     flickT -= dt;
     if (flickT <= 0 && Math.random() < dt * 0.25) flickT = 0.06 + Math.random() * 0.05;
     flicker.value = flickT > 0 ? 0.6 + Math.random() * 0.3 : 1;
-    // 强干扰：亮度剧烈跳动，画面偏橙（双闪打断确认）
+    // 强干扰：亮度剧烈跳动，画面偏橙
     state.glitch = Math.max(0, state.glitch - dt);
     if (state.glitch > 0) flicker.value = Math.random() < 0.35 ? 0.15 : 1.4 + Math.random();
     tint.value.setRGB(1, 1, 1).lerp(_orange, Math.min(1, state.glitch * 3));
@@ -681,7 +721,7 @@ export function createTablet(camera) {
       if (i < 0) return;
       state.tab = 0; state.sel = i; state.typeT = 0; state.dirty = true;
     },
-    get hacking() { return !!state.hack; },
+    get hacking() { return !!state.hack && !state.hack.held; },
     glitch(sec = 0.5) { state.glitch = sec; state.dirty = true; },
     get open() { return state.open; },
     get amount() { return state.k; },   // 用于背景压暗与虚化

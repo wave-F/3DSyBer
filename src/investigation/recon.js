@@ -6,6 +6,7 @@ import { createActor } from './actors.js';
 import { markKeep } from './mask.js';
 import { addTireTracks } from '../tireTracks.js';
 import { ROUNDS } from './clues.js';
+import { uniform, vec3, float, uv, sin, texture } from 'three/tsl';
 
 const BLUE = 0x3fb8ff;
 const ORANGE = 0xff8a1a;
@@ -73,6 +74,54 @@ const YAW_W = -0.9;               // 绕竖直轴的慢转
 const SIM_DT = 1 / 600, SIM_LEN = 3.0;
 const FALL_HIDE_Y = DECK_Y - 12;  // 髋部掉到桥面下这么深后隐藏
 const B_GONE_T = 4.0;
+const P0_R = 3.2;                 // 零号保障边界半径（米）
+const P0_WALL = 1.1;              // 光墙高度
+
+function buildP0() {
+  const group = new THREE.Group();
+  group.visible = false;
+  const glow = uniform(1);
+  const add = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false };
+  // 贴地圆环
+  const ringMat = markKeep(new THREE.MeshBasicNodeMaterial(add));
+  ringMat.colorNode = vec3(1, 1, 1).mul(glow).mul(2.2);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(P0_R - 0.07, P0_R, 128), ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.06;
+  // 光墙：底部最亮，向上渐隐，带细竖纹
+  const wallMat = markKeep(new THREE.MeshBasicNodeMaterial(add));
+  const fade = float(1).sub(uv().y).pow(2.2);
+  const ribs = sin(uv().x.mul(Math.PI * 2 * 48)).mul(0.25).add(0.75);
+  wallMat.colorNode = vec3(0.85, 0.93, 1).mul(fade).mul(ribs).mul(glow).mul(0.55);
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(P0_R, P0_R, P0_WALL, 128, 1, true), wallMat);
+  wall.position.y = P0_WALL / 2 + 0.05;
+  // 标牌：始终朝向镜头
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 128;
+  const g = c.getContext('2d');
+  g.strokeStyle = '#ffffff'; g.lineWidth = 4;
+  g.strokeRect(6, 14, 500, 100);
+  g.fillStyle = '#ffffff';
+  g.font = '600 64px "SF Mono", Menlo, monospace';
+  g.textBaseline = 'middle';
+  g.fillText('P0', 30, 66);
+  g.font = '500 30px "PingFang SC", sans-serif';
+  g.fillText('零号保障 · ZERO PRIORITY', 130, 66);
+  const map = new THREE.CanvasTexture(c);
+  map.colorSpace = THREE.SRGBColorSpace;
+  const tagMat = markKeep(new THREE.SpriteNodeMaterial({ ...add, side: THREE.FrontSide }));
+  tagMat.colorNode = texture(map).rgb.mul(texture(map).a).mul(glow).mul(1.6);
+  const tag = new THREE.Sprite(tagMat);
+  tag.scale.set(2.4, 0.6, 1);
+  tag.position.y = 2.1;
+  group.add(ring, wall, tag);
+  return {
+    group,
+    // s：缩放；k：亮度倍数
+    set(s, k) { ring.scale.setScalar(s); wall.scale.set(s, 1, s); glow.value = k; },
+  };
+}
+
 export function createRecon(scene, crash) {
   const root = new THREE.Group();
   root.visible = false;
@@ -177,12 +226,18 @@ export function createRecon(scene, crash) {
   // 第二段黑梦才有黄车，胎痕跟着这条路线铺在回放里，探索时不显示
   const bSkids = addTireTracks(root, TRACK_B.curve, { offsets: [-0.85, 0.85], width: 0.265, seed: 811, opacity: 0.75, keep: true });
 
+  // 零号保障边界：贴地白环 + 向上渐隐的光墙 + 「P0」标牌，跟着黄车走
+  // actors.p0 为出现时刻：黑梦 3 为 0（看起来一直都有），黑梦 4 在两车接近时突然生成并闪一下
+  const p0 = buildP0();
+  root.add(p0.group);
+
   let actors = { carB: true };
   function setRound(n) {
     const r = ROUNDS[n];
     actors = r.actors;
     pathB.visible = actors.carB;
     bSkids.forEach((m) => { m.visible = !!actors.carB; });
+    p0.group.visible = false;
   }
   setRound(1);
 
@@ -214,6 +269,16 @@ export function createRecon(scene, crash) {
     }
     carB.visible = actors.carB && t < B_GONE_T;
     placeCar(carB, TRACK_B, t);
+    const appear = actors.p0;
+    p0.group.visible = appear != null && carB.visible && t >= appear;
+    if (p0.group.visible) {
+      p0.group.position.set(carB.position.x, DECK_Y, carB.position.z);
+      // 突然生成：先放大、过曝、闪两下，0.4 秒内落定
+      const k = appear > 0 ? t - appear : Infinity;
+      const flare = Math.exp(-k * 7);
+      const blink = k < 0.18 && Math.floor(k * 40) % 2 === 1 ? 0.15 : 1;
+      p0.set(1 + flare * 0.5, (1 + flare * 3) * blink);
+    }
 
     if (victim) updateVictim(t);
   }
