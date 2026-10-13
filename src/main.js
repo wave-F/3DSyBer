@@ -183,7 +183,7 @@ renderer.setAnimationLoop(() => {
   updateSky(clock.dt, clock.elapsed);
   updateCity();
   inv.update(dt);
-  sound.update(dt);
+  sound.update(dt, camera);
   tabletAmt.value = Math.min(1, inv.tablet.amount * 1.4);
   pipeline.render();
 });

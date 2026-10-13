@@ -9,6 +9,7 @@ Freesound (CC0)  →  Fmod/source/*.mp3 + credits.json        npm run audio:fetc
    ↓ 剪辑 / 分层 / EQ / 回声 / 淡变 / 标准化（DAW 式 EDL）    npm run audio:design
 Fmod/3DSyBer/Assets/{amb,foley,ui,scifi}/*.wav
    ↓ FMOD Studio 脚本建 Event / 总线 / Bank                    npm run audio:events
+   ↓ 在手工 amb 事件上搭 3D / 子总线 / Snapshot / VCA          npm run audio:mix
 Fmod/3DSyBer/3DSyBer.fspro
    ↓ 构建 Desktop Bank 并同步                                  npm run audio:build
 public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
@@ -16,21 +17,30 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 
 - `scripts/freesound.mjs`：`search` 检索 CC0 素材，`get <id> <name>` 下载并登记出处，`fetch` 按 `credits.json` 重新下载。原始 mp3 不入库。
 - `scripts/sound-design.mjs`：编辑工程。每个输出是若干片段（素材、起点、长度、处理链、偏移、增益）的混音，再过母带链。脚步起点来自 onset 分析。环境声用尾部叠回开头做无缝循环，按 LUFS 标准化；单发音效按峰值标准化。传参只渲染名字匹配的文件，例如 `npm run audio:design -- step_walk`。
-- `Fmod/build-events.js`：每次重建 `amb` `foley` `ui` `scifi` 四个文件夹（`test/ping` 不动）。要在 Studio 里手工精修的事件，放到别的文件夹，否则下次会被覆盖。
+- `Fmod/build-events.js`：每次重建 `foley` `ui` `scifi` 三个文件夹（`amb`、`test/ping` 不动）。要在 Studio 里手工精修的事件，放到别的文件夹，否则下次会被覆盖。
+- `Fmod/setup-mix.js`：只增改不重建，可重复执行。`amb` 是在 Studio 里手工做的，脚本只给它加路由、Spatializer、Snapshot、VCA。跑完 `audio:events` 后要再跑一次。
 - CLI 读的是磁盘内容，Studio 里改完要先保存。
 
 ## 混音结构
 
-总线 `AMB`(-2 dB) `FOLEY`(0) `UI`(-3) `SCIFI`(-1) 都接 Master。全部事件为 2D，进 `Main` Bank。
+总线 `AMB`(-2 dB，带一个平时全开的 LP 24 dB) `FOLEY`(0) `UI`(-3) `SCIFI`(-1) 都接 Master。`AMB` 下分 `Bed` `City` `Crowd`。全部事件进 `Main` Bank。
 
-- 循环事件（`amb/*`、`scifi/analyze_loop`）放在用户参数 `level` 的参数页上，实例活着就一直循环。主轨有 AHDSR：起播淡入、`stop(ALLOWFADEOUT)` 时淡出。
+- 循环事件用时间线 + Loop Region：触发一次就一直循环。主轨上的 AHDSR 负责起播淡入，`stop(ALLOWFADEOUT)` 时淡出。没有参数。
+- `amb/rain` `amb/traffic` → `AMB/Bed`。2D 立体声铺底，跟着头走。
+- `amb/Amb_1` `Amb_2` `Amb_4` → `AMB/City`，`amb/Amb_3`（人群）→ `AMB/Crowd`。都是 3D 点声源，用 FMOD Spatializer（Inverse Tapered，User 包络），到最大距离时静音。位置写在 `src/audio/sound.js` 的 `EMITTERS`。听者每帧跟着相机的位置和朝向走；FMOD 用右手坐标系（`INIT_3D_RIGHTHANDED`），与 three.js 相同，单位米。
+- Snapshot（Overriding，强度用 AHDSR 淡入淡出）：
+  - `Dream`（黑梦，1.5 s）：Bed -8 dB、City -20 dB、Crowd -26 dB，AMB 低通降到 1.1 kHz。
+  - `Tablet`（平板举起，0.4 / 0.5 s）：AMB -7 dB（比平时低 5 dB）。
+- VCA：`Ambience`（AMB）、`SFX`（FOLEY + SCIFI）、`UI`。游戏里用 `sound.setVolume('ambience' | 'sfx' | 'ui', 0..1)` 调节。
 - 多变体事件（脚步、衣物）用 Multi Instrument 随机播放，并加音高 / 音量随机器。
 
 ## 事件与触发点
 
 | Event | 触发 |
 |-------|------|
-| `amb/rain` `amb/traffic` `amb/crowd` `amb/restaurant` | 第一次点击「点击开始」时启动。黑梦里压低（雨保留 35%，人群和餐馆几乎听不到） |
+| `amb/rain` `amb/traffic` `amb/Amb_1..4` | 第一次点击「点击开始」时各触发一次，之后一直循环 |
+| `snapshot:/Dream` | 进入 / 离开黑梦 |
+| `snapshot:/Tablet` | 平板打开期间 |
 | `foley/step_walk` / `step_run` | `player.js` 按走过的距离触发：走 1.9 m、跑 3.0 m 一步 |
 | `foley/cloth_move` | 停下脚步时 |
 | `foley/scanner_draw` / `scanner_holster` | 手持扫描仪出现 / 收起（打开平板、黑梦、过场） |
@@ -50,7 +60,7 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 
 ## 试听
 
-`npm run dev` 后打开 `/audio.html`，可以单独试听全部事件（清单在 `src/audio/events.js`）。循环事件会一直播，点「停止全部」停止。
+`npm run dev` 后打开 `/audio.html`，可以单独试听全部事件（清单在 `src/audio/events.js`），也可以推 VCA、开关 Snapshot。循环事件会一直播，点「停止全部」停止。
 
 ## 素材出处
 
@@ -62,6 +72,7 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 npm run audio:fetch    # 按 credits.json 下载原始素材
 npm run audio:design   # 渲染编辑后的 WAV
 npm run audio:events   # 在 FMOD 工程里重建事件
+npm run audio:mix      # amb 3D 定位 + 子总线 + Snapshot + VCA
 npm run audio:build    # 构建 Bank 并同步到 public/fmod/
 ```
 

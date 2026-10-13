@@ -1,6 +1,7 @@
-// FMOD Studio 官方脚本：根据 Assets/ 下编辑好的 WAV 生成全部游戏 Event、混音总线和 Main Bank。
-// 通过 npm run audio:events 执行。脚本管理的文件夹（amb / foley / ui / scifi）会被整体重建，
-// 需要在 Studio 里手动精修的事件请放到其它文件夹。
+// FMOD Studio 官方脚本：根据 Assets/ 下编辑好的 WAV 生成游戏 Event、混音总线和 Main Bank。
+// 通过 npm run audio:events 执行。脚本管理的文件夹（foley / ui / scifi）会被整体重建，
+// 需要在 Studio 里手动精修的事件请放到其它文件夹。amb 是手工制作的，这里不碰；
+// 它的 3D 定位、子总线、Snapshot、VCA 由 setup-mix.js 搭（重建后要再跑 npm run audio:mix）。
 var dir = studio.project.filePath.replace(/[^/]+$/, '') + 'Assets/';
 var ws = studio.project.workspace;
 
@@ -79,13 +80,17 @@ function oneShot(f, name, bus, files, opts) {
     return e;
 }
 
-// 循环事件：放在用户参数 level 的参数页上，实例运行期间一直循环，停止时淡出
+// 循环事件：时间线 + Loop Region，触发一次后一直循环，停止时淡出
 function loop(f, name, bus, file, fade) {
     var e = newEvent(f, name, bus);
-    var param = e.addGameParameter({ name: 'level', type: studio.project.parameterType.User, min: 0, max: 1 });
-    var sound = e.masterTrack.addSound(param.parameter || param, 'SingleSound', 0, 1);
-    sound.audioFile = asset(file);
-    sound.looping = true;
+    var a = asset(file);
+    var sound = e.masterTrack.addSound(e.timeline, 'SingleSound', 0, a.length);
+    sound.audioFile = a;
+    var region = studio.project.create('LoopRegion');
+    region.position = 0;
+    region.length = a.length;
+    region.timeline = e.timeline;
+    region.markerTrack = e.markerTracks[0];
     var adsr = e.masterTrack.mixerGroup.addModulator('ADSRModulator', 'volume');
     adsr.initialValue = -80;
     adsr.attackTime = fade;
@@ -98,12 +103,6 @@ function seq(prefix, n) {
     for (var i = 1; i <= n; i++) out.push(prefix + (i < 10 ? '0' : '') + i);
     return out;
 }
-
-var amb = folder('amb');
-loop(amb, 'rain', 'AMB', 'amb/rain_bed', 2500);
-loop(amb, 'crowd', 'AMB', 'amb/crowd_distant', 3000);
-loop(amb, 'restaurant', 'AMB', 'amb/restaurant_far', 3000);
-loop(amb, 'traffic', 'AMB', 'amb/traffic_far', 3000);
 
 var foley = folder('foley');
 oneShot(foley, 'step_walk', 'FOLEY', seq('foley/step_walk_', 11), { pitch: 1.2, volume: 2.5 });
@@ -136,4 +135,4 @@ oneShot(scifi, 'dream_exit', 'SCIFI', ['scifi/dream_exit']);
 
 ws.builtBanksOutputDirectory = '';
 studio.project.save();
-console.log('Ready: amb / foley / ui / scifi -> Main bank');
+console.log('Ready: foley / ui / scifi -> Main bank');

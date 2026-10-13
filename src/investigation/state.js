@@ -575,6 +575,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     update(realDt) {
       tablet.update(realDt);
       ui.setTabletOpen(tablet.amount > 0.05);
+      sound.setTablet(tablet.open);
       if (mode === 'cut') {
         cut.update(cutFrozen ? 0 : realDt);
         if (wasHolding) { wasHolding = false; sound.analyze(null); }

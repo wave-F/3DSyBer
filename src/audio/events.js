@@ -1,13 +1,19 @@
 // Bank 来自本仓库 Fmod/3DSyBer 工程。游戏和试听页共用；EVENTS 只给试听页列清单。
 export const BANKS = ['Master.strings.bank', 'Master.bank', 'Preview.bank', 'Main.bank'];
 
+// Mixer 对象：Fmod/setup-mix.js 创建
+export const SNAPSHOTS = { dream: 'snapshot:/Dream', tablet: 'snapshot:/Tablet' };
+export const VCAS = { ambience: 'vca:/Ambience', sfx: 'vca:/SFX', ui: 'vca:/UI' };
+
 const e = (path, label, description, bank = 'Main.bank') => ({ path, label, description, bank, volume: 1, pitch: 1 });
 
 export const EVENTS = [
-  e('event:/amb/rain', '雨声（循环）', '城市稳定雨声 + 近处密雨层 · 60 秒无缝循环 · 黑梦里压低', 'Main.bank'),
-  e('event:/amb/traffic', '远处车流（循环）', '夜间高架远景车流，低通去近场细节'),
-  e('event:/amb/crowd', '远处人群（循环）', '车站人声低通 + 早期反射，退到桥下街区'),
-  e('event:/amb/restaurant', '远处餐馆（循环）', '室内餐馆录音强低通，像从街边飘上来'),
+  e('event:/amb/rain', '雨声（循环）', '2D 立体声铺底 · AMB/Bed · 黑梦里压低并闷掉'),
+  e('event:/amb/traffic', '车流（循环）', '2D 立体声铺底 · AMB/Bed'),
+  e('event:/amb/Amb_1', '城市低频轰鸣（循环 · 3D）', '桥下街面点声源 · AMB/City · 12–160 m'),
+  e('event:/amb/Amb_2', '街面活动（循环 · 3D）', '楼脚点声源 · AMB/City · 8–110 m'),
+  e('event:/amb/Amb_3', '人群（循环 · 3D）', '街口点声源 · AMB/Crowd · 10–130 m'),
+  e('event:/amb/Amb_4', '远处城市（循环 · 3D）', '远处楼群点声源 · AMB/City · 30–300 m'),
   e('event:/foley/step_walk', '脚步 · 走', '11 条湿靴脚步 + 雨衣摩擦层 · 随机不重复 · 音高 / 音量随机'),
   e('event:/foley/step_run', '脚步 · 跑', '12 条跑步脚步，衣物层更重'),
   e('event:/foley/cloth_move', '衣物摆动', '停步 / 转身 · 5 条随机'),
