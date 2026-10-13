@@ -17,6 +17,10 @@ const SCAN_RANGE = 40;      // Q 扫描可发现的范围
 const SCAN_SHOW = 2;        // 扫描出的标记显示秒数，之后隐藏
 const SCAN_COOLDOWN = 5;    // 扫描冷却
 const RECORD_WINDOW = 0.22; // 事件节点可记录的时间窗口
+// 黑梦完成后的报告流程（自动举平板出报告 → 按住确认归档 → 双闪中断 → 车漆特写过场 → 第 2 轮），暂时屏蔽
+// 屏蔽时：本轮只标记完成，不出报告、不进第 2 轮。代码保留，改回 true 即恢复
+const REPORT_FLOW = false;
+const PROBE_WINDOW = 0.25;  // 带时间点 t 的分析点：回放时间在 t ± 此值内才出现
 const CONFIRM_TIME = 1.8;   // 按住确认归档走满所需时间
 const INTERRUPT_AT = 0.68;  // 确认进度到这里被双闪打断
 
@@ -36,9 +40,10 @@ export function createInvestigation(scene, camera, crash, controls) {
 
   // reveal：扫描后剩余显示时间；hit：本次扫描是否已扫到
   const clues = CLUES.map((c) => ({ ...c, p: new THREE.Vector3(...c.pos), done: false, reveal: 0, hit: false, unlocked: c.round === 1 }));
-  const probes = PROBES.map((c) => ({ ...c, probe: true, p: new THREE.Vector3(), done: false, visible: false }));
+  const probes = PROBES.map((c) => ({ ...c, probe: true, p: c.pos ? new THREE.Vector3(...c.pos) : new THREE.Vector3(), done: false, visible: false }));
   const recorded = { 1: ROUNDS[1].events.map(() => false), 2: ROUNDS[2].events.map(() => false) };
   const reports = ['initial'];
+  let guideTablet = true;   // 开场第一次按 Tab，直接落在报告页
   const roundDone = { 1: false, 2: false };
   let round = 1;
   let lead = false;            // 第 2 轮：只有车门残漆可查，分析后解锁其余线索
@@ -144,11 +149,13 @@ export function createInvestigation(scene, camera, crash, controls) {
       ui.setHint(reconReady());
     }
     if (m === 'recon') {
+      ui.clearToast();
       rt = 0; playing = true;
       recon.setRound(round);
       const r = R();
-      ui.buildTimeline(r.events, r.duration, r.jump, r.jumpLabel, frac);
-      ui.setCounter(recorded[round].filter(Boolean).length, r.events.length, '事件');
+      ui.buildTimeline(timeMarks(), r.duration, r.jump, r.jumpLabel, frac);
+      if (r.events.length) ui.setCounter(recorded[round].filter(Boolean).length, r.events.length, '事件');
+      else ui.setCounter(keyProbes().filter((c) => c.done).length, keyProbes().length, '分析');
     }
   }
 
@@ -169,7 +176,14 @@ export function createInvestigation(scene, camera, crash, controls) {
     }
 
     // 平板只在探索时可用；打开期间按键都交给平板
-    if (e.code === 'Tab' && mode === 'explore') { if (!e.repeat) setTablet(!tablet.open); return; }
+    if (e.code === 'Tab' && mode === 'explore') {
+      if (!e.repeat) {
+        const first = !tablet.open && guideTablet;
+        setTablet(!tablet.open);
+        if (first) { guideTablet = false; tablet.showReport('initial'); }
+      }
+      return;
+    }
     if (tablet.open) {
       if (!tablet.nav(e.code) && e.code === 'Escape') setTablet(false, false);
       return;
@@ -226,11 +240,21 @@ export function createInvestigation(scene, camera, crash, controls) {
     const ev = events()[i];
     ui.toast(`事件已记录 · ${clockText(ev.t)}`, ev.fact);
     ui.setCounter(rec.filter(Boolean).length, rec.length, '事件');
-    if (rec.every(Boolean) && !roundDone[round]) {
-      const r = round;
-      setTimeout(() => { if (mode === 'recon' && round === r) finishRecon(); }, 1800);
-    }
+    checkRoundDone();
     return true;
+  }
+
+  // 本轮黑梦完成：事件全部记录，且 key 分析点全部分析（黑梦 1 没有事件，只要分析车辙）
+  const keyProbes = () => probes.filter((c) => c.round === round && c.key);
+  // 带时间点的分析点，在进度条上显示为黄块
+  const timedProbes = () => probes.filter((c) => c.round === round && c.t != null);
+  const timeMarks = () => [...R().events, ...timedProbes()].map((m) => ({ t: m.t }));
+  const roundComplete = () => recorded[round].every(Boolean) && keyProbes().every((c) => c.done);
+  function checkRoundDone() {
+    if (!roundComplete() || roundDone[round]) return;
+    if (!REPORT_FLOW) { roundDone[round] = true; return; }
+    const r = round;
+    setTimeout(() => { if (mode === 'recon' && round === r && !roundDone[r]) finishRecon(); }, 1800);
   }
 
   // ---------- 复核报告 ----------
@@ -433,7 +457,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     const list = clues.map((c) => {
       const s = project(c.p);
       const d = c.p.distanceTo(camera.position);
-      const show = showClues && c.unlocked && c !== analysisClue && s.front && (d < NEAR_RANGE || c === aimed || (!c.done && c.reveal > 0));
+      const show = showClues && c.unlocked && c !== analysisClue && s.front && (d < NEAR_RANGE || (!c.nearOnly && (c === aimed || (!c.done && c.reveal > 0))));
       return {
         id: c.id, x: s.x, y: s.y, front: s.front, show, done: c.done, aim: c === aimed,
         label: c.done ? (c === aimed ? c.name : '') : (c === aimed || d < 8 ? `${d.toFixed(1)} m` : ''),
@@ -455,7 +479,7 @@ export function createInvestigation(scene, camera, crash, controls) {
       c.reveal = Math.max(0, c.reveal - dt);
       if (!c.unlocked) continue;
       const d = c.p.distanceTo(camera.position);
-      if (fx.pulsing && !c.hit && d < SCAN_RANGE && d < fx.pulseRadius) { c.hit = true; c.reveal = SCAN_SHOW; }
+      if (fx.pulsing && !c.nearOnly && !c.hit && d < SCAN_RANGE && d < fx.pulseRadius) { c.hit = true; c.reveal = SCAN_SHOW; }
     }
     const nextAim = aimAt(unlocked(), AIM_RANGE);
     if (nextAim !== aimed) holdT = 0;
@@ -464,7 +488,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     holdAnalyze(aimed, dt, (c) => {
       ui.setCounter(unlocked().filter((x) => x.done).length, unlocked().length);
       if (c.lead) onLeadDone();
-      else if (c.key && reconReady()) ui.toast('信息量达到重建要求', '黑梦已就绪 · 按 R 启动回放', 4500);
+      else if (c.key && reconReady()) ui.toast('信息量达到重建要求', '黑梦已就绪 · 按 R 启动回放', 0);
       ui.setHint(reconReady());
     });
     const analysisClue = showAnalysis(aimed);
@@ -484,7 +508,6 @@ export function createInvestigation(scene, camera, crash, controls) {
 
     if (analysisClue) ui.setPrompt(null);
     else if (aimed && aimed.done) ui.setPrompt(`按 E 查看：${aimed.name}`);
-    else if (reconReady() && !roundDone[round]) ui.setPrompt('信息量达到重建要求 · 按 R 启动黑梦', true);
     else ui.setPrompt(null);
 
     ui.updateMarkers(markerList(true, false, analysisClue));
@@ -500,30 +523,34 @@ export function createInvestigation(scene, camera, crash, controls) {
     recon.setTime(rt);
 
     // 全息物体分析：跟随物体当前位置；开始分析时自动暂停
-    for (const c of probes) c.visible = c.round === round && recon.targetPos(c.target, c.p);
+    // 固定位置的分析点只在可见范围内出现；nearOnly 要走近 NEAR_RANGE 才显示和可分析
+    for (const c of probes) {
+      if (c.round !== round) c.visible = false;
+      else if (c.t != null && Math.abs(rt - c.t) > PROBE_WINDOW) c.visible = false;
+      else if (c.pos) c.visible = !c.nearOnly || c.p.distanceTo(camera.position) < NEAR_RANGE;
+      else c.visible = recon.targetPos(c.target, c.p);
+    }
     const nextAim = aimAt(probes.filter((c) => c.visible), PROBE_RANGE);
     if (nextAim !== aimedProbe) holdT = 0;
     aimedProbe = nextAim;
     tickFinished(dt);
-    holdAnalyze(aimedProbe, dt, () => {});
+    holdAnalyze(aimedProbe, dt, (c) => { if (c.key) ui.setCounter(keyProbes().filter((x) => x.done).length, keyProbes().length, '分析'); checkRoundDone(); });
     if (holdT > 0) playing = false;
     const analysisClue = showAnalysis(aimedProbe);
 
     const rec = recorded[round];
     const ni = nearEvent();
-    ui.updateTimeline(rt, r.duration, clockText(rt), rec, ni);
+    // 进度条黄块：先是事件，后是带时间点的分析点（已分析视为已记录）
+    const tp = timedProbes();
+    const tpNear = tp.findIndex((c) => Math.abs(rt - c.t) <= PROBE_WINDOW);
+    const markNear = ni >= 0 ? ni : (tpNear >= 0 ? rec.length + tpNear : -1);
+    const countText = r.events.length ? `已记录事件 ${rec.filter(Boolean).length}/${rec.length}` : `已分析 ${tp.filter((c) => c.done).length}/${tp.length}`;
+    ui.updateTimeline(rt, r.duration, clockText(rt), [...rec, ...tp.map((c) => c.done)], markNear, countText);
     if (ni >= 0 && !rec[ni]) ui.setPrompt(`按 E 记录：${r.events[ni].label}`, true);
     else if (analysisClue) ui.setPrompt(null);
     else if (aimedProbe && aimedProbe.done) ui.setPrompt(`按 E 查看：${aimedProbe.name}`);
-    else if (rec.every(Boolean)) ui.setPrompt('回放完成 · 正在生成复核报告', true);
+    else if (REPORT_FLOW && roundComplete()) ui.setPrompt('回放完成 · 正在生成复核报告', true);
     else ui.setPrompt(null);
-    // 只标注离当前时间最近的一个事件，避免同一位置的标签重叠
-    let closest = -1, cd = 0.35;
-    r.events.forEach((ev, i) => { const d = Math.abs(ev.t - rt); if (d < cd) { cd = d; closest = i; } });
-    ui.updateEventLabels(recon.eventPos.map((p, i) => {
-      const s = project(p);
-      return { x: s.x, y: s.y, show: s.front && i === closest, rec: rec[i], near: i === ni };
-    }));
     ui.updateMarkers(markerList(false, true, analysisClue));
   }
 

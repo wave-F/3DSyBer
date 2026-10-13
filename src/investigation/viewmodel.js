@@ -181,7 +181,7 @@ function buildDevice() {
   emitter.add(glow, ring, spill);
   g.add(emitter);
   let ready = false;
-  new GLTFLoader().load('/assets/scanner-arm.glb', (gltf) => {
+  new GLTFLoader().load('/assets/scanner-arm.glb?v=3', (gltf) => {
     const model = gltf.scene;
     // Align this asset's diagonal barrel with -Z, pivoting about its grip.
     model.rotation.set(-0.19, -2.61, 0);

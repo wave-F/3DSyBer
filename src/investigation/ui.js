@@ -72,24 +72,27 @@ const CSS = `
 #inv-panel .prob .pb { flex: 1; height: 3px; background: rgba(255,210,122,.2); }
 #inv-panel .prob .pb i { display: block; height: 100%; background: #ffd27a; width: 0; transition: width 1s ease-out; }
 @keyframes inv-in { to { opacity: 1; transform: none; } }
-#inv-toast { left: 50%; top: 18%; transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity .4s; }
+#inv-toast { left: 50%; top: 12%; transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity .4s; }
 #inv-toast.on { opacity: 1; }
 #inv-toast .t1 { font-size: 11px; letter-spacing: .4em; color: #6cc8ff; }
 #inv-toast .t2 { margin-top: 8px; font-size: 18px; letter-spacing: .06em; }
+#inv-toast.big { padding: 12px 22px; background: rgba(5,12,20,.62); border: 1px solid rgba(255,207,74,.7); }
+#inv-toast.big .t1 { font-size: 12px; letter-spacing: .36em; }
+#inv-toast.big .t2 { margin-top: 8px; font-size: 22px; letter-spacing: .08em; color: #ffcf4a; }
 #inv-tl { left: 50%; bottom: 84px; width: min(900px, 70vw); transform: translateX(-50%); opacity: 0; transition: opacity .4s; }
 #inv-tl.on { opacity: 1; }
 #inv-tl .head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; letter-spacing: .25em; color: #6cc8ff; margin-bottom: 14px; }
 #inv-tl .head .count { font-size: 13px; letter-spacing: .14em; color: #9fd4ff; }
 #inv-tl .track { position: relative; display: flex; align-items: center; gap: 3px; height: 14px; }
-#inv-tl .track > i { flex: 1; height: 14px; background: rgba(176,186,198,.32); }
+#inv-tl .track > i { position: relative; z-index: 1; flex: 1; height: 14px; background: rgba(176,186,198,.32); }
 #inv-tl .track > i.past { background: rgba(236,242,248,.92); }
-#inv-tl .track > i.now { background: #3aa7ff; box-shadow: 0 0 8px rgba(58,167,255,.85); }
+#inv-tl .track > i.now { z-index: 3; background: #3aa7ff; box-shadow: 0 0 8px rgba(58,167,255,.85); }
 #inv-tl .gap { position: relative; flex: 0 0 14px; align-self: stretch; background: repeating-linear-gradient(90deg, rgba(255,255,255,.7) 0 1px, transparent 1px 3px); }
 #inv-tl .gap span { position: absolute; bottom: 22px; transform: translateX(-40%); font-size: 10px; white-space: nowrap; letter-spacing: .12em; color: rgba(232,246,255,.7); }
 #inv-tl .clock { position: absolute; top: 20px; transform: translateX(-50%); font-size: 12px; letter-spacing: .08em; color: #7ec8ff; white-space: nowrap; }
-#inv-tl .ev { position: absolute; top: -6px; width: 2px; height: 24px; margin-left: -1px; background: rgba(255,207,74,.4); }
-#inv-tl .ev.rec { background: #ffcf4a; box-shadow: 0 0 6px #ffcf4a; }
-#inv-tl .ev.near { background: #fff6cc; height: 28px; top: -8px; }
+#inv-tl .ev { position: absolute; z-index: 2; top: 0; height: 14px; background: rgba(255,207,74,.72); }
+#inv-tl .ev.rec { background: #ffcf4a; }
+#inv-tl .ev.near { box-shadow: 0 0 8px #ffcf4a; }
 #inv-evlabels { inset: 0; }
 .inv-evl3 { position: absolute; transform: translate(-50%, -100%); font-size: 12px; padding: 3px 8px; border: 1px solid rgba(255,207,74,.6); color: #ffcf4a; background: rgba(5,10,16,.5); white-space: nowrap; letter-spacing: .08em; transition: opacity .2s; }
 .inv-evl3.rec { border-color: rgba(255,255,255,.6); color: #fff; }
@@ -158,7 +161,7 @@ export function createUI() {
   const cine = el('inv-cine');
   const black = el('inv-black');
   const flash = el('inv-flash');
-  let panelTimer = 0, toastTimer = 0;
+  let panelTimer = 0, toastTimer = 0, toastHold = null;
   let sayToken = 0;
 
   const HINTS = {
@@ -292,12 +295,24 @@ export function createUI() {
       panelTimer = setTimeout(() => { panel.classList.remove('on'); panel.style.visibility = ''; clueId = null; }, 4000);
     },
     hidePanel() { clearTimeout(panelTimer); panel.classList.remove('on'); panel.style.visibility = ''; clueId = null; },
+    // ms 为 0 时不自动消失，直到下一条提示或 clearToast
     toast(t1, t2, ms = 3200) {
       clearTimeout(toastTimer);
+      const big = ms === 0;
+      if (big) toastHold = [t1, t2];
       toast.querySelector('.t1').textContent = t1;
       toast.querySelector('.t2').textContent = t2;
+      toast.classList.toggle('big', big);
       toast.classList.add('on');
-      toastTimer = setTimeout(() => toast.classList.remove('on'), ms);
+      if (ms > 0) toastTimer = setTimeout(() => {
+        if (toastHold) this.toast(toastHold[0], toastHold[1], 0);
+        else toast.classList.remove('on', 'big');
+      }, ms);
+    },
+    clearToast() {
+      clearTimeout(toastTimer);
+      toastHold = null;
+      toast.classList.remove('on', 'big');
     },
     buildTimeline(events, duration, jumpT, jumpLabel, frac, title = 'BLACKDREAM · 黑梦回放') {
       const CELLS = 72;
@@ -310,21 +325,13 @@ export function createUI() {
       const strip = Array.from({ length: before }, (_, i) => cell(i)).join('')
         + (jumpAt == null ? '' : `<b class="gap"><span>${jumpLabel}</span></b>`)
         + Array.from({ length: CELLS - before }, (_, i) => cell(before + i)).join('');
-      tl.innerHTML = `<div class="head"><span>${title}</span><span class="count inv-mono">已记录事件 0/${events.length}</span></div>
+      tl.innerHTML = `<div class="head"><span>${title}</span><span class="count inv-mono"></span></div>
         <div class="track">${strip}
         ${events.map((e, i) => `<div class="ev" data-i="${i}"></div>`).join('')}
         <div class="clock inv-mono">00:00.0</div></div>`;
-      evlabels.innerHTML = '';
-      evEls.length = 0;
-      events.forEach((e) => {
-        const d = document.createElement('div');
-        d.className = 'inv-evl3';
-        d.textContent = e.label;
-        evlabels.appendChild(d);
-        evEls.push(d);
-      });
     },
-    updateTimeline(t, duration, clockText, recorded, nearIdx) {
+    // recorded / nearIdx 按 buildTimeline 传入的标记顺序；countText 为标题右侧的计数文字
+    updateTimeline(t, duration, clockText, recorded, nearIdx, countText = '') {
       const track = tl.querySelector('.track');
       if (!track) return;
       const cells = track.querySelectorAll(':scope > i');
@@ -344,17 +351,20 @@ export function createUI() {
         clock.style.left = `${ar.left - cr.left + ar.width / 2}px`;
       }
       const done = recorded.filter(Boolean).length;
-      tl.querySelector('.count').textContent = `已记录事件 ${done}/${recorded.length}`;
+      tl.querySelector('.count').textContent = countText;
+      const cr = track.getBoundingClientRect();
       tl.querySelectorAll('.ev').forEach((e) => {
         const i = +e.dataset.i;
         e.classList.toggle('rec', recorded[i]);
         e.classList.toggle('near', i === nearIdx);
         const idx = Math.round((this._evFrac[i] ?? 0) * (n - 1));
-        const cell = cells[Math.max(0, Math.min(n - 1, idx))];
-        if (!cell) return;
-        const cr = track.getBoundingClientRect();
-        const br = cell.getBoundingClientRect();
-        e.style.left = `${br.left - cr.left + br.width / 2}px`;
+        const a = cells[Math.max(0, idx - 1)];
+        const b = cells[Math.min(n - 1, idx + 1)];
+        if (!a || !b) return;
+        const ar = a.getBoundingClientRect();
+        const br = b.getBoundingClientRect();
+        e.style.left = `${ar.left - cr.left}px`;
+        e.style.width = `${br.right - ar.left}px`;
       });
     },
     // list: [{ x, y, show, rec, near }]

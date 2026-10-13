@@ -1,20 +1,10 @@
 // 剧情数据：对应 docs/Story/事故之前-序章.md 的前两轮
 // 流程：取证 → 黑梦回放 → 复核报告。第 1 轮只看单车，第 2 轮发现第二辆车
 
-// 线索：round 为解锁轮次；key 为该轮进入黑梦的必需线索
+// 线索：round 为解锁轮次；key 为该轮进入黑梦的必需线索；nearOnly 为只有走近（NEAR_RANGE）才显示菱形，Q 扫描扫不亮
 // 第 2 轮按最新剧情没有返回现场的人：黄车接触后直接向北开走
 // 第 2 轮中 scrape 是转折入口，单独先解锁，分析后才解锁同轮其余线索
 export const CLUES = [
-  {
-    id: 'victim', round: 1, name: '遇难者', pos: [1.8, 20.25, 5.1], radius: 1.0, key: true,
-    lines: ['身份识别：程叙，34 岁（职业档案未开放）', '颈椎骨折，当场死亡', '驾驶员侧车窗破碎，被甩出车外约 5.8 m'],
-    result: '死者被甩出车外', prob: 0.95,
-  },
-  {
-    id: 'skidA', round: 1, name: '刹车痕', pos: [-0.9, 20.05, -22], radius: 1.6, key: true,
-    lines: ['制动距离 29.4 m', '推算初速度 112 km/h（限速 80）', '制动后约 0.4 秒方向向左偏转'],
-    result: '死者车辆紧急制动', prob: 0.97,
-  },
   {
     id: 'front', round: 1, name: '车头损毁', pos: [6.9, 20.6, 1.5], radius: 0.9, key: true,
     lines: ['前纵梁压缩 0.62 m', '左前悬架断裂，车轮脱落', '驾驶员侧气囊已展开'],
@@ -26,7 +16,7 @@ export const CLUES = [
     result: '车辆失控撞断护栏', prob: 0.99,
   },
   {
-    id: 'debris', round: 1, name: '碎片散布', pos: [3.2, 20.1, -3.0], radius: 1.2, key: false,
+    id: 'debris', round: 1, name: '碎片散布', pos: [3.2, 20.1, -3.0], radius: 1.2, key: true,
     lines: ['散布方向 NE 41°，与最终车头朝向一致', '玻璃碎片来自驾驶员侧车窗', '乘员可能经由该车窗被甩出'],
     result: '车窗破碎', prob: 0.84,
   },
@@ -36,23 +26,21 @@ export const CLUES = [
     result: '残漆不属于本车', prob: 0.96,
   },
   {
-    id: 'skidB', round: 2, name: '第二道胎痕', pos: [-3.9, 20.05, -21], radius: 1.6, key: true,
+    id: 'skidB', round: 2, nearOnly: true, name: '第二道胎痕', pos: [-3.9, 20.05, -21], radius: 1.6, key: true,
     lines: ['胎宽 265 mm，与死者车辆（245 mm）不符', '由右侧切入，随后向北延伸', '没有停车制动的痕迹'],
     result: '第二辆车未停车，已经开走', prob: 0.93,
   },
 ];
 
-// 黑梦内可分析的全息对象（按住 E）。target 对应 recon.js 里的全息物体
+// 黑梦内可分析的对象（按住 E）。target 对应 recon.js 里的全息物体；或用 pos 指定固定位置
 export const PROBES = [
+  // 黑梦 1 唯一的分析点：现场真实存在、但重建没有收录的另一道车辙。和报告「未发现其他涉事车辆」对不上
+  // pos 为固定位置（不跟随全息物体）；nearOnly 为走近 NEAR_RANGE 才显示菱形、才能分析；key 为生成本轮报告的必需分析
+  // t 为时间点：进度条上显示黄块，回放时间在 t 附近（±0.25 s）才出现。1.4 s 是黄车切入、留下这道车辙的时刻
   {
-    id: 'p1car', round: 1, target: 'carA', name: 'A 车全息', radius: 1.8,
-    lines: ['轨迹依据：刹车痕、护栏断口、车头形变', '驾驶模式：手动（数据来源：系统初判）', '重建范围内未检出其他车辆'],
-    result: '重建结果支持单车失控', prob: 0.9,
-  },
-  {
-    id: 'p1man', round: 1, target: 'victim', name: '蓝色人影', radius: 0.9,
-    lines: ['乘员位置：驾驶座', '甩出路径与车窗碎片散布一致', '落点与血泊位置吻合'],
-    result: '驾驶员被甩出车外', prob: 0.93,
+    id: 'p1skid', round: 1, key: true, t: 1.4, pos: [-3.9, 20.05, -21], nearOnly: true, name: '另一道车辙', radius: 1.6,
+    lines: ['胎宽 265 mm，与死者车辆（245 mm）不符', '由右侧切入，随后向北延伸', '重建模型未收录这道车辙'],
+    result: '与「未发现其他涉事车辆」矛盾', prob: 0.9,
   },
   {
     id: 'p2car', round: 2, target: 'carB', name: '黄色车辆', radius: 1.8,
@@ -69,24 +57,20 @@ export const PROBES = [
 // 每轮黑梦：时长、时间跳跃、事件节点、出场的全息物体、回放后生成的报告
 export const ROUNDS = {
   1: {
-    duration: 4, jump: null,
+    duration: 5, jump: null,
     actors: { carB: false },
-    events: [
-      { t: 1.0, label: '紧急制动', fact: '死者车辆以约 112 km/h 行驶，紧急制动' },
-      { t: 1.4, label: '方向偏转', fact: '制动中车辆向左偏转，驾驶员操作失当' },
-      { t: 2.6, label: '撞击护栏', fact: '车辆失控，以约 86 km/h 撞断护栏' },
-      { t: 2.85, label: '乘员甩出', fact: '侧窗破碎，驾驶员被甩出车外' },
-    ],
+    // 黑梦 1 不记录事件：进度条上唯一的黄块是车辙分析点 p1skid 的时间点，分析完生成报告 01
+    events: [],
     report: 'r1',
   },
   2: {
-    duration: 4.5, jump: null,
+    duration: 5, jump: null,
     actors: { carB: true },
     events: [
       { t: 1.0, label: '紧急制动', fact: '黄色车辆从右侧切入，死者车辆紧急制动' },
       { t: 1.4, label: '侧面碰撞', fact: '黄色车辆刮擦死者车辆右侧；两车交换碰撞数据包，原始字段不可读' },
       { t: 2.6, label: '撞击护栏', fact: '死者车辆打滑失控，以约 86 km/h 撞断护栏' },
-      { t: 2.85, label: '乘员甩出', fact: '侧窗破碎，死者被甩出车外' },
+      { t: 2.85, label: '乘员坠桥', fact: '侧窗破碎，死者被甩出车外，越过护栏缺口坠落桥下' },
       { t: 3.5, label: '黄车驶离', track: 'B', fact: '黄色车辆没有减速，向北驶出重建范围' },
     ],
     report: 'r2',

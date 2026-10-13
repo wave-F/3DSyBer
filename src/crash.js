@@ -3,7 +3,7 @@ import { float, mx_noise_float, positionLocal, positionWorld, vec3 } from 'three
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { rng, bloodTexture } from './textures.js';
+import { rng } from './textures.js';
 import { DECK_Y, HALF_W, BREAK, concrete as concreteBase, metal as metalBase } from './bridge.js';
 import { mergeStatic } from './merge.js';
 import { markKeep } from './investigation/mask.js';
@@ -20,9 +20,6 @@ carPaint.clearcoatRoughnessNode = float(0.18).add(paintVariation.mul(0.035)).cla
 // 车的位置与朝向（车头为本地 +X）
 export const CAR_POS = new THREE.Vector3(5.5, DECK_Y, 0.2);
 export const CAR_YAW = -0.75;
-// 盖布（遇难者）最终位置，重建时被甩出的人形落在这里
-export const SHEET_POS = new THREE.Vector3(1.6, DECK_Y + 0.02, 5.2);
-export const SHEET_YAW = 0.5;
 
 // 供玩家碰撞用的车体包围盒（车本地坐标）
 export const carCollider = {
@@ -44,7 +41,6 @@ export function buildCrash(scene) {
   buildBrokenRail(scene);
   buildDebris(scene, r);
   buildSkidMarks(scene);
-  buildVictim(scene);
 
   // 车头起火的橙色闪烁光（放在车头前上方，离引擎盖约 0.8m，避免平方衰减把引擎盖打爆）
   const fireLight = new THREE.PointLight(0xff6a20, 6, 10, 2);
@@ -421,18 +417,4 @@ function buildSkidMarks(scene) {
     end,
   );
   addTireTracks(scene, curve, { offsets: [-0.8, 0.8], width: 0.245, seed: 404, slide: 0.45, opacity: 0.78 });
-}
-
-// 桥面上的盖布尸体已去掉，只留血迹
-function buildVictim(scene) {
-  const bloodMat = (seed, o) => markKeep(new THREE.MeshStandardMaterial({
-    map: bloodTexture(seed), transparent: true, depthWrite: false, roughness: 0.15, metalness: 0.2, opacity: o,
-  }));
-  const pool = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.2), bloodMat(1, 1));
-  pool.rotation.set(-Math.PI / 2, 0, 0.3);
-  pool.position.set(2.3, DECK_Y + 0.018, 4.4);
-  const trail = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 3.2), bloodMat(2, 0.8));
-  trail.rotation.set(-Math.PI / 2, 0, 0.9);
-  trail.position.set(3.4, DECK_Y + 0.017, 3.2);
-  scene.add(pool, trail);
 }
