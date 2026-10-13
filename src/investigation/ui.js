@@ -78,35 +78,40 @@ const CSS = `
 #inv-toast .t2 { margin-top: 8px; font-size: 18px; letter-spacing: .06em; }
 #inv-tl { left: 50%; bottom: 84px; width: min(900px, 70vw); transform: translateX(-50%); opacity: 0; transition: opacity .4s; }
 #inv-tl.on { opacity: 1; }
-#inv-tl .head { display: flex; justify-content: space-between; font-size: 12px; letter-spacing: .25em; color: #6cc8ff; margin-bottom: 40px; }
-#inv-tl .head .clock { font-size: 16px; color: #e8f6ff; letter-spacing: .08em; }
-#inv-tl .track { position: relative; height: 2px; background: rgba(108,200,255,.3); }
-#inv-tl .fill { position: absolute; left: 0; top: 0; height: 100%; background: #6cc8ff; }
-#inv-tl .ph { position: absolute; top: -9px; width: 2px; height: 20px; background: #fff; box-shadow: 0 0 8px #6cc8ff; }
-#inv-tl .ev { position: absolute; top: -6px; width: 10px; height: 10px; margin-left: -5px; border: 1.5px solid #ffcf4a; transform: rotate(45deg); background: rgba(5,10,16,.8); }
-#inv-tl .ev.rec { background: #ffcf4a; }
-#inv-tl .ev.near { box-shadow: 0 0 12px #ffcf4a; width: 14px; height: 14px; margin-left: -7px; top: -8px; }
-#inv-tl .evl { position: absolute; top: 14px; transform: translateX(-50%); font-size: 11px; white-space: nowrap; color: #ffcf4a; opacity: .75; }
-#inv-tl .evl.rec { color: #fff; opacity: .9; }
-#inv-tl .evl.up { top: -30px; }
-#inv-tl .jump { position: absolute; top: -14px; height: 30px; border-left: 1px dashed rgba(255,255,255,.5); }
-#inv-tl .jump span { position: absolute; top: -16px; left: 6px; font-size: 10px; white-space: nowrap; opacity: .6; letter-spacing: .1em; }
+#inv-tl .head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; letter-spacing: .25em; color: #6cc8ff; margin-bottom: 14px; }
+#inv-tl .head .count { font-size: 13px; letter-spacing: .14em; color: #9fd4ff; }
+#inv-tl .track { position: relative; display: flex; align-items: center; gap: 3px; height: 14px; }
+#inv-tl .track > i { flex: 1; height: 14px; background: rgba(176,186,198,.32); }
+#inv-tl .track > i.past { background: rgba(236,242,248,.92); }
+#inv-tl .track > i.now { background: #3aa7ff; box-shadow: 0 0 8px rgba(58,167,255,.85); }
+#inv-tl .gap { position: relative; flex: 0 0 14px; align-self: stretch; background: repeating-linear-gradient(90deg, rgba(255,255,255,.7) 0 1px, transparent 1px 3px); }
+#inv-tl .gap span { position: absolute; bottom: 22px; transform: translateX(-40%); font-size: 10px; white-space: nowrap; letter-spacing: .12em; color: rgba(232,246,255,.7); }
+#inv-tl .clock { position: absolute; top: 20px; transform: translateX(-50%); font-size: 12px; letter-spacing: .08em; color: #7ec8ff; white-space: nowrap; }
+#inv-tl .ev { position: absolute; top: -6px; width: 2px; height: 24px; margin-left: -1px; background: rgba(255,207,74,.4); }
+#inv-tl .ev.rec { background: #ffcf4a; box-shadow: 0 0 6px #ffcf4a; }
+#inv-tl .ev.near { background: #fff6cc; height: 28px; top: -8px; }
 #inv-evlabels { inset: 0; }
 .inv-evl3 { position: absolute; transform: translate(-50%, -100%); font-size: 12px; padding: 3px 8px; border: 1px solid rgba(255,207,74,.6); color: #ffcf4a; background: rgba(5,10,16,.5); white-space: nowrap; letter-spacing: .08em; transition: opacity .2s; }
 .inv-evl3.rec { border-color: rgba(255,255,255,.6); color: #fff; }
 .inv-evl3.near { background: rgba(255,207,74,.25); }
-#inv-end { inset: 0; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, rgba(4,10,18,.75), rgba(2,5,9,.92)); opacity: 0; transition: opacity .8s; }
-#inv-end.on { opacity: 1; }
-#inv-end .box { width: min(760px, 80vw); }
-#inv-end .tag { font-size: 12px; letter-spacing: .5em; color: #6cc8ff; }
-#inv-end h1 { margin: 10px 0 26px; font-size: 34px; font-weight: 400; letter-spacing: .12em; }
-#inv-end .f { font-size: 15px; line-height: 2; opacity: 0; animation: inv-in .4s forwards; }
-#inv-end .f .ts { color: #6cc8ff; margin-right: 14px; }
-#inv-end .v { margin-top: 26px; padding-top: 20px; border-top: 1px solid rgba(255,179,92,.4); opacity: 0; animation: inv-in .5s forwards; }
-#inv-end .v .vd { font-size: 26px; color: #ffb35c; letter-spacing: .1em; }
-#inv-end .v .pr { margin-top: 6px; font-size: 13px; opacity: .8; }
-#inv-end .v p { font-size: 14px; line-height: 1.9; opacity: .85; }
-#inv-end .k { margin-top: 26px; font-size: 12px; opacity: .5; letter-spacing: .2em; }
+#inv-sub { left: 50%; bottom: 128px; transform: translateX(-50%); max-width: 64vw; text-align: center; font-size: 22px; line-height: 1.6; letter-spacing: .06em; color: #f2f6fa; text-shadow: 0 2px 6px rgba(0,0,0,.95), 0 0 18px rgba(0,0,0,.7); opacity: 0; transition: opacity .25s; z-index: 6; }
+#inv-sub.on { opacity: 1; }
+#inv-sub .who { color: #6cc8ff; margin-right: 12px; font-size: 18px; letter-spacing: .2em; }
+#inv-sub.radio .who::before { content: '◉ '; color: #ff8a1a; }
+#inv-sub.inner { font-style: italic; color: #e6e0d4; }
+#inv-ptr { left: 0; top: 0; transform: translate(-50%, -50%); opacity: 0; transition: opacity .3s; z-index: 4; }
+#inv-ptr.on { opacity: 1; }
+#inv-ptr .ar { width: 0; height: 0; border-left: 13px solid transparent; border-right: 13px solid transparent; border-bottom: 22px solid #ffcf4a; filter: drop-shadow(0 0 6px rgba(255,207,74,.8)); margin: 0 auto; }
+#inv-ptr .lb { margin-top: 8px; font-size: 13px; letter-spacing: .25em; color: #ffcf4a; white-space: nowrap; text-align: center; text-shadow: 0 1px 4px #000; }
+#inv-ptr.onscreen .ar { display: none; }
+#inv-ptr.onscreen .lb { margin-top: 36px; }
+#inv-cine { inset: 0; z-index: 8; }
+#inv-cine::before, #inv-cine::after { content: ''; position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height .35s ease; }
+#inv-cine::before { top: 0; }
+#inv-cine::after { bottom: 0; }
+#inv-cine.on::before, #inv-cine.on::after { height: 11vh; }
+#inv-black { inset: 0; background: #000; opacity: 0; z-index: 9; }
+#inv-flash { inset: 0; background: radial-gradient(circle at 60% 55%, rgba(255,170,60,.55), rgba(255,120,20,.15) 60%, transparent); opacity: 0; z-index: 5; mix-blend-mode: screen; }
 `;
 
 // 证据图（Gemini 生成），启动时预加载，避免面板弹出时图片还没到
@@ -148,14 +153,18 @@ export function createUI() {
   const panel = el('inv-panel');
   const toast = el('inv-toast', '', '<div class="t1"></div><div class="t2"></div>');
   const tl = el('inv-tl');
-  const end = el('inv-end');
+  const sub = el('inv-sub');
+  const ptr = el('inv-ptr', '', '<div class="ar"></div><div class="lb"></div>');
+  const cine = el('inv-cine');
+  const black = el('inv-black');
+  const flash = el('inv-flash');
   let panelTimer = 0, toastTimer = 0;
+  let sayToken = 0;
 
   const HINTS = {
     explore: '<b>Q</b>扫描线索　<b>E</b>按住分析　<b>TAB</b>平板',
-    exploreReady: '<b>Q</b>扫描线索　<b>E</b>按住分析　<b>R</b>开始事件重建　<b>TAB</b>平板',
-    recon: '<b>滚轮</b>拖动时间　<b>空格</b>播放 / 暂停　<b>E</b>记录事件　<b>Q</b>退出重建',
-    end: '',
+    exploreReady: '<b>Q</b>扫描线索　<b>E</b>按住分析　<b>R</b>启动黑梦　<b>TAB</b>平板',
+    recon: '<b>滚轮</b>拖动时间　<b>空格</b>播放 / 暂停　<b>E</b>记录事件 / 按住分析全息　<b>Q</b>退出黑梦',
   };
 
   const markerEls = new Map();
@@ -182,8 +191,13 @@ export function createUI() {
       hud.classList.toggle('on', mode === 'explore' || mode === 'recon');
       hud.querySelector('.mode').textContent = label;
       hint.innerHTML = HINTS[mode === 'explore' && this._ready ? 'exploreReady' : mode] ?? '';
-      if (mode !== 'explore') { markers.style.opacity = 0; this.setAnalysis(null); this.hidePanel(); }
+      if (mode !== 'explore' && mode !== 'recon') { markers.style.opacity = 0; this.setAnalysis(null); this.hidePanel(); }
       else markers.style.opacity = 1;
+      if (mode !== 'explore') this.setPointer(null);
+      if (mode === 'cut') { clearTimeout(toastTimer); toast.classList.remove('on'); }
+      sub.style.bottom = mode === 'recon' ? '250px' : '';   // 黑梦里避开时间轴
+      const ch = document.getElementById('crosshair');
+      if (ch) ch.style.opacity = mode === 'cut' ? 0 : '';
       evlabels.style.opacity = mode === 'recon' ? 1 : 0;
       tl.classList.toggle('on', mode === 'recon');
     },
@@ -196,7 +210,7 @@ export function createUI() {
       for (const e of [hud, hint, markers, solved, document.getElementById('crosshair')]) if (e) e.style.visibility = on ? 'hidden' : '';
       if (on) { prompt.classList.remove('on'); this.setAnalysis(null); }
     },
-    setSolved(on) { solved.classList.toggle('on', on); },
+    setSolved(text) { if (text) solved.textContent = text; solved.classList.toggle('on', !!text); },
     setCounter(done, total, label = '线索') {
       hud.querySelector('.count').innerHTML = `${done} / ${total}<small>${label}</small>`;
       hud.querySelector('.bar i').style.width = `${(done / total) * 100}%`;
@@ -263,12 +277,14 @@ export function createUI() {
       const lines = c.lines.map((l, i) => `<div class="ln" style="animation-delay:${0.15 + i * 0.35}s">${l}</div>`).join('');
       const dl = 0.15 + c.lines.length * 0.35;
       const no = String(index + 1).padStart(2, '0');
-      panel.innerHTML = `<div class="txt"><div class="tag inv-mono">证据 #${no} · 已分析</div><h2>${c.name}</h2>${lines}
-        <div class="res" style="animation-delay:${dl}s">${c.result}</div>
-        <div class="prob inv-mono" style="animation-delay:${dl + 0.2}s"><span>概率</span><div class="pb"><i></i></div><span>${Math.round(c.prob * 100)}%</span></div></div>
-        <div class="pic"><div class="img" style="background-image:url(${clueImage(c)})"></div><div class="scan"></div>
+      const tag = c.probe ? '黑梦分析 · 全息重建' : `证据 #${no} · 已分析`;
+      const pic = c.probe ? '' : `<div class="pic"><div class="img" style="background-image:url(${clueImage(c)})"></div><div class="scan"></div>
         <div class="box"></div><i class="cn a"></i><i class="cn b"></i><i class="cn c"></i><i class="cn d"></i>
         <div class="cap inv-mono">影像记录 · EV-${no}</div></div>`;
+      panel.innerHTML = `<div class="txt"><div class="tag inv-mono">${tag}</div><h2>${c.name}</h2>${lines}
+        <div class="res" style="animation-delay:${dl}s">${c.result}</div>
+        <div class="prob inv-mono" style="animation-delay:${dl + 0.2}s"><span>概率</span><div class="pb"><i></i></div><span>${Math.round(c.prob * 100)}%</span></div></div>
+        ${pic}`;
       panel.classList.add('on');
       const m = markPos.get(c.id);
       if (m) placePanel(m.x, m.y, m.front);
@@ -283,15 +299,21 @@ export function createUI() {
       toast.classList.add('on');
       toastTimer = setTimeout(() => toast.classList.remove('on'), ms);
     },
-    buildTimeline(events, duration, jumpT, jumpLabel, frac) {
+    buildTimeline(events, duration, jumpT, jumpLabel, frac, title = 'BLACKDREAM · 黑梦回放') {
+      const CELLS = 72;
       this._frac = frac;
-      const pct = (t) => `${frac(t) * 100}%`;
-      tl.innerHTML = `<div class="head"><span>事件重建</span><span class="clock inv-mono">00:00.0</span></div>
-        <div class="track"><div class="fill"></div>
-        <div class="jump" style="left:${pct(jumpT)}"><span>${jumpLabel}</span></div>
-        ${events.map((e, i) => `<div class="ev" data-i="${i}" style="left:${pct(e.t)}"></div><div class="evl${i % 2 ? ' up' : ''}" data-i="${i}" style="left:${pct(e.t)}">${e.label}</div>`).join('')}
-        <div class="ph"></div></div>
-`;
+      this._cells = CELLS;
+      this._evFrac = events.map((e) => frac(e.t));
+      const jumpAt = jumpT == null ? null : Math.round(frac(jumpT) * CELLS);
+      const before = jumpAt == null ? CELLS : jumpAt;
+      const cell = (i) => `<i data-i="${i}"></i>`;
+      const strip = Array.from({ length: before }, (_, i) => cell(i)).join('')
+        + (jumpAt == null ? '' : `<b class="gap"><span>${jumpLabel}</span></b>`)
+        + Array.from({ length: CELLS - before }, (_, i) => cell(before + i)).join('');
+      tl.innerHTML = `<div class="head"><span>${title}</span><span class="count inv-mono">已记录事件 0/${events.length}</span></div>
+        <div class="track">${strip}
+        ${events.map((e, i) => `<div class="ev" data-i="${i}"></div>`).join('')}
+        <div class="clock inv-mono">00:00.0</div></div>`;
       evlabels.innerHTML = '';
       evEls.length = 0;
       events.forEach((e) => {
@@ -303,16 +325,37 @@ export function createUI() {
       });
     },
     updateTimeline(t, duration, clockText, recorded, nearIdx) {
-      const f = this._frac(t) * 100;
-      tl.querySelector('.fill').style.width = `${f}%`;
-      tl.querySelector('.ph').style.left = `${f}%`;
-      tl.querySelector('.clock').textContent = clockText;
+      const track = tl.querySelector('.track');
+      if (!track) return;
+      const cells = track.querySelectorAll(':scope > i');
+      const n = cells.length || this._cells || 1;
+      const head = Math.round(this._frac(t) * (n - 1));
+      const half = 2;
+      cells.forEach((el) => {
+        const i = +el.dataset.i;
+        el.className = i < head - half ? 'past' : (i <= head + half ? 'now' : '');
+      });
+      const anchor = cells[Math.max(0, Math.min(n - 1, head))];
+      const clock = tl.querySelector('.clock');
+      clock.textContent = clockText;
+      if (anchor) {
+        const cr = track.getBoundingClientRect();
+        const ar = anchor.getBoundingClientRect();
+        clock.style.left = `${ar.left - cr.left + ar.width / 2}px`;
+      }
+      const done = recorded.filter(Boolean).length;
+      tl.querySelector('.count').textContent = `已记录事件 ${done}/${recorded.length}`;
       tl.querySelectorAll('.ev').forEach((e) => {
         const i = +e.dataset.i;
         e.classList.toggle('rec', recorded[i]);
         e.classList.toggle('near', i === nearIdx);
+        const idx = Math.round((this._evFrac[i] ?? 0) * (n - 1));
+        const cell = cells[Math.max(0, Math.min(n - 1, idx))];
+        if (!cell) return;
+        const cr = track.getBoundingClientRect();
+        const br = cell.getBoundingClientRect();
+        e.style.left = `${br.left - cr.left + br.width / 2}px`;
       });
-      tl.querySelectorAll('.evl').forEach((e) => e.classList.toggle('rec', recorded[+e.dataset.i]));
     },
     // list: [{ x, y, show, rec, near }]
     updateEventLabels(list) {
@@ -326,14 +369,41 @@ export function createUI() {
         e.classList.toggle('near', m.near);
       });
     },
-    showConclusion(c, facts) {
-      end.innerHTML = `<div class="box"><div class="tag inv-mono">RECONSTRUCTION COMPLETE</div><h1>${c.title}</h1>
-        ${facts.map((f, i) => `<div class="f" style="animation-delay:${0.4 + i * 0.45}s"><span class="ts inv-mono">${f.ts}</span>${f.text}</div>`).join('')}
-        <div class="v" style="animation-delay:${0.6 + facts.length * 0.45}s"><div class="vd">结论：${c.verdict}</div>
-        <div class="pr inv-mono">概率 ${Math.round(c.prob * 100)}%</div><p>${c.summary}</p></div>
-        <div class="k">按 Q 返回现场</div></div>`;
-      end.classList.add('on');
+    // 字幕：逐条显示，返回 Promise。who 为空是内心独白；radio 为无线电通话
+    say(lines, { radio = false } = {}) {
+      const token = ++sayToken;
+      return lines.reduce((p, l) => p.then(() => new Promise((res) => {
+        if (token !== sayToken) return res();
+        sub.className = `inv on${l.who ? (radio && l.who !== '陈墨' ? ' radio' : '') : ' inner'}`;
+        sub.innerHTML = l.who ? `<span class="who">${l.who}</span>${l.text}` : l.text;
+        const ms = l.ms ?? 1400 + l.text.length * 140;
+        setTimeout(() => { if (token === sayToken) sub.classList.remove('on'); setTimeout(res, 280); }, ms);
+      })), Promise.resolve());
     },
-    hideConclusion() { end.classList.remove('on'); },
+    // 方向标记：目标在屏幕内时只显示文字，在屏幕外时箭头贴边指向目标
+    setPointer(p) {
+      if (!p) { ptr.classList.remove('on'); return; }
+      ptr.querySelector('.lb').textContent = p.label;
+      const m = 70;
+      let { x, y } = p;
+      const on = p.front && x > m && x < innerWidth - m && y > m && y < innerHeight - m;
+      ptr.classList.add('on');
+      ptr.classList.toggle('onscreen', on);
+      const ar = ptr.querySelector('.ar');
+      if (on) { ptr.style.left = `${x}px`; ptr.style.top = `${y}px`; return; }
+      // 相机后方时投影点会翻转，取反方向
+      const cx = innerWidth / 2, cy = innerHeight / 2;
+      let dx = x - cx, dy = y - cy;
+      if (!p.front) { dx = -dx; dy = -dy; }
+      if (Math.abs(dx) < 1e-3 && Math.abs(dy) < 1e-3) dy = 1;
+      const k = Math.min((cx - m) / Math.abs(dx || 1e-3), (cy - m) / Math.abs(dy || 1e-3));
+      ptr.style.left = `${cx + dx * k}px`;
+      ptr.style.top = `${cy + dy * k}px`;
+      ar.style.transform = `rotate(${Math.atan2(dy, dx) + Math.PI / 2}rad)`;
+    },
+    setCinema(on) { cine.classList.toggle('on', on); },
+    // 黑场：a 为不透明度，ms 为过渡时长
+    black(a, ms = 0) { black.style.transition = `opacity ${ms}ms`; black.style.opacity = a; },
+    flash(a, ms = 0) { flash.style.transition = `opacity ${ms}ms`; flash.style.opacity = a; },
   };
 }

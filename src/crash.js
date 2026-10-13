@@ -58,10 +58,22 @@ export function buildCrash(scene) {
 
   let fireOn = true;
   let hazardOn = true;
+  // 演出接管：{ on, boost, x }。boost 放大亮度与照射范围，x 为灯在车身本地 X 上的位置（扫光）
+  let hazardOverride = null;
+  let hazardLit = false;
+  const HAZARD_LOCAL = new THREE.Vector3(-3.0, 1.2, 0);
+  const _hp = new THREE.Vector3();
   function update(dt, t) {
-    const on = Math.floor(t * 1.6) % 2 === 0;
-    car.hazardMat.emissiveIntensity = hazardOn && on ? 8 : 0;
-    hazardLight.intensity = hazardOn && on ? 5 : 0;
+    const o = hazardOverride;
+    const on = o ? o.on : Math.floor(t * 1.6) % 2 === 0;
+    const boost = o?.boost ?? 1;
+    hazardLit = hazardOn && on;
+    car.hazardMat.emissiveIntensity = hazardLit ? 8 * Math.min(boost, 3) : 0;
+    hazardLight.intensity = hazardLit ? 5 * boost : 0;
+    hazardLight.distance = 14 * Math.max(1, Math.sqrt(boost));
+    _hp.copy(HAZARD_LOCAL);
+    if (o?.x != null) { _hp.x = o.x; _hp.z = o.z ?? 2.2; }
+    hazardLight.position.copy(car.group.localToWorld(_hp));
     fireLight.intensity = fireOn ? 4 + Math.sin(t * 23) * 1.5 + Math.sin(t * 7.1) * 1.5 : 0;
   }
   addLightGroup('车头火光', (on) => { fireOn = on; if (!on) fireLight.intensity = 0; });
@@ -71,7 +83,11 @@ export function buildCrash(scene) {
   });
   // info: { pristine: 未变形的模型副本（重建前半段用）, crashed: 变形后的模型（重建后半段用） }
   const onCarReady = (cb) => { if (ready) cb(ready); else readyCbs.push(cb); };
-  return { update, carGroup: car.group, onCarReady };
+  return {
+    update, carGroup: car.group, onCarReady, hazardMat: car.hazardMat,
+    setHazardOverride(o) { hazardOverride = o; },
+    get hazardLit() { return hazardLit; },
+  };
 }
 
 // 超跑模型（Blender 导出：Draco 压缩 + WebP 贴图，约 3.5MB）
@@ -93,11 +109,13 @@ function buildCar(onReady) {
 
     const mats = carMaterials(hazardMat);
     const originalGlass = [];
+    const paintMeshes = [];   // 主车漆面，给车门残漆贴花投影用
     model.traverse((o) => {
       if (!o.isMesh) return;
       const imported = o.material;
       const key = imported.name.replace(/^GC_/, '');
       if (key === 'GlassWindshield') originalGlass.push(o);
+      if (key === 'CarPaint_Main') paintMeshes.push(o);
       if (mats[key]) {
         o.material = mats[key];
         if (imported.normalMap) {
@@ -143,7 +161,7 @@ function buildCar(onReady) {
     group.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(wheel);
     wheel.position.y += DECK_Y + 0.01 - box.min.y;
-    onReady({ pristine, crashed: model });
+    onReady({ pristine, crashed: model, paintMeshes });
   }).catch((error) => {
     console.error('Failed to load the crash vehicle and replacement glazing', error);
   }).finally(() => draco.dispose());

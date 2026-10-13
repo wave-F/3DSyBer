@@ -4,7 +4,7 @@ import { CAR_POS, CAR_YAW, SHEET_POS, SHEET_YAW } from '../crash.js';
 import { hologramize, hologramMaterial } from './hologram.js';
 import { createActor } from './actors.js';
 import { markKeep } from './mask.js';
-import { EVENTS } from './clues.js';
+import { ROUNDS } from './clues.js';
 
 const BLUE = 0x3fb8ff;
 const ORANGE = 0xff8a1a;
@@ -43,7 +43,7 @@ const TRACK_A = new Track([
   { t: 2.6, x: 5.3, z: -0.4, yaw: -0.78 },
   { t: 2.75, x: CAR_POS.x, z: CAR_POS.z, yaw: CAR_YAW },
 ]);
-// 黄色车辆：从右侧切入、刮擦后回正离开
+// 黄色车辆：从右侧切入、刮擦后不减速，向北驶出重建范围
 const TRACK_B = new Track([
   { t: 0, x: -4.9, z: -66, yaw: STRAIGHT },
   { t: 1.1, x: -4.9, z: -30, yaw: -1.5 },
@@ -56,19 +56,6 @@ const TRACK_B = new Track([
 const IMPACT_T = 2.6;
 const EJECT_T0 = 2.75, EJECT_T1 = 3.3;
 const B_GONE_T = 4.0;
-// 返回现场的人员（时间跳跃后，约 1 分钟）
-const WALKER = new Track([
-  { t: 4.2, x: -3.4, z: 18 },
-  { t: 6.3, x: 4.2, z: 1.8 },
-  { t: 7.2, x: 4.2, z: 1.8 },
-  { t: 7.5, x: 2.9, z: 4.8 },
-  { t: 8.0, x: 2.9, z: 4.8 },
-  { t: 8.2, x: 2.4, z: 5.9 },
-  { t: 10, x: -2.2, z: 18 },
-]);
-const WALKER_T0 = 4.2;
-const HAZARD_T = 7.0;
-
 export function createRecon(scene, crash) {
   const root = new THREE.Group();
   root.visible = false;
@@ -79,8 +66,8 @@ export function createRecon(scene, crash) {
   const wrap = (obj) => { const g = new THREE.Group(); g.add(obj); root.add(g); return g; };
   let carA, carAc, carB;
 
-  // 遇难者（蓝）与返回现场的人（橙）：全息人偶 + 动作，加载完成后才显示
-  let victim = null, walker = null;
+  // 遇难者（蓝）：全息人偶 + 动作，加载完成后才显示
+  let victim = null;
   const head = new THREE.Vector3(Math.cos(SHEET_YAW), 0, -Math.sin(SHEET_YAW)); // 盖布上头部朝向
   const lie = { yaw: 0, pos: new THREE.Vector3() };
   const ejectFrom = new THREE.Vector3(5.1, DECK_Y + 0.9, 0.7); // 事件标注位置
@@ -92,24 +79,15 @@ export function createRecon(scene, crash) {
   const vTmp = new THREE.Vector3();
   const seatWorld = new THREE.Vector3();
 
-  Promise.all([
-    createActor(BLUE, [
-      { t0: 0, t1: EJECT_T0, clip: 'Driving_Loop', mode: 'loop' },
-      { t0: EJECT_T0, t1: EJECT_T0 + 0.2, clip: 'Hit_Chest', mode: 'once' },
-      { t0: EJECT_T0 + 0.2, t1: EJECT_T1, clip: 'Roll', mode: 'loop', rate: 1.4 },
-      { t0: EJECT_T1, t1: 99, clip: 'Death01', mode: 'once', offset: 1.5, rate: 1.2 },
-    ]),
-    createActor(ORANGE, [
-      { t0: WALKER_T0, t1: 6.3, clip: 'Jog_Fwd_Loop', mode: 'loop', rate: 1.3 },
-      { t0: 6.3, t1: 7.2, clip: 'Interact', mode: 'once', rate: 2.2 },
-      { t0: 7.2, t1: 7.5, clip: 'Walk_Loop', mode: 'loop', rate: 1.6 },
-      { t0: 7.5, t1: 8.0, clip: 'Crouch_Idle_Loop', mode: 'loop' },
-      { t0: 8.0, t1: 99, clip: 'Walk_Loop', mode: 'loop', rate: 1.4 },
-    ]),
-  ]).then(([v, w]) => {
-    victim = v; walker = w;
-    root.add(victim.root, walker.root);
-    victim.root.visible = walker.root.visible = false;
+  createActor(BLUE, [
+    { t0: 0, t1: EJECT_T0, clip: 'Driving_Loop', mode: 'loop' },
+    { t0: EJECT_T0, t1: EJECT_T0 + 0.2, clip: 'Hit_Chest', mode: 'once' },
+    { t0: EJECT_T0 + 0.2, t1: EJECT_T1, clip: 'Roll', mode: 'loop', rate: 1.4 },
+    { t0: EJECT_T1, t1: 99, clip: 'Death01', mode: 'once', offset: 1.5, rate: 1.2 },
+  ]).then((v) => {
+    victim = v;
+    root.add(victim.root);
+    victim.root.visible = false;
     // 校准：倒地动作最后一帧，让"髋→头"方向对齐盖布的头部方向，躯干中心落在盖布上
     const d = victim.duration('Death01') - 0.01;
     const hip = victim.measure('Death01', d, 'DEF-hips');
@@ -129,41 +107,49 @@ export function createRecon(scene, crash) {
     for (let t = t0; t <= t1; t += 0.02) { track.sample(t, s); pts.push(new THREE.Vector3(s.p.x, DECK_Y + 0.08, s.p.z)); }
     const m = lineMat(hex);
     m.color.multiplyScalar(3);
-    root.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), m));
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), m);
+    root.add(line);
+    return line;
   };
   pathLine(TRACK_A, 0, 2.75, BLUE);
-  pathLine(TRACK_B, 0, B_GONE_T, ORANGE);
+  const pathB = pathLine(TRACK_B, 0, B_GONE_T, ORANGE);
 
-  // 事件位置（供界面标注）
-  const eventPos = EVENTS.map((ev) => {
-    if (ev.t >= WALKER_T0) { WALKER.sample(ev.t, s); return new THREE.Vector3(s.p.x, DECK_Y + 2.2, s.p.z); }
-    if (ev.t >= EJECT_T0) return ejectFrom.clone().setY(DECK_Y + 2.2);
-    TRACK_A.sample(ev.t, s);
-    return new THREE.Vector3(s.p.x, DECK_Y + 2.2, s.p.z);
-  });
+  // 事件位置（供界面标注），每轮事件不同，切换轮次时重建光柱
+  const eventPos = [];
+  const pillars = [];
   const pillarGeo = new THREE.CylinderGeometry(0.02, 0.02, 2.2, 6);
   pillarGeo.translate(0, -1.1, 0);
-  for (const p of eventPos) {
-    const pillar = new THREE.Mesh(pillarGeo, hologramMaterial(0xffffff, 1.5));
-    pillar.position.copy(p);
-    root.add(pillar);
+  const pillarMat = hologramMaterial(0xffffff, 1.5);
+  function buildEvents(events) {
+    pillars.forEach((p) => root.remove(p));
+    pillars.length = 0;
+    eventPos.length = 0;
+    for (const ev of events) {
+      let p;
+      if (ev.track === 'B') { TRACK_B.sample(ev.t, s); p = new THREE.Vector3(s.p.x, DECK_Y + 2.2, s.p.z); }
+      else if (ev.t >= EJECT_T0) p = ejectFrom.clone().setY(DECK_Y + 2.2);
+      else { TRACK_A.sample(ev.t, s); p = new THREE.Vector3(s.p.x, DECK_Y + 2.2, s.p.z); }
+      eventPos.push(p);
+      const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+      pillar.position.copy(p);
+      root.add(pillar);
+      pillars.push(pillar);
+    }
   }
-
-  // 双闪（返回人员打开后闪烁）
-  const hazardMat = hologramMaterial(0xffaa30, 3);
-  const hazards = [];
+  let actors = { carB: true };
+  function setRound(n) {
+    const r = ROUNDS[n];
+    actors = r.actors;
+    pathB.visible = actors.carB;
+    buildEvents(r.events);
+  }
+  setRound(1);
 
   crash.onCarReady(({ pristine, crashed }) => {
     // 车辆只显示外壳（去掉内饰、底盘的轮廓线），亮度压低避免过曝
     carA = wrap(hologramize(pristine, BLUE, CAR_HOLO, { shell: true }));
     carAc = wrap(hologramize(crashed, BLUE, CAR_HOLO, { shell: true }));
     carB = wrap(hologramize(pristine, ORANGE, CAR_HOLO, { shell: true }));
-    for (const z of [-0.95, 0.95]) {
-      const h = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.25), hazardMat);
-      h.position.set(-2.05, 0.65, z);
-      carAc.add(h);
-      hazards.push(h);
-    }
     ready = true;
   });
 
@@ -173,7 +159,7 @@ export function createRecon(scene, crash) {
     g.rotation.set(0, s.yaw, 0);
   }
 
-  function setTime(t, blink) {
+  function setTime(t) {
     if (!ready) return;
     // 死者车辆：撞击前用完好模型，撞击后换成变形模型；撞击瞬间有一次抖动
     carA.visible = t < IMPACT_T;
@@ -185,12 +171,10 @@ export function createRecon(scene, crash) {
       carAc.rotation.x = Math.sin(t * 90) * 0.05 * k;
       carAc.rotation.z = Math.sin(t * 70) * 0.04 * k;
     }
-    carB.visible = t < B_GONE_T;
+    carB.visible = actors.carB && t < B_GONE_T;
     placeCar(carB, TRACK_B, t);
-    hazards.forEach((h) => { h.visible = t >= HAZARD_T && blink; });
 
     if (victim) updateVictim(t);
-    if (walker) updateWalker(t);
   }
 
   // 遇难者：撞击前坐在驾驶座（随车移动），之后沿抛物线甩出并翻滚，落地后与盖布重合
@@ -220,22 +204,27 @@ export function createRecon(scene, crash) {
     victim.pose(t);
   }
 
-  // 返回人员：位置沿轨迹，移动时面向前进方向，停下时面向车辆/遇难者
-  function updateWalker(t) {
-    walker.root.visible = t >= WALKER_T0;
-    if (!walker.root.visible) return;
-    WALKER.sample(t, s);
-    const prev = WALKER.sample(Math.max(WALKER_T0, t - 0.05), { p: new THREE.Vector3(), yaw: 0 }).p;
-    const v = s.p.clone().sub(prev);
-    walker.root.position.set(s.p.x, DECK_Y, s.p.z);
-    if (v.length() > 0.02) walker.root.rotation.y = Math.atan2(v.x, v.z);
-    else walker.root.rotation.y = t < 7.3 ? Math.atan2(CAR_POS.x - s.p.x, CAR_POS.z - s.p.z) : Math.atan2(SHEET_POS.x - s.p.x, SHEET_POS.z - s.p.z);
-    walker.pose(t);
+  // 可分析的全息物体当前位置（物体中心）。不可见时返回 false
+  const CENTER_Y = { carA: 0.6, carB: 0.6, victim: 0.9 };
+  function targetPos(name, out) {
+    if (!ready) return false;
+    let obj = null;
+    if (name === 'carA') obj = carA.visible ? carA : carAc;
+    else if (name === 'carB') obj = carB.visible ? carB : null;
+    else if (name === 'victim') obj = victim?.root.visible ? victim.root : null;
+    if (!obj) return false;
+    out.copy(obj.position);
+    // 人偶根节点在脚底；倒地后躯干贴地
+    out.y = name === 'victim' && obj.position.y < DECK_Y + 0.3 ? DECK_Y + 0.3 : obj.position.y + CENTER_Y[name];
+    if (name.startsWith('car')) out.y = DECK_Y + CENTER_Y[name];
+    return true;
   }
 
   return {
     root,
     setTime,
+    setRound,
+    targetPos,
     eventPos,
     get ready() { return ready; },
   };

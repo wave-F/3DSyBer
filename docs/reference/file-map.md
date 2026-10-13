@@ -32,14 +32,15 @@
 
 | 路径 | 职责 |
 |------|------|
-| `src/investigation/state.js` | 模式机、输入、标记、调试「直接重建」 |
-| `src/investigation/clues.js` | 9 条线索、5 个重建事件、报告字段、结论文案 |
-| `src/investigation/ui.js` | HUD、线索卡、时间轴、结论层 |
-| `src/investigation/recon.js` | 重建回放与全息车 |
-| `src/investigation/tablet.js` | 平板 UI 场景与结案盖章 |
+| `src/investigation/state.js` | 轮次与模式机、输入、标记、确认打断、转折过场编排 |
+| `src/investigation/clues.js` | 线索、黑梦全息分析、两轮回放、报告、台词 |
+| `src/investigation/ui.js` | HUD、线索卡、时间轴、字幕、方向标记、黑边 |
+| `src/investigation/recon.js` | 黑梦回放、全息车与人，按轮次切换出场物体 |
+| `src/investigation/cutscene.js` | 过场镜头：接管相机硬切，结束还原 |
+| `src/investigation/tablet.js` | 平板 UI：线索、事件、报告与确认归档 |
 | `src/investigation/viewmodel.js` | 第一人称手与袖 |
 | `src/investigation/analysisFx.js` | 按住分析的扫描表现 |
-| `src/investigation/props.js` | 现场道具（胎痕、血迹等） |
+| `src/investigation/props.js` | 第 2 轮道具（第二道胎痕、车门残漆贴花） |
 | `src/investigation/actors.js` | 重建人形 |
 | `src/investigation/hologram.js` | 全息材质与外壳遮罩 |
 | `src/investigation/mask.js` | 把材质标进 MRT `keep` |

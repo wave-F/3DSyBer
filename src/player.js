@@ -10,8 +10,9 @@ const RUN = 8;
 
 export function createPlayer(camera, domElement, overlay) {
   const controls = new PointerLockControls(camera, domElement);
-  camera.position.set(-0.5, DECK_Y + EYE, 11);
-  camera.lookAt(4, DECK_Y + 0.6, 1);
+  // 出生在事故车的另一侧（-Z）。+X 贴护栏，走不过去，所以只翻到车头这一面。
+  camera.position.set(-0.5, DECK_Y + EYE, carCollider.z - 10.8);
+  camera.lookAt(carCollider.x, DECK_Y + 0.6, carCollider.z);
 
   overlay.addEventListener('click', () => controls.lock());
   // keepOverlayHidden：打开平板时主动释放鼠标，不弹出暂停层
