@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { rng } from '../textures.js';
 import { markKeep } from './mask.js';
+import { DECK_Y } from '../bridge.js';
 import { addTireTracks } from '../tireTracks.js';
 import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js';
 
@@ -23,7 +24,23 @@ export function buildTwistProps(scene, crash) {
     new THREE.Vector3(-4.9, 0, -30), new THREE.Vector3(-2.6, 0, -18),
     new THREE.Vector3(-3.3, 0, -16), new THREE.Vector3(-4.4, 0, -7),
   );
-  addTireTracks(scene, cutIn, { offsets: [-0.85, 0.85], width: 0.265, seed: 705, opacity: 0.62, fadeOut: 0.45 });
+  // 两道车辙都先藏着，第二轮搜证才显示
+  const tracks = [
+    ...crash.skids,
+    ...addTireTracks(scene, cutIn, { offsets: [-0.85, 0.85], width: 0.265, seed: 705, opacity: 0.62, fadeOut: 0.45, keep: false }),
+  ];
+  tracks.forEach((m) => { m.visible = false; });
+
+  // 黄车向北驶离时拽掉的饰条，落在离开方向的路面上
+  const trimMat = markKeep(new THREE.MeshStandardMaterial({ color: 0xe2a010, roughness: 0.45, metalness: 0.35 }));
+  const trimBreak = markKeep(new THREE.MeshStandardMaterial({ color: 0x2a2a28, roughness: 0.8 }));
+  const trim = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.035, 0.07), trimMat);
+  const broken = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.075), trimBreak);
+  broken.position.x = -0.15;
+  trim.add(broken);
+  trim.position.set(-4.3, DECK_Y + 0.03, 8);
+  trim.rotation.set(0.08, 0.7, 0.35);
+  scene.add(trim);
 
   // 2. 车身右侧（组内 +Z）的黄色刮漆
   // 由后向前刮擦：左端（车尾方向）漆块厚，向右拖成细碎的擦痕并收窄；夹杂露出底材的银色划痕
@@ -89,6 +106,7 @@ export function buildTwistProps(scene, crash) {
 
   return {
     // opacity：漆面可见度；glow：自发光强度（跟随双闪）
+    setTracks(on) { tracks.forEach((m) => { m.visible = on; }); },
     setScrape(opacity, glow) {
       scrapeMat.opacity = opacity;
       scrapeMat.emissiveIntensity = glow;

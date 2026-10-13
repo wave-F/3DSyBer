@@ -11,7 +11,7 @@ import { CLUES, PROBES, ROUNDS, REPORTS, LINES } from './clues.js';
 
 const HOLD_TIME = 1.4;      // Includes raising the instrument and one readable scan pass.
 const AIM_RANGE = 6;        // 准星可分析距离
-const PROBE_RANGE = 16;     // 黑梦里全息物体的可分析距离
+const PROBE_RANGE = 5;      // 黑梦分析点要走近到这个距离内才能瞄准，和现场 NEAR_RANGE 一致
 const NEAR_RANGE = 5;       // 走近到此距离内自动发现线索
 const SCAN_RANGE = 40;      // Q 扫描可发现的范围
 const SCAN_SHOW = 2;        // 扫描出的标记显示秒数，之后隐藏
@@ -48,6 +48,7 @@ export function createInvestigation(scene, camera, crash, controls) {
   let round = 1;
   let lead = false;            // 第 2 轮：只有车门残漆可查，分析后解锁其余线索
   let glint = false;           // 残漆随双闪反光
+  let paintTask = false;       // 第 1 次黑梦退出后，收起报告就去查车漆
   let doubtSaid = false;
   let confirm = null;          // { p, state: 'idle' | 'suspended' }
   let holdConfirm = false;
@@ -64,6 +65,7 @@ export function createInvestigation(scene, camera, crash, controls) {
 
   const R = () => ROUNDS[round];
   const unlocked = () => clues.filter((c) => c.unlocked);
+  const stageClues = () => unlocked().filter((c) => c.round === round);
   const evIndex = (c) => unlocked().indexOf(c);
   const roundKeys = () => clues.filter((c) => c.round === round && c.key);
   const reconReady = () => !lead && roundKeys().every((c) => c.done);
@@ -117,8 +119,6 @@ export function createInvestigation(scene, camera, crash, controls) {
   testBtn.textContent = '测试 · 直接进黑梦';
   testBtn.style.cssText = 'position:fixed;right:24px;top:20px;transform:scale(1.5);transform-origin:right top;z-index:10;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#ffcf6a;background:rgba(5,12,20,.7);border:1px solid rgba(255,207,106,.6);cursor:pointer;';
   document.body.appendChild(testBtn);
-  const syncTestBtn = () => { testBtn.style.display = locked() || mode === 'report' || mode === 'cut' ? 'none' : ''; };
-  document.addEventListener('pointerlockchange', syncTestBtn);
   testBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (lead) unlockRound2();
@@ -129,7 +129,34 @@ export function createInvestigation(scene, camera, crash, controls) {
     controls.lock();
     testBtn.blur();
   });
-  syncTestBtn();
+  const round2Btn = document.createElement('button');
+  round2Btn.textContent = '测试 · 第二轮搜证';
+  round2Btn.style.cssText = 'position:fixed;right:24px;top:68px;transform:scale(1.5);transform-origin:right top;z-index:10;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#ffcf6a;background:rgba(5,12,20,.7);border:1px solid rgba(255,207,106,.6);cursor:pointer;';
+  document.body.appendChild(round2Btn);
+  const syncTestBtns = () => {
+    const hide = locked() || mode === 'report' || mode === 'cut' ? 'none' : '';
+    testBtn.style.display = hide;
+    round2Btn.style.display = hide;
+  };
+  document.addEventListener('pointerlockchange', syncTestBtns);
+  round2Btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clues.forEach((c) => {
+      if (c.round === 1) { c.unlocked = true; c.done = true; }
+      if (c.round === 2) { c.unlocked = false; c.done = false; }
+    });
+    probes.forEach((p) => { if (p.round === 1) p.done = true; });
+    roundDone[1] = true;
+    roundDone[2] = false;
+    if (!reports.includes('r1')) reports.push('r1');
+    paintTask = false;
+    confirm = null;
+    if (tablet.open) tablet.toggle(false);
+    startRound2();
+    controls.lock();
+    round2Btn.blur();
+  });
+  syncTestBtns();
 
   function setMode(m) {
     mode = m;
@@ -145,7 +172,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     ui.setSolved(roundDone[2] && m === 'explore' ? '◆ 第 2 次复核完成 · 未完待续' : null);
     controls.enabled = m !== 'cut';
     if (m === 'explore') {
-      ui.setCounter(unlocked().filter((c) => c.done).length, unlocked().length);
+      ui.setCounter(stageClues().filter((c) => c.done).length, stageClues().length);
       ui.setHint(reconReady());
     }
     if (m === 'recon') {
@@ -190,7 +217,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     }
     if (e.code === 'KeyQ') {
       if (mode === 'explore') scan();
-      else if (mode === 'recon') setMode('explore');
+      else if (mode === 'recon') leaveRecon();
     }
     if (e.code === 'KeyE') {
       holdKey = true;
@@ -251,10 +278,19 @@ export function createInvestigation(scene, camera, crash, controls) {
   const timeMarks = () => [...R().events, ...timedProbes()].map((m) => ({ t: m.t }));
   const roundComplete = () => recorded[round].every(Boolean) && keyProbes().every((c) => c.done);
   function checkRoundDone() {
+    // 分析做完留在黑梦里，按 Q 离开时才进入下一轮
+  }
+
+  // 玩家主动退出，且本轮分析点已做完，才进入下一轮探索。第三轮还没有，停在现场。
+  function advanceAfterDream() {
     if (!roundComplete() || roundDone[round]) return;
-    if (!REPORT_FLOW) { roundDone[round] = true; return; }
     const r = round;
-    setTimeout(() => { if (mode === 'recon' && round === r && !roundDone[r]) finishRecon(); }, 1800);
+    roundDone[r] = true;
+    if (r === 1) startRound2();
+    else {
+      setMode('explore');
+      ui.toast('第 2 次黑梦完成', '下一轮探索还没接上', 4500);
+    }
   }
 
   // ---------- 复核报告 ----------
@@ -272,10 +308,31 @@ export function createInvestigation(scene, camera, crash, controls) {
     syncTablet();
   }
 
+  // 第 1 次黑梦：分析过转向点再退出，才更新报告并布置现场任务
+  function leaveRecon() {
+    if (roundComplete()) advanceAfterDream();
+    else setMode('explore');
+  }
+
+  function presentRound1() {
+    roundDone[1] = true;
+    if (!reports.includes('r1')) reports.push('r1');
+    confirm = null;
+    paintTask = true;
+    setMode('report');
+    setTablet(true);
+    tablet.showReport('r1');
+    syncTablet();
+  }
+
   function closeReport(relock) {
     setTablet(false, relock);
     setMode('explore');
-    if (roundDone[2]) ui.toast('第 2 次复核完成', '未完待续', 4500);
+    if (paintTask) {
+      paintTask = false;
+      startRound2();
+      ui.toast('新的任务', '返回现场，收集车门残漆、车旁胎痕和脱落饰条。', 5000);
+    } else if (roundDone[2]) ui.toast('第 2 次复核完成', '未完待续', 4500);
   }
 
   function updateReport(dt) {
@@ -361,7 +418,8 @@ export function createInvestigation(scene, camera, crash, controls) {
     round = 2;
     lead = true;
     glint = true;
-    clues.find((c) => c.lead).unlocked = true;
+    props.setTracks(true);
+    clues.forEach((c) => { if (c.round === 2) c.unlocked = true; });
     setMode('explore');
     syncTablet();
   }
@@ -370,7 +428,7 @@ export function createInvestigation(scene, camera, crash, controls) {
   function unlockRound2() {
     lead = false;
     clues.forEach((c) => { if (c.round === 2) c.unlocked = true; });
-    ui.setCounter(unlocked().filter((c) => c.done).length, unlocked().length);
+    ui.setCounter(stageClues().filter((c) => c.done).length, stageClues().length);
     syncTablet();
   }
   function onLeadDone() {
@@ -457,7 +515,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     const list = clues.map((c) => {
       const s = project(c.p);
       const d = c.p.distanceTo(camera.position);
-      const show = showClues && c.unlocked && c !== analysisClue && s.front && (d < NEAR_RANGE || (!c.nearOnly && (c === aimed || (!c.done && c.reveal > 0))));
+      const show = showClues && c.unlocked && c.round === round && c !== analysisClue && s.front && (d < NEAR_RANGE || (!c.nearOnly && (c === aimed || (!c.done && c.reveal > 0))));
       return {
         id: c.id, x: s.x, y: s.y, front: s.front, show, done: c.done, aim: c === aimed,
         label: c.done ? (c === aimed ? c.name : '') : (c === aimed || d < 8 ? `${d.toFixed(1)} m` : ''),
@@ -481,12 +539,12 @@ export function createInvestigation(scene, camera, crash, controls) {
       const d = c.p.distanceTo(camera.position);
       if (fx.pulsing && !c.nearOnly && !c.hit && d < SCAN_RANGE && d < fx.pulseRadius) { c.hit = true; c.reveal = SCAN_SHOW; }
     }
-    const nextAim = aimAt(unlocked(), AIM_RANGE);
+    const nextAim = aimAt(stageClues(), AIM_RANGE);
     if (nextAim !== aimed) holdT = 0;
     aimed = nextAim;
     tickFinished(dt);
     holdAnalyze(aimed, dt, (c) => {
-      ui.setCounter(unlocked().filter((x) => x.done).length, unlocked().length);
+      ui.setCounter(stageClues().filter((x) => x.done).length, stageClues().length);
       if (c.lead) onLeadDone();
       else if (c.key && reconReady()) ui.toast('信息量达到重建要求', '黑梦已就绪 · 按 R 启动回放', 0);
       ui.setHint(reconReady());
@@ -497,14 +555,11 @@ export function createInvestigation(scene, camera, crash, controls) {
       fx.analyze(clues[dbgAim].p, clues[dbgAim].radius, 0.6);
     }
 
-    // 转折引导：残漆随双闪反光；方向标记指向车门；第一次瞄准时出内心独白
+    // 车门残漆和普通线索一样：走近出现菱形，没有远处方向标记
     const lc = clues.find((c) => c.lead);
     if (glint) props.setScrape(SCRAPE_ALPHA, crash.hazardLit ? 1.2 : 0.1);
-    if (lead && !lc.done) {
-      const near = lc.p.distanceTo(camera.position) < AIM_RANGE;
-      ui.setPointer(near ? null : { ...project(lc.p), label: '色值异常' });
-      if (aimed === lc && !doubtSaid) { doubtSaid = true; ui.say(LINES.doubt); }
-    } else ui.setPointer(null);
+    ui.setPointer(null);
+    if (lead && !lc.done && aimed === lc && !doubtSaid) { doubtSaid = true; ui.say(LINES.doubt); }
 
     if (analysisClue) ui.setPrompt(null);
     else if (aimed && aimed.done) ui.setPrompt(`按 E 查看：${aimed.name}`);
@@ -522,13 +577,11 @@ export function createInvestigation(scene, camera, crash, controls) {
     }
     recon.setTime(rt);
 
-    // 全息物体分析：跟随物体当前位置；开始分析时自动暂停
-    // 固定位置的分析点只在可见范围内出现；nearOnly 要走近 NEAR_RANGE 才显示和可分析
+    // 分析点一律：回放到自己的时间窗，并且人走到 5 m 内，菱形才出现、才能瞄准
     for (const c of probes) {
-      if (c.round !== round) c.visible = false;
-      else if (c.t != null && Math.abs(rt - c.t) > PROBE_WINDOW) c.visible = false;
-      else if (c.pos) c.visible = !c.nearOnly || c.p.distanceTo(camera.position) < NEAR_RANGE;
-      else c.visible = recon.targetPos(c.target, c.p);
+      const inTime = c.t == null || Math.abs(rt - c.t) <= PROBE_WINDOW;
+      const placed = c.pos ? true : recon.targetPos(c.target, c.p);
+      c.visible = c.round === round && inTime && placed && c.p.distanceTo(camera.position) < PROBE_RANGE;
     }
     const nextAim = aimAt(probes.filter((c) => c.visible), PROBE_RANGE);
     if (nextAim !== aimedProbe) holdT = 0;

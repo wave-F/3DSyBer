@@ -3,7 +3,8 @@ import { rng } from './textures.js';
 import { DECK_Y } from './bridge.js';
 import { markKeep } from './investigation/mask.js';
 
-export function addTireTracks(scene, curve, { offsets, width, seed, opacity = 0.65, slide = 0, fadeOut = 0.06 }) {
+export function addTireTracks(scene, curve, { offsets, width, seed, opacity = 0.65, slide = 0, fadeOut = 0.06, keep = true }) {
+  const meshes = [];
   const steps = 160;
   const points = curve.getSpacedPoints(steps);
   for (const [track, offset] of offsets.entries()) {
@@ -37,11 +38,12 @@ export function addTireTracks(scene, curve, { offsets, width, seed, opacity = 0.
     const map = new THREE.CanvasTexture(canvas);
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 8;
-    const material = markKeep(new THREE.MeshStandardMaterial({
+    const material = new THREE.MeshStandardMaterial({
       map, color: 0x111316, roughness: 0.72, metalness: 0,
       transparent: true, opacity, depthWrite: false,
       polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
-    }));
+    });
+    if (keep) markKeep(material);
     const positions = [], uvs = [], indices = [];
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
@@ -65,6 +67,9 @@ export function addTireTracks(scene, curve, { offsets, width, seed, opacity = 0.
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
-    scene.add(new THREE.Mesh(geometry, material));
+    const mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+    meshes.push(mesh);
   }
+  return meshes;
 }

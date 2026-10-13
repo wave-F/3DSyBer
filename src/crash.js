@@ -40,7 +40,7 @@ export function buildCrash(scene) {
 
   buildBrokenRail(scene);
   buildDebris(scene, r);
-  buildSkidMarks(scene);
+  const skids = buildSkidMarks(scene);
 
   // 车头起火的橙色闪烁光（放在车头前上方，离引擎盖约 0.8m，避免平方衰减把引擎盖打爆）
   const fireLight = new THREE.PointLight(0xff6a20, 6, 10, 2);
@@ -81,7 +81,7 @@ export function buildCrash(scene) {
   const onCarReady = (cb) => { if (ready) cb(ready); else readyCbs.push(cb); };
   return {
     update, carGroup: car.group, onCarReady, hazardMat: car.hazardMat,
-    setHazardOverride(o) { hazardOverride = o; },
+    skids, setHazardOverride(o) { hazardOverride = o; },
     get hazardLit() { return hazardLit; },
   };
 }
@@ -416,5 +416,5 @@ function buildSkidMarks(scene) {
     end.clone().addScaledVector(forward, -5),
     end,
   );
-  addTireTracks(scene, curve, { offsets: [-0.8, 0.8], width: 0.245, seed: 404, slide: 0.45, opacity: 0.78 });
+  return addTireTracks(scene, curve, { offsets: [-0.8, 0.8], width: 0.245, seed: 404, slide: 0.45, opacity: 0.78 });
 }

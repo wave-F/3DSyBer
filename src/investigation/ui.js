@@ -6,11 +6,19 @@ const CSS = `
 #inv-hud { left: 32px; top: 25%; transform: translateY(-6px) scale(1.5); transform-origin: left bottom; opacity: 0; transition: opacity .4s; }
 #inv-hud.on { opacity: 1; }
 #inv-hud .mode { font-size: 13px; letter-spacing: .32em; color: #6cc8ff; display: flex; align-items: center; gap: 10px; }
-#inv-hud .mode::before { content: ''; width: 8px; height: 8px; border: 1px solid #6cc8ff; transform: rotate(45deg); }
-#inv-hud .count { margin-top: 8px; font-size: 22px; font-weight: 300; }
+#inv-hud .mode::before { content: ''; width: 8px; height: 8px; border: 1px solid currentColor; transform: rotate(45deg); flex: none; }
+#inv-hud .count { margin-top: 8px; font-size: 22px; font-weight: 300; transition: opacity .32s ease, transform .32s ease; }
 #inv-hud .count small { font-size: 12px; opacity: .6; margin-left: 8px; letter-spacing: .2em; }
-#inv-hud .bar { margin-top: 8px; width: 220px; height: 2px; background: rgba(108,200,255,.2); }
+#inv-hud .count b { font-weight: 500; color: #ffcf4a; }
+#inv-hud .bar { margin-top: 8px; width: 220px; height: 2px; background: rgba(108,200,255,.2); transition: opacity .32s ease, transform .32s ease; }
 #inv-hud .bar i { display: block; height: 100%; width: 0; background: #6cc8ff; transition: width .4s; }
+#inv-hud.done .count { color: #b6f3c6; }
+#inv-hud.ready .mode, #inv-hud.ready .count { color: #ffcf4a; }
+#inv-hud.ready .mode::before { border-color: #ffcf4a; }
+#inv-hud.ready .bar i { background: #ffcf4a; }
+#inv-hud.out .count, #inv-hud.out .bar { opacity: 0; transform: translateY(-12px); }
+#inv-hud.in .count, #inv-hud.in .bar { animation: inv-task-in .42s ease; }
+@keyframes inv-task-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 #inv-solved { left: 32px; top: 25%; transform: translateY(-6px) scale(1.5); transform-origin: left bottom; font-size: 12px; letter-spacing: .3em; color: #ffb35c; opacity: 0; transition: opacity .4s; }
 #inv-solved.on { opacity: .9; }
 #inv-hint { left: 32px; bottom: 28px; font-size: 12px; opacity: .55; letter-spacing: .08em; line-height: 1.9; }
@@ -137,7 +145,7 @@ export function createUI() {
   style.textContent = CSS;
   document.head.appendChild(style);
 
-  const hud = el('inv-hud', '', `<div class="mode">分析模式</div><div class="count inv-mono">0 / 0<small>线索</small></div><div class="bar"><i></i></div>`);
+  const hud = el('inv-hud', '', `<div class="mode"><span>分析模式</span></div><div class="count inv-mono">0 / 0<small>线索</small></div><div class="bar"><i></i></div>`);
   const solved = el('inv-solved', '', '◆ 案件已重建');
   const hint = el('inv-hint');
   const markers = el('inv-markers');
@@ -192,7 +200,7 @@ export function createUI() {
     setMode(mode, label) {
       this._mode = mode;
       hud.classList.toggle('on', mode === 'explore' || mode === 'recon');
-      hud.querySelector('.mode').textContent = label;
+      hud.querySelector('.mode span').textContent = label;
       hint.innerHTML = HINTS[mode === 'explore' && this._ready ? 'exploreReady' : mode] ?? '';
       if (mode !== 'explore' && mode !== 'recon') { markers.style.opacity = 0; this.setAnalysis(null); this.hidePanel(); }
       else markers.style.opacity = 1;
@@ -215,8 +223,39 @@ export function createUI() {
     },
     setSolved(text) { if (text) solved.textContent = text; solved.classList.toggle('on', !!text); },
     setCounter(done, total, label = '线索') {
-      hud.querySelector('.count').innerHTML = `${done} / ${total}<small>${label}</small>`;
-      hud.querySelector('.bar i').style.width = `${(done / total) * 100}%`;
+      const count = hud.querySelector('.count');
+      const bar = hud.querySelector('.bar i');
+      const taskDone = this._mode === 'explore' && label === '线索' && total > 0 && done >= total;
+      const stamp = `${this._mode}:${label}:${done}/${total}:${taskDone}`;
+      if (stamp === this._countStamp) return;
+      this._countStamp = stamp;
+      clearTimeout(this._taskTimer);
+      clearTimeout(this._taskTimer2);
+      const show = (html, width, ready) => {
+        count.innerHTML = html;
+        bar.style.width = width;
+        hud.classList.toggle('ready', ready);
+      };
+      // 线索刚满：先停在 3/3，再切成「按 R 构建黑梦」
+      if (taskDone && !this._taskReady) {
+        this._taskReady = true;
+        hud.classList.remove('in', 'out', 'ready');
+        hud.classList.add('done');
+        show(`${done} / ${total}<small>${label}完成</small>`, '100%', false);
+        this._taskTimer = setTimeout(() => {
+          hud.classList.add('out');
+          this._taskTimer2 = setTimeout(() => {
+            hud.classList.remove('done', 'out');
+            show('按 <b>R</b> 构建<small>黑梦</small>', '100%', true);
+            hud.classList.add('in');
+            setTimeout(() => hud.classList.remove('in'), 460);
+          }, 340);
+        }, 640);
+        return;
+      }
+      this._taskReady = taskDone;
+      hud.classList.remove('done', 'out', 'in');
+      show(taskDone ? '按 <b>R</b> 构建<small>黑梦</small>' : `${done} / ${total}<small>${label}</small>`, `${total ? (done / total) * 100 : 0}%`, taskDone);
     },
     // list: [{ id, x, y, show, done, aim, label }]
     updateMarkers(list) {
