@@ -7,7 +7,7 @@ import { buildTwistProps } from './props.js';
 import { createTablet } from './tablet.js';
 import { createViewmodel } from './viewmodel.js';
 import { createCutscene } from './cutscene.js';
-import { CLUES, PROBES, ROUNDS, REPORTS, LINES } from './clues.js';
+import { CLUES, PROBES, ROUNDS, REPORTS, LINES, ARCHIVED } from './clues.js';
 
 const HOLD_TIME = 1.4;      // Includes raising the instrument and one readable scan pass.
 const AIM_RANGE = 6;        // 准星可分析距离
@@ -26,7 +26,9 @@ const INTERRUPT_AT = 0.68;  // 确认进度到这里被双闪打断
 
 // 流程：
 // 第 1 轮：取证（单车线索）→ 黑梦 1 → 复核报告 01 → 按住确认归档时被双闪打断 → 特写镜头
-// 第 2 轮：车门残漆（引导）→ 派单通话 → 解锁其余线索 → 黑梦 2 → 复核报告 02 → 待续
+// 第 2 轮：车门残漆（引导）→ 派单通话 → 解锁其余线索 → 黑梦 2（A 车前轮：先转向后接触）→ 复核报告 02
+//   按住 E 归档 → 假结局 → 按 E 回到报告 02
+//   TAB 暂不归档 → 陈墨质问仪器 → 报告改写为「复核挂起」→ 收起平板 → 派单员施压 → 第 3 轮任务提示（待接入）
 export function createInvestigation(scene, camera, crash, controls) {
   const props = buildTwistProps(scene, crash);
   const fx = createAnalysisFx(scene, camera);
@@ -49,11 +51,15 @@ export function createInvestigation(scene, camera, crash, controls) {
   let lead = false;            // 第 2 轮：只有车门残漆可查，分析后解锁其余线索
   let glint = false;           // 残漆随双闪反光
   let paintTask = false;       // 第 1 次黑梦退出后，收起报告就去查车漆
-  let confirm = null;          // { p, state: 'idle' | 'suspended' }
+  // { key, p, state: 'idle' | 'talking' | 'suspended' | 'archived', text, onDecline }
+  let confirm = null;
   let holdConfirm = false;
   let reportT = 0;
+  const revised = new Set();   // 已被质疑改写的报告
+  let round3Task = false;      // 报告 02 挂起、派单施压之后：第 3 轮任务提示
+  let endingT = 0;             // 假结局黑场文字出现后的计时，防止误按立刻返回
 
-  let mode = 'explore';        // explore | recon | report | cut
+  let mode = 'explore';        // explore | recon | report | cut | ending
   let holdT = 0, holdKey = false, aimed = null, aimedProbe = null;
   let finishedAnalysis = null;
   let rt = 0, playing = false;
@@ -104,9 +110,9 @@ export function createInvestigation(scene, camera, crash, controls) {
     tablet.setData({
       clues: [...unlocked(), ...probes.filter((p) => p.done)],
       events: ROUNDS[er].events.map((ev, i) => ({ ...ev, recorded: recorded[er][i], ts: clockText(ev.t, ROUNDS[er]) })),
-      reports: reports.map((k) => ({ key: k, ...REPORTS[k] })),
+      reports: reports.map((k) => ({ key: k, ...REPORTS[k], revisedOn: revised.has(k) })),
       confirm,
-      status: roundDone[2] ? '待续' : `第 ${round} 轮复核`,
+      status: revised.has('r2') ? '复核挂起' : roundDone[2] ? '待归档' : `第 ${round} 轮复核`,
     });
   }
 
@@ -133,7 +139,7 @@ export function createInvestigation(scene, camera, crash, controls) {
   round2Btn.style.cssText = 'position:fixed;right:24px;top:68px;transform:scale(1.5);transform-origin:right top;z-index:10;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#ffcf6a;background:rgba(5,12,20,.7);border:1px solid rgba(255,207,106,.6);cursor:pointer;';
   document.body.appendChild(round2Btn);
   const syncTestBtns = () => {
-    const hide = locked() || mode === 'report' || mode === 'cut' ? 'none' : '';
+    const hide = locked() || mode === 'report' || mode === 'cut' || mode === 'ending' ? 'none' : '';
     testBtn.style.display = hide;
     round2Btn.style.display = hide;
   };
@@ -150,6 +156,10 @@ export function createInvestigation(scene, camera, crash, controls) {
     if (!reports.includes('r1')) reports.push('r1');
     paintTask = false;
     confirm = null;
+    revised.clear();
+    round3Task = false;
+    if (reports.includes('r2')) reports.splice(reports.indexOf('r2'), 1);
+    probes.forEach((p) => { if (p.round === 2) p.done = false; });
     if (tablet.open) tablet.toggle(false);
     startRound2();
     controls.lock();
@@ -162,17 +172,20 @@ export function createInvestigation(scene, camera, crash, controls) {
     holdT = 0; holdKey = false; finishedAnalysis = null;
     fx.setFocus(false);
     ui.setAnalysis(null);
-    clock.target = m === 'explore' || m === 'cut' ? 1 : 0;
+    clock.target = m === 'explore' || m === 'cut' || m === 'ending' ? 1 : 0;
     fx.setActive(m === 'recon');
     recon.root.visible = m === 'recon';
     ui.setMode(m, m === 'recon' ? '黑梦回放' : '现场调查');
     ui.setPrompt(null);
-    ui.setCinema(m === 'cut');
-    ui.setSolved(roundDone[2] && m === 'explore' ? '◆ 第 2 次复核完成 · 未完待续' : null);
-    controls.enabled = m !== 'cut';
+    ui.setCinema(m === 'cut' || m === 'ending');
+    ui.setSolved(null);
+    controls.enabled = m !== 'cut' && m !== 'ending';
     if (m === 'explore') {
-      ui.setCounter(stageClues().filter((c) => c.done).length, stageClues().length);
-      ui.setHint(reconReady());
+      if (round3Task) showRound3Task();
+      else {
+        ui.setCounter(stageClues().filter((c) => c.done).length, stageClues().length);
+        ui.setHint(reconReady());
+      }
     }
     if (m === 'recon') {
       ui.clearToast();
@@ -189,14 +202,21 @@ export function createInvestigation(scene, camera, crash, controls) {
   addEventListener('keydown', (e) => {
     if (e.code === 'Tab') e.preventDefault();
     if (mode === 'cut') return;
+    // 假结局：鼠标未锁定，按 E 回到报告 02
+    if (mode === 'ending') {
+      if ((e.code === 'KeyE' || e.code === 'Enter') && !e.repeat && endingT > 4) returnFromArchive();
+      return;
+    }
     // 平板打开时鼠标已释放，按键照常处理
     if (!locked() && !tablet.open) return;
 
-    // 报告页：确认归档（第 1 轮）或收起继续调查
+    // 报告页：待确认时按住 E 归档、TAB 暂不归档；没有确认或已挂起时 TAB / Esc 收起
     if (mode === 'report') {
-      const pending = confirm && confirm.state === 'idle';
-      if (e.code === 'KeyE' && pending) holdConfirm = true;
-      else if ((e.code === 'Tab' || e.code === 'Escape') && !confirm && !e.repeat) closeReport(e.code === 'Tab');
+      const st = confirm?.state;
+      const closable = !confirm || (st === 'suspended' && confirm.key === 'r2');
+      if (e.code === 'KeyE' && st === 'idle') holdConfirm = true;
+      else if (e.code === 'Tab' && st === 'idle' && !e.repeat && confirm.key === 'r2') declineReport();
+      else if ((e.code === 'Tab' || e.code === 'Escape') && closable && !e.repeat) closeReport(e.code === 'Tab');
       else tablet.nav(e.code);
       return;
     }
@@ -287,7 +307,9 @@ export function createInvestigation(scene, camera, crash, controls) {
     roundDone[r] = true;
     const key = ROUNDS[r].report;
     if (!reports.includes(key)) reports.push(key);
-    confirm = null;
+    confirm = makeConfirm(key);
+    holdConfirm = false;
+    reportT = 0;
     paintTask = r === 1;
     setMode('explore');
     setTimeout(() => {
@@ -305,7 +327,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     const key = R().report;
     roundDone[round] = true;
     if (!reports.includes(key)) reports.push(key);
-    confirm = REPORTS[key].confirm ? { p: 0, state: 'idle' } : null;
+    confirm = makeConfirm(key);
     holdConfirm = false;
     reportT = 0;
     setMode('report');
@@ -319,13 +341,21 @@ export function createInvestigation(scene, camera, crash, controls) {
     else setMode('explore');
   }
 
+  function makeConfirm(key) {
+    if (!REPORTS[key].confirm || revised.has(key)) return null;
+    return { key, p: 0, state: 'idle', text: '', onDecline: key === 'r2' ? declineReport : null };
+  }
+
   function closeReport(relock) {
+    const after2 = confirm?.key === 'r2' && confirm.state === 'suspended' && !round3Task;
+    if (after2) round3Task = true;
+    confirm = null;
     setTablet(false, relock);
     setMode('explore');
     if (paintTask) {
       paintTask = false;
       startRound2();
-    } else if (roundDone[2]) ui.toast('下一轮探索', '回到蓝车，核对转向是不是刮擦造成的。这一轮还没接上。', 5000);
+    } else if (after2) pressureCall();
   }
 
   function updateReport(dt) {
@@ -335,7 +365,81 @@ export function createInvestigation(scene, camera, crash, controls) {
     const before = confirm.p;
     confirm.p = holdConfirm && ready ? confirm.p + dt / CONFIRM_TIME : Math.max(0, confirm.p - dt * 2);
     if (confirm.p !== before) syncTablet();
-    if (confirm.p >= INTERRUPT_AT) interrupt();
+    // 报告 02 可以真的按满归档；其他报告保留原来的双闪打断
+    if (confirm.key === 'r2') { if (confirm.p >= 1) archiveReport(); }
+    else if (confirm.p >= INTERRUPT_AT) interrupt();
+  }
+
+  // ---------- 报告 02：暂不归档 → 质问仪器 → 报告改写 ----------
+  function declineReport() {
+    if (!confirm || confirm.state !== 'idle') return;
+    confirm.state = 'talking';
+    confirm.text = '复核质询中…';
+    holdConfirm = false;
+    syncTablet();
+    ui.say(LINES.question2).then(() => {
+      if (mode !== 'report') return;
+      revised.add('r2');
+      confirm.state = 'suspended';
+      confirm.text = '复核挂起 · 接触前转向原因未知　TAB 收起';
+      tablet.glitch(0.45);
+      tablet.showReport('r2');
+      syncTablet();
+      return ui.say(LINES.revised2);
+    });
+  }
+
+  // 收起挂起的报告 02：派单员催单，陈墨拒绝交单，给出第 3 轮目标
+  function pressureCall() {
+    setTimeout(() => {
+      ui.say(LINES.call2, { radio: true }).then(() => {
+        if (mode === 'explore') showRound3Task();
+        syncTablet();
+      });
+    }, 700);
+  }
+  // 第 3 轮内容未接入：HUD 只显示目标，不再提示按 R
+  function showRound3Task() {
+    ui.setObjective('查清<b>接触前</b>为什么转向<small>第 3 轮待接入</small>');
+    ui.setHint(false);
+  }
+
+  // ---------- 报告 02：真的归档 → 假结局 ----------
+  function archiveReport() {
+    confirm.state = 'archived';
+    confirm.p = 1;
+    confirm.text = '已归档 · FRA-B1234';
+    holdConfirm = false;
+    syncTablet();
+    setTimeout(() => {
+      // 鼠标保持释放：假结局只需要按 E 返回
+      endingT = -Infinity;
+      tablet.toggle(false);
+      setMode('ending');
+      syncTestBtns();
+      ui.say(LINES.archived, { radio: true }).then(() => {
+        if (mode !== 'ending') return;
+        ui.black(1, 1400);
+        setTimeout(() => {
+          if (mode !== 'ending') return;
+          endingT = 0;
+          ui.ending(ARCHIVED);
+        }, 1500);
+      });
+    }, 900);
+  }
+
+  function returnFromArchive() {
+    ui.ending(null);
+    ui.black(0, 600);
+    confirm = makeConfirm('r2');
+    holdConfirm = false;
+    reportT = 0;
+    setMode('report');
+    setTablet(true);
+    tablet.showReport('r2');
+    syncTablet();
+    syncTestBtns();
   }
 
   // ---------- 转折：拇指移向确认键，双闪亮了 ----------
@@ -580,6 +684,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     tickFinished(dt);
     holdAnalyze(aimedProbe, dt, (c) => {
       if (c.id === 'p1turn') ui.say(LINES.dream1);
+      if (c.id === 'p2gap') ui.say(LINES.dream2);
       if (c.key) ui.setCounter(keyProbes().filter((x) => x.done).length, keyProbes().length, '分析');
       checkRoundDone();
     });
@@ -605,10 +710,11 @@ export function createInvestigation(scene, camera, crash, controls) {
   return {
     fx,
     tablet,
-    get moveScale() { return mode === 'report' || mode === 'cut' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
+    get moveScale() { return mode === 'report' || mode === 'cut' || mode === 'ending' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
     update(realDt) {
       tablet.update(realDt);
       ui.setTabletOpen(tablet.amount > 0.05);
+      if (mode === 'ending') endingT += realDt;
       if (mode === 'cut') {
         cut.update(cutFrozen ? 0 : realDt);
         vm.analyze(null, 0);
@@ -640,6 +746,9 @@ export function createInvestigation(scene, camera, crash, controls) {
       recordAll() { events().forEach((ev) => { rt = ev.t; tryRecord(); }); },
       report() { finishRecon(); },
       confirm(on = true) { holdConfirm = on; },
+      decline() { declineReport(); },
+      returnFromArchive() { returnFromArchive(); },
+      get confirmState() { return confirm?.state ?? null; },
       twist() { playTwist(); },
       cutFreeze(on = true) { cutFrozen = on; },
       cutStep(dt) { cut.update(dt); },

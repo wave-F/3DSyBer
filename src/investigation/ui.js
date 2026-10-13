@@ -122,6 +122,11 @@ const CSS = `
 #inv-cine::after { bottom: 0; }
 #inv-cine.on::before, #inv-cine.on::after { height: 11vh; }
 #inv-black { inset: 0; background: #000; opacity: 0; z-index: 9; }
+#inv-ending { inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; opacity: 0; transition: opacity 1.2s; }
+#inv-ending.on { opacity: 1; }
+#inv-ending h1 { margin: 0 0 22px; font-size: 34px; font-weight: 400; letter-spacing: .5em; color: #9fb4c4; }
+#inv-ending .ln { font-size: 19px; letter-spacing: .12em; color: #d8e2ea; opacity: 0; animation: inv-in .8s forwards; }
+#inv-ending .back { margin-top: 48px; font-size: 13px; letter-spacing: .3em; color: #ffcf4a; opacity: 0; animation: inv-in .8s forwards; }
 #inv-flash { inset: 0; background: radial-gradient(circle at 60% 55%, rgba(255,170,60,.55), rgba(255,120,20,.15) 60%, transparent); opacity: 0; z-index: 5; mix-blend-mode: screen; }
 `;
 
@@ -169,6 +174,7 @@ export function createUI() {
   const cine = el('inv-cine');
   const black = el('inv-black');
   const flash = el('inv-flash');
+  const ending = el('inv-ending');
   let panelTimer = 0, toastTimer = 0, toastHold = null;
   let sayToken = 0;
 
@@ -220,6 +226,18 @@ export function createUI() {
     setTabletOpen(on) {
       for (const e of [hud, hint, markers, solved, document.getElementById('crosshair')]) if (e) e.style.visibility = on ? 'hidden' : '';
       if (on) { prompt.classList.remove('on'); this.setAnalysis(null); }
+    },
+    // 线索计数位置改为显示任务目标（html），进度条清空
+    setObjective(html) {
+      clearTimeout(this._taskTimer);
+      clearTimeout(this._taskTimer2);
+      this._countStamp = `objective:${html}`;
+      this._taskReady = false;
+      hud.classList.remove('done', 'out', 'ready');
+      hud.querySelector('.count').innerHTML = html;
+      hud.querySelector('.bar i').style.width = '0%';
+      hud.classList.add('in');
+      setTimeout(() => hud.classList.remove('in'), 460);
     },
     setSolved(text) { if (text) solved.textContent = text; solved.classList.toggle('on', !!text); },
     setCounter(done, total, label = '线索') {
@@ -454,5 +472,13 @@ export function createUI() {
     // 黑场：a 为不透明度，ms 为过渡时长
     black(a, ms = 0) { black.style.transition = `opacity ${ms}ms`; black.style.opacity = a; },
     flash(a, ms = 0) { flash.style.transition = `opacity ${ms}ms`; flash.style.opacity = a; },
+    // 结局黑场文字：{ title, lines, back }；传 null 隐藏
+    ending(d) {
+      if (!d) { ending.classList.remove('on'); return; }
+      ending.innerHTML = `<h1>${d.title}</h1>`
+        + d.lines.map((l, i) => `<div class="ln" style="animation-delay:${0.8 + i * 1.1}s">${l}</div>`).join('')
+        + `<div class="back" style="animation-delay:${1.2 + d.lines.length * 1.1}s">${d.back}</div>`;
+      ending.classList.add('on');
+    },
   };
 }

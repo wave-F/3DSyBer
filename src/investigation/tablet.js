@@ -397,39 +397,75 @@ export function createTablet(camera) {
     text(r.tag, x, 392, 46, C.white, 500);
     const shown = Math.floor(state.typeT * 5);
     const maxW = CW - 70 - (x + 28);
+    // 被质疑改写：原行划掉，追加一行；原判定划掉，下面写新判定
+    const rv = r.revisedOn ? r.revised : null;
+    const lines = rv ? [...r.lines, rv.add] : r.lines;
     let ly = 460;
-    r.lines.forEach((l, i) => {
+    lines.forEach((l, i) => {
       if (i >= shown) return;
-      g.fillStyle = C.cyan;
+      const struck = rv && rv.strike.includes(i);
+      const added = rv && i === r.lines.length;
+      g.fillStyle = added ? '#ff9a3a' : C.cyan;
       g.fillRect(x, ly - 10, 14, 3);
-      wrap(l, maxW, 30).forEach((row, k) => text(row, x + 28, ly + k * 44, 30, '#d6effc'));
+      wrap(l, maxW, 30).forEach((row, k) => {
+        text(row, x + 28, ly + k * 44, 30, struck ? C.dim : added ? '#ffb066' : '#d6effc');
+        if (struck) strike(x + 28, ly + k * 44 - 10, measure(row, 30));
+      });
       ly += 58;
     });
-    if (shown > r.lines.length) {
-      const vy = 460 + r.lines.length * 58 + 30;
+    if (shown > lines.length) {
+      const vy = 460 + lines.length * 58 + 30;
       g.fillStyle = 'rgba(255,207,106,0.35)';
       g.fillRect(x, vy - 40, 520, 2);
-      text(r.verdict, x, vy + 10, 36, C.gold, 500);
-      if (r.note) text(r.note, x, vy + 72, 24, C.dim);
+      if (rv) {
+        text(r.verdict, x, vy + 4, 28, C.dim, 500);
+        strike(x, vy - 6, measure(r.verdict, 28, 500));
+        text(rv.verdict, x, vy + 58, 36, '#ffb066', 500);
+        text(rv.note, x, vy + 110, 24, C.dim);
+      } else {
+        text(r.verdict, x, vy + 10, 36, C.gold, 500);
+        if (r.note) text(r.note, x, vy + 72, 24, C.dim);
+      }
     }
-    if (r.confirm && shown > r.lines.length + 1) drawConfirm(x);
+    if (r.confirm && shown > lines.length + 1) drawConfirm(x, !!rv);
+  }
+
+  function strike(x, y, w) {
+    g.fillStyle = '#ff6a4a';
+    g.fillRect(x - 4, y, w + 8, 3);
   }
 
   // 「按住 E 确认归档」：确认进度条；被打断后显示挂起
-  function drawConfirm(x) {
+  // 报告 02（cf.onDecline）：左侧确认条 + 右侧「TAB 暂不归档」；cf.text 为非待确认状态下的文字
+  function drawConfirm(x, low = false) {
     const cf = state.data.confirm;
     if (!cf) return;
-    const bx = x, by = 820, bw = CW - 70 - x, bh = 92;
-    const suspended = cf.state === 'suspended';
-    g.fillStyle = suspended ? 'rgba(255,138,26,0.10)' : 'rgba(255,207,106,0.08)';
+    const by = low ? 870 : 820, bh = low ? 76 : 92;
+    const full = CW - 70 - x;
+    const idle = cf.state === 'idle';
+    const split = idle && cf.onDecline;
+    const bx = x, bw = split ? full * 0.66 : full;
+    const warn = cf.state === 'suspended' || cf.state === 'talking';
+    const done = cf.state === 'archived';
+    g.fillStyle = warn ? 'rgba(255,138,26,0.10)' : 'rgba(255,207,106,0.08)';
     g.fillRect(bx, by, bw, bh);
-    if (!suspended && cf.p > 0) {
+    if ((idle || done) && cf.p > 0) {
       g.fillStyle = 'rgba(255,207,106,0.32)';
-      g.fillRect(bx, by, bw * cf.p, bh);
+      g.fillRect(bx, by, bw * Math.min(1, cf.p), bh);
     }
-    corners(bx, by, bw, bh, 18, suspended ? '#ff9a3a' : C.gold, 3);
-    if (suspended) text('复核挂起 · 现场出现未登记色值', bx + bw / 2, by + 58, 32, '#ffb066', 500, 'center');
-    else text(cf.p > 0 ? '确认归档中…' : '按住 E 确认归档', bx + bw / 2, by + 58, 34, C.gold, 500, 'center');
+    corners(bx, by, bw, bh, 18, warn ? '#ff9a3a' : C.gold, 3);
+    const ty = by + bh / 2 + 12;
+    if (idle) text(cf.p > 0 ? '确认归档中…' : '按住 E 确认归档', bx + bw / 2, ty, 34, C.gold, 500, 'center');
+    else if (cf.text) text(cf.text, bx + bw / 2, ty, 30, warn ? '#ffb066' : C.gold, 500, 'center');
+    else text('复核挂起 · 现场出现未登记色值', bx + bw / 2, ty, 32, '#ffb066', 500, 'center');
+    if (!split) return;
+    const dx = bx + bw + 24, dw = full - bw - 24;
+    const hot = inside(dx, by, dw, bh);
+    g.fillStyle = hot ? 'rgba(127,214,255,0.16)' : 'rgba(127,214,255,0.06)';
+    g.fillRect(dx, by, dw, bh);
+    corners(dx, by, dw, bh, 14, C.dim, 2);
+    text('TAB 暂不归档', dx + dw / 2, ty, 28, hot ? C.white : C.cyan, 500, 'center');
+    region(dx, by, dw, bh, () => cf.onDecline());
   }
 
   // 切到报告页并选中指定报告（新生成的报告重新打字）
