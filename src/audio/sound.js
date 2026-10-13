@@ -16,14 +16,47 @@ const EMITTERS = {
   'event:/amb/Amb_4': { x: -70, y: 25, z: -60 },  // 远处城市整体：-X 侧后方楼群
 };
 
+// 雨打在楼上：两种素材在各栋楼立面上交替使用，每个实例随机起点，避免同相叠加
+const RAIN_HITS = ['event:/amb/Amb_5_rain', 'event:/amb/Amb_6_rain'];
+const RAIN_HIT_RANGE = 45;   // 与 Studio 里事件的最大距离一致：更远的楼永远听不到，不建实例
+let rainSpots = [];
+
 const fmod = new FmodRuntime();
+const rainInstances = [];
 const position = { x: 0, y: 0, z: 0 }, forward = { x: 0, y: 0, z: -1 }, up = { x: 0, y: 1, z: 0 };
 
 function guard(fn) {
   try { return fmod.ready ? fn() : undefined; } catch (error) { console.warn('[audio]', error.message); }
 }
 
+function startRainHits() {
+  if (rainInstances.length) return;
+  rainSpots.forEach((p, i) => {
+    const path = RAIN_HITS[i % RAIN_HITS.length];
+    const inst = fmod.instance(path);
+    try {
+      fmod.check(inst.set3DAttributes(fmod.fill(p)), `3D ${path}`);
+      fmod.check(inst.setTimelinePosition(Math.floor(Math.random() * 60000)), `offset ${path}`);
+      fmod.check(inst.setPitch(0.94 + Math.random() * 0.12), `pitch ${path}`);
+      fmod.check(inst.start(), `start ${path}`);
+      rainInstances.push(inst);
+    } catch (error) { inst.release(); throw error; }
+  });
+}
+
+// 点到轴对齐盒子的距离
+function distanceToBox(p, box) {
+  const dx = Math.max(box.x[0] - p.x, 0, p.x - box.x[1]);
+  const dz = Math.max(box.z[0] - p.z, 0, p.z - box.z[1]);
+  return Math.hypot(dx, p.y - box.y, dz);
+}
+
 export const sound = {
+  // 楼体立面上的雨声点（city.js 生成）。area：玩家能到的范围 { x: [min, max], z: [min, max], y: 耳高 }
+  setRainSpots(spots, area) {
+    rainSpots = spots.filter((p) => distanceToBox(p, area) < RAIN_HIT_RANGE);
+  },
+
   preload() { fmod.preload().catch((e) => console.warn('[audio] preload', e.message)); },
 
   // 必须在用户手势（点击开始）里调用
@@ -32,6 +65,7 @@ export const sound = {
       fmod.setMuted(document.hidden);
       for (const path of BEDS) fmod.startLoop(path);
       for (const [path, position] of Object.entries(EMITTERS)) fmod.startLoop(path, position);
+      startRainHits();
     })).catch((e) => console.warn('[audio] init', e.message));
   },
 
@@ -77,4 +111,4 @@ export const sound = {
 };
 
 document.addEventListener('visibilitychange', () => guard(() => fmod.setMuted(document.hidden)));
-if (import.meta.env.DEV) window.__sound = sound;
+if (import.meta.env.DEV) window.__sound = Object.assign(sound, { debug: () => ({ spots: rainSpots, playing: rainInstances.length }) });

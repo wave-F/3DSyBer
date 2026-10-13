@@ -14,11 +14,11 @@ import { chromaticAberration } from 'three/addons/tsl/display/ChromaticAberratio
 import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
-import { buildBridge } from './bridge.js';
+import { buildBridge, DECK_Y, HALF_W } from './bridge.js';
 import { buildCity } from './city.js';
 import { buildCrash } from './crash.js';
 import { buildRain } from './rain.js';
-import { buildCordon } from './cordon.js';
+import { buildCordon, CORDON } from './cordon.js';
 import { createPlayer } from './player.js';
 import { buildSky, FOG_HEX } from './sky.js';
 import { clock, tick } from './investigation/clock.js';
@@ -77,6 +77,7 @@ const crash = buildCrash(scene);
 const updateSky = buildSky(scene);
 const updateRain = buildRain(scene, camera);
 const updateCordon = buildCordon(scene);
+sound.setRainSpots(updateCity.rainSpots, { x: [-HALF_W, HALF_W], z: [CORDON.z0, CORDON.z1], y: DECK_Y + 1.7 });
 const updatePlayer = createPlayer(camera, document.body, document.getElementById('overlay'));
 const inv = createInvestigation(scene, camera, crash, updatePlayer.controls);
 if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; window.__renderer = renderer; window.__scene = scene; } // 开发时截图调机位用

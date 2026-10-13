@@ -1,7 +1,7 @@
 // FMOD Studio 官方脚本：在手工制作的 amb 事件上搭混音（npm run audio:mix）。
 // 只增改、不重建事件，可以重复执行：
-//   - AMB 下分出 Bed / City / Crowd 三条子总线，并把 amb 事件路由过去
-//   - Amb_1..4 加 FMOD Spatializer（3D 定位），rain / traffic 保持 2D 立体声铺底
+//   - AMB 下分出 Bed / City / Crowd / RainHits 子总线，并把 amb 事件路由过去
+//   - Amb_1..6 加 FMOD Spatializer（3D 定位），rain / traffic 保持 2D 立体声铺底
 //   - Snapshot：Dream（黑梦）、Tablet（举起平板）；AHDSR 调制强度做淡入淡出
 //   - VCA：Ambience / SFX / UI，游戏运行时调音量
 //   - scifi/analyze_loop 没有声音时补回循环
@@ -31,6 +31,7 @@ function subBus(parent, name) {
 var bed = subBus(amb, 'Bed');       // rain / traffic：2D 立体声，跟头走
 var city = subBus(amb, 'City');     // Amb_1 / 2 / 4：城市点声源
 var crowd = subBus(amb, 'Crowd');   // Amb_3：人群点声源
+var rainHits = subBus(amb, 'RainHits');   // Amb_5_rain / Amb_6_rain：雨打在楼体立面上，每栋楼一个点声源
 
 // AMB 总线上的低通（平时全开），黑梦 Snapshot 把它压下来
 function ambLowpass() {
@@ -77,6 +78,9 @@ spatial('event:/amb/Amb_1', city, { min: 12, max: 160, size: 30 });   // 桥下�
 spatial('event:/amb/Amb_2', city, { min: 8, max: 110, size: 12 });    // 街面零碎活动
 spatial('event:/amb/Amb_3', crowd, { min: 10, max: 130, size: 18 });  // 人群
 spatial('event:/amb/Amb_4', city, { min: 30, max: 300, size: 60 });   // 远处城市整体
+// 雨打楼体：近处细节，最大距离与 src/audio/sound.js 的 RAIN_HIT_RANGE 一致
+spatial('event:/amb/Amb_5_rain', rainHits, { min: 6, max: 45, size: 8 });
+spatial('event:/amb/Amb_6_rain', rainHits, { min: 6, max: 45, size: 8 });
 
 // ---------- VCA ----------
 function vca(name, strips) {
@@ -95,14 +99,18 @@ vca('UI', [need('bus:/UI')]);
 
 // ---------- Snapshot ----------
 // Overriding：数值是绝对值（总线默认 0 dB，AMB 默认 -2 dB）
+// Snapshot 和总线、VCA 一样自动进 Master Bank，不要再分配到其它 Bank：
+// 分配到 Main 后，Studio 2.03.14 往这个 Bank 里加任何事件都会卡死（Bank 浏览器排序死循环）
 function snapshot(name, scoped, fadeIn, fadeOut) {
     var s = studio.project.lookup('snapshot:/' + name);
-    if (s) studio.project.deleteObject(s);
+    if (s) {
+        s.banks.forEach(function (b) { s.relationships.banks.remove(b); });
+        studio.project.deleteObject(s);
+    }
     s = studio.project.create('Snapshot');
     s.name = name;
     s.folder = mixer.snapshotList;
     s.mixer = mixer;
-    s.relationships.banks.add(bank);
     var tracked = [];
     scoped.forEach(function (it) {
         if (tracked.indexOf(it.strip) < 0) {
@@ -133,6 +141,7 @@ snapshot('Dream', [
     { strip: bed, property: 'volume', value: -8 },
     { strip: city, property: 'volume', value: -20 },
     { strip: crowd, property: 'volume', value: -26 },
+    { strip: rainHits, property: 'volume', value: -12 },
     { strip: amb, target: lowpass, property: 'frequencyA', value: 1100 },
 ], 1500, 1500);
 // 举起平板：环境让一点位置给 UI
@@ -154,4 +163,4 @@ if (analyze && analyze.masterTrack.modules.length === 0 && analyze.groupTracks.l
 }
 
 studio.project.save();
-console.log('Mix ready: AMB/Bed|City|Crowd, 3D Amb_1..4, snapshot:/Dream|Tablet, vca:/Ambience|SFX|UI');
+console.log('Mix ready: AMB/Bed|City|Crowd|RainHits, 3D Amb_1..6, snapshot:/Dream|Tablet, vca:/Ambience|SFX|UI');

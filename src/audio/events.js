@@ -14,6 +14,8 @@ export const EVENTS = [
   e('event:/amb/Amb_2', '街面活动（循环 · 3D）', '楼脚点声源 · AMB/City · 8–110 m'),
   e('event:/amb/Amb_3', '人群（循环 · 3D）', '街口点声源 · AMB/Crowd · 10–130 m'),
   e('event:/amb/Amb_4', '远处城市（循环 · 3D）', '远处楼群点声源 · AMB/City · 30–300 m'),
+  e('event:/amb/Amb_5_rain', '雨打楼体 A（循环 · 3D）', '每栋楼朝桥立面一个点声源，与 B 交替 · AMB/RainHits · 6–45 m'),
+  e('event:/amb/Amb_6_rain', '雨打楼体 B（循环 · 3D）', '每栋楼朝桥立面一个点声源，与 A 交替 · AMB/RainHits · 6–45 m'),
   e('event:/foley/step_walk', '脚步 · 走', '11 条湿靴脚步 + 雨衣摩擦层 · 随机不重复 · 音高 / 音量随机'),
   e('event:/foley/step_run', '脚步 · 跑', '12 条跑步脚步，衣物层更重'),
   e('event:/foley/cloth_move', '衣物摆动', '停步 / 转身 · 5 条随机'),

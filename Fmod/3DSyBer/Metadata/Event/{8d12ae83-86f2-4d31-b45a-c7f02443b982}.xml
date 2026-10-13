@@ -128,6 +128,9 @@
 		<property name="releaseTime">
 			<value>3000</value>
 		</property>
+		<property name="finalValue">
+			<value>-80</value>
+		</property>
 	</object>
 	<object class="MixerBusEffectChain" id="{6c121073-7bb7-42e4-8356-5ef3654048a4}">
 		<relationship name="effects">

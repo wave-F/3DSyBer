@@ -23,13 +23,14 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 
 ## 混音结构
 
-总线 `AMB`(-2 dB，带一个平时全开的 LP 24 dB) `FOLEY`(0) `UI`(-3) `SCIFI`(-1) 都接 Master。`AMB` 下分 `Bed` `City` `Crowd`。全部事件进 `Main` Bank。
+总线 `AMB`(-2 dB，带一个平时全开的 LP 24 dB) `FOLEY`(0) `UI`(-3) `SCIFI`(-1) 都接 Master。`AMB` 下分 `Bed` `City` `Crowd` `RainHits`。全部事件进 `Main` Bank；Snapshot、总线、VCA 自动进 `Master` Bank，**不要把 Snapshot 分配到 Main**：Studio 2.03.14 会在往这个 Bank 加事件时卡死。
 
 - 循环事件用时间线 + Loop Region：触发一次就一直循环。主轨上的 AHDSR 负责起播淡入，`stop(ALLOWFADEOUT)` 时淡出。没有参数。
 - `amb/rain` `amb/traffic` → `AMB/Bed`。2D 立体声铺底，跟着头走。
-- `amb/Amb_1` `Amb_2` `Amb_4` → `AMB/City`，`amb/Amb_3`（人群）→ `AMB/Crowd`。都是 3D 点声源，用 FMOD Spatializer（Inverse Tapered，User 包络），到最大距离时静音。位置写在 `src/audio/sound.js` 的 `EMITTERS`。听者每帧跟着相机的位置和朝向走；FMOD 用右手坐标系（`INIT_3D_RIGHTHANDED`），与 three.js 相同，单位米。
+- `amb/Amb_1` `Amb_2` `Amb_4` → `AMB/City`，`amb/Amb_3`（人群）→ `AMB/Crowd`。
+- `amb/Amb_5_rain` `Amb_6_rain`（雨打物体）→ `AMB/RainHits`，范围 6–45 m。`city.js` 给每栋楼朝桥的立面外 1 m、桥面高度放一个声源点（立面超过 24 m 放两个），两种素材交替使用；每个实例随机起点、音高 ±6%，避免多个实例同相叠加。离玩家活动范围超过 45 m 的点不建实例，现在共 21 个。都是 3D 点声源，用 FMOD Spatializer（Inverse Tapered，User 包络），到最大距离时静音。位置写在 `src/audio/sound.js` 的 `EMITTERS`。听者每帧跟着相机的位置和朝向走；FMOD 用右手坐标系（`INIT_3D_RIGHTHANDED`），与 three.js 相同，单位米。
 - Snapshot（Overriding，强度用 AHDSR 淡入淡出）：
-  - `Dream`（黑梦，1.5 s）：Bed -8 dB、City -20 dB、Crowd -26 dB，AMB 低通降到 1.1 kHz。
+  - `Dream`（黑梦，1.5 s）：Bed -8 dB、City -20 dB、Crowd -26 dB、RainHits -12 dB，AMB 低通降到 1.1 kHz。
   - `Tablet`（平板举起，0.4 / 0.5 s）：AMB -7 dB（比平时低 5 dB）。
 - VCA：`Ambience`（AMB）、`SFX`（FOLEY + SCIFI）、`UI`。游戏里用 `sound.setVolume('ambience' | 'sfx' | 'ui', 0..1)` 调节。
 - 多变体事件（脚步、衣物）用 Multi Instrument 随机播放，并加音高 / 音量随机器。
@@ -38,7 +39,7 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 
 | Event | 触发 |
 |-------|------|
-| `amb/rain` `amb/traffic` `amb/Amb_1..4` | 第一次点击「点击开始」时各触发一次，之后一直循环 |
+| `amb/rain` `amb/traffic` `amb/Amb_1..4` `amb/Amb_5_rain` `amb/Amb_6_rain` | 第一次点击「点击开始」时各触发一次，之后一直循环 |
 | `snapshot:/Dream` | 进入 / 离开黑梦 |
 | `snapshot:/Tablet` | 平板打开期间 |
 | `foley/step_walk` / `step_run` | `player.js` 按走过的距离触发：走 1.9 m、跑 3.0 m 一步 |

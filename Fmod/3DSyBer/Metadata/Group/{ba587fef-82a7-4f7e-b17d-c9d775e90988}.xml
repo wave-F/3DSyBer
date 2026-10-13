@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="MixerGroup" id="{ba587fef-82a7-4f7e-b17d-c9d775e90988}">
+		<property name="name">
+			<value>RainHits</value>
+		</property>
+		<relationship name="effectChain">
+			<destination>{cbe3c6fa-6129-48de-ad65-b8d42f423878}</destination>
+		</relationship>
+		<relationship name="panner">
+			<destination>{dc6c5ef5-3b73-4d2d-ad51-25bdb1e51825}</destination>
+		</relationship>
+		<relationship name="output">
+			<destination>{4c34a905-2a3e-49e3-888e-a489a4052266}</destination>
+		</relationship>
+	</object>
+	<object class="MixerBusEffectChain" id="{cbe3c6fa-6129-48de-ad65-b8d42f423878}">
+		<relationship name="effects">
+			<destination>{0b01a235-52e5-4c5b-8344-64171b18f8d2}</destination>
+		</relationship>
+	</object>
+	<object class="MixerBusPanner" id="{dc6c5ef5-3b73-4d2d-ad51-25bdb1e51825}" />
+	<object class="MixerBusFader" id="{0b01a235-52e5-4c5b-8344-64171b18f8d2}" />
+</objects>

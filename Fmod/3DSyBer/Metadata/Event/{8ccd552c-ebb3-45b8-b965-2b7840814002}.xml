@@ -39,7 +39,7 @@
 	</object>
 	<object class="MasterTrack" id="{8b247fd8-9ba6-41b7-b075-d741d5730b51}">
 		<relationship name="modules">
-			<destination>{b5523ad1-0b58-4fc3-b799-8764c07c1dec}</destination>
+			<destination>{2f03b667-a819-453f-9c42-212d79aa09fc}</destination>
 		</relationship>
 		<relationship name="mixerGroup">
 			<destination>{c1ed98e1-aeb1-4bdb-96f1-ddc65c3a9085}</destination>
@@ -60,7 +60,7 @@
 	<object class="MarkerTrack" id="{4687b1ab-ed13-43df-8e52-9cf12d8997b3}" />
 	<object class="Timeline" id="{304d196a-f881-47d4-b5ad-e742c333f883}">
 		<relationship name="modules">
-			<destination>{b5523ad1-0b58-4fc3-b799-8764c07c1dec}</destination>
+			<destination>{2f03b667-a819-453f-9c42-212d79aa09fc}</destination>
 		</relationship>
 		<relationship name="markers">
 			<destination>{751d4224-5b8c-47d4-ada0-efa53275465f}</destination>
@@ -80,7 +80,7 @@
 			<destination>{2ba8387e-5c11-4362-aa32-507a9a31add3}</destination>
 		</relationship>
 	</object>
-	<object class="SingleSound" id="{b5523ad1-0b58-4fc3-b799-8764c07c1dec}">
+	<object class="SingleSound" id="{2f03b667-a819-453f-9c42-212d79aa09fc}">
 		<property name="length">
 			<value>51.228004535147392</value>
 		</property>
@@ -116,10 +116,16 @@
 			<value>-80</value>
 		</property>
 		<property name="attackTime">
-			<value>2500</value>
+			<value>4115.38379</value>
+		</property>
+		<property name="decayTime">
+			<value>4230.77002</value>
 		</property>
 		<property name="releaseTime">
-			<value>2500</value>
+			<value>5730.76855</value>
+		</property>
+		<property name="finalValue">
+			<value>-80</value>
 		</property>
 	</object>
 	<object class="MixerBusEffectChain" id="{8d6bf619-9e17-41a4-9adc-a78425b63a2e}">
