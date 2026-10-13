@@ -17,7 +17,7 @@ const SHOWN = { pos: new THREE.Vector3(0, -0.012, -0.375), rot: new THREE.Euler(
 const HIDDEN = { pos: new THREE.Vector3(0.22, -0.5, -0.32), rot: new THREE.Euler(-1.25, 0.25, 0.35) };
 const C = { cyan: '#7fd6ff', dim: 'rgba(127,214,255,0.45)', faint: 'rgba(127,214,255,0.12)', gold: '#ffcf6a', white: '#eaf6ff', red: '#ff4a3a' };
 const SANS = '"PingFang SC", "Helvetica Neue", sans-serif';
-const TABS = ['线索', '事件', '报告'];
+const TABS = ['线索', '报告'];
 
 const easeOutBack = (x) => 1 + 2.2 * (x - 1) ** 3 + 1.2 * (x - 1) ** 2;
 const easeIn = (x) => x * x * x;
@@ -164,6 +164,7 @@ export function createTablet(camera) {
     hover: null, regions: [],
     repSel: 0,                    // 报告页选中的报告
     glitch: 0,                    // 强干扰剩余时间（双闪打断确认时）
+    hack: null,                   // 插卡接入画面：{ t, cfg, onDone }
   };
   const sway = { yaw: 0, pitch: 0, vx: 0, vy: 0 };
   let lastYaw = 0, lastPitch = 0;
@@ -227,12 +228,13 @@ export function createTablet(camera) {
   }
 
   function draw() {
-    const { clues, events } = state.data;
+    const { clues } = state.data;
     state.regions = [];
     g.clearRect(0, 0, CW, CH);
     g.fillStyle = 'rgba(40,110,160,0.07)';
     g.fillRect(0, 0, CW, CH);
     corners(24, 24, CW - 48, CH - 48, 46, C.cyan, 4);
+    if (state.hack) { drawHack(); return; }
 
     // 顶栏
     text('CASE FILE · 复核工单', 70, 104, 26, C.dim, 400, 'left', true);
@@ -259,8 +261,66 @@ export function createTablet(camera) {
     g.fillRect(70, 262, CW - 140, 2);
 
     if (state.tab === 0) drawClues(clues);
-    else if (state.tab === 1) drawEvents(events);
     else drawReport();
+  }
+
+  // ---------- 插卡接入画面 ----------
+  // 逐行出现的接入日志；读取段落有十六进制滚屏和进度条
+  const HEX = '0123456789ABCDEF';
+  function hexRow(seed) {
+    let s = '', x = seed * 2654435761 >>> 0;
+    for (let i = 0; i < 12; i++) { x = (x * 1103515245 + 12345) >>> 0; s += HEX[x >>> 28] + HEX[(x >>> 24) & 15] + ' '; }
+    return s;
+  }
+  function drawHack() {
+    const { t, cfg } = state.hack;
+    text('CARD LINK · FIELD FORENSICS', 70, 104, 26, C.dim, 400, 'left', true);
+    text(cfg.title, 70, 150, 40, C.white, 500);
+    // 右上角：接入状态
+    const blink = Math.floor(t * 4) % 2 === 0;
+    const done = t >= cfg.scan[1];
+    text(done ? '● 已接入' : blink ? '● 接入中' : '○ 接入中', CW - 70, 150, 32, done ? '#40ff90' : C.gold, 500, 'right');
+    g.fillStyle = C.faint;
+    g.fillRect(70, 190, CW - 140, 2);
+
+    // 左侧：日志
+    let y = 260;
+    for (const s of cfg.steps) {
+      if (t < s.t) break;
+      const color = s.tone === 'red' ? C.red : s.tone === 'gold' ? C.gold : '#d6effc';
+      // 每行逐字打出
+      const n = Math.min(s.text.length, Math.floor((t - s.t) * 60));
+      text('>', 70, y, 26, C.dim, 400, 'left', true);
+      text(s.text.slice(0, n), 104, y, 28, color, s.tone ? 500 : 400);
+      y += 56;
+    }
+
+    // 右侧：十六进制滚屏
+    const [s0, s1] = cfg.scan;
+    const x0 = 940, top = 240, rows = 10;
+    if (t >= s0) {
+      const p = Math.min(1, (t - s0) / (s1 - s0));
+      const scroll = Math.floor(t * 30);
+      for (let i = 0; i < rows; i++) {
+        const live = p < 1;
+        const row = live ? hexRow(scroll + i) : hexRow(i + 7);
+        const addr = (0x7f00 + ((live ? scroll : 0) + i) * 16).toString(16).toUpperCase();
+        text(addr, x0, top + i * 40, 20, C.dim, 400, 'left', true);
+        text(row, x0 + 90, top + i * 40, 20, i === rows - 1 && live ? C.white : 'rgba(127,214,255,0.7)', 400, 'left', true);
+      }
+      // 进度条
+      const by = top + rows * 40 + 20;
+      g.fillStyle = 'rgba(127,214,255,0.15)';
+      g.fillRect(x0, by, CW - 70 - x0, 10);
+      g.fillStyle = p < 1 ? C.cyan : '#40ff90';
+      g.fillRect(x0, by, (CW - 70 - x0) * p, 10);
+      text(`${Math.floor(p * 100)}%`, CW - 70, by + 46, 24, p < 1 ? C.cyan : '#40ff90', 400, 'right', true);
+    }
+  }
+  function hack(cfg, onDone) {
+    state.hack = { t: 0, cfg, onDone };
+    state.glitch = 0.35;
+    state.dirty = true;
   }
 
   function setTab(i) {
@@ -286,7 +346,9 @@ export function createTablet(camera) {
       }
       region(70, y, 470, rowH - 8, () => { if (state.sel !== i) { state.sel = i; state.typeT = 0; } });
       const by = y + (rowH - 8) / 2 + 11;
-      text(c.probe ? '梦' : String(i + 1).padStart(2, '0'), 96, by - 1, 24, c.probe ? C.gold : c.done ? C.dim : C.faint, 400, 'left', !c.probe);
+      const icon = c.probe ? '梦' : c.data ? (c.locked ? '锁' : '数') : String(i + 1).padStart(2, '0');
+      const iconColor = c.probe ? C.gold : c.data ? (c.locked ? C.red : '#40ff90') : c.done ? C.dim : C.faint;
+      text(icon, 96, by - 1, 24, iconColor, 400, 'left', !c.probe && !c.data);
       text(c.done ? c.name : '？？？', 150, by, rowH < 60 ? 27 : 30, c.done ? (on ? C.white : '#bfe4f7') : C.faint, on ? 500 : 400);
       if (c.done && c.key) text('◆', 520, by - 2, 20, C.gold, 400, 'right');
     });
@@ -302,11 +364,13 @@ export function createTablet(camera) {
       text('该线索尚未分析。靠近可疑位置按住 E，或按 Q 扫描周围。', x, 420, 26, C.dim);
       return;
     }
-    text(c.probe ? '黑梦分析' : `证据 #${String(state.sel + 1).padStart(2, '0')}`, x, 336, 22, c.probe ? C.gold : C.cyan, 400, 'left', true);
+    const head = c.probe ? '黑梦分析' : c.data ? (c.locked ? '车载数据 · 权限不足' : '车载数据 · 执行器缓存') : `证据 #${String(state.sel + 1).padStart(2, '0')}`;
+    text(head, x, 336, 22, c.probe ? C.gold : c.locked ? C.red : c.data ? '#40ff90' : C.cyan, 400, 'left', true);
     text(c.name, x, 392, 46, C.white, 500);
     // 打字机效果：切换线索后逐行出现
     // 文字区宽度到证据图左侧为止，超出自动换行
-    const maxW = c.probe ? CW - 70 - (x + 28) : CW - 70 - 380 - 40 - (x + 28);
+    const noImage = c.probe || c.data;
+    const maxW = noImage ? CW - 70 - (x + 28) : CW - 70 - 380 - 40 - (x + 28);
     const shown = Math.floor(state.typeT * 6);
     let ly = 448;
     c.lines.forEach((l, i) => {
@@ -322,7 +386,8 @@ export function createTablet(camera) {
       const ry = ly + 16;
       g.fillStyle = 'rgba(255,207,106,0.35)';
       g.fillRect(x, ry - 34, 400, 2);
-      text(c.result, x, ry + 12, 32, C.gold, 500);
+      text(c.result, x, ry + 12, 32, c.locked ? C.red : C.gold, 500);
+      if (c.prob == null) return;
       text('概率', x, ry + 66, 22, C.dim);
       g.fillStyle = 'rgba(255,207,106,0.2)';
       g.fillRect(x + 70, ry + 57, 260, 5);
@@ -330,8 +395,8 @@ export function createTablet(camera) {
       g.fillRect(x + 70, ry + 57, 260 * c.prob * Math.min(1, (state.typeT * 6 - c.lines.length - 1) / 2), 5);
       text(`${Math.round(c.prob * 100)}%`, x + 350, ry + 66, 22, C.gold, 400, 'left', true);
     }
-    // 证据图（黑梦分析没有影像）
-    if (c.probe) return;
+    // 证据图（黑梦分析、车载数据没有影像）
+    if (noImage) return;
     const im = image(c.id);
     const ix = CW - 70 - 380, iy = 300, is = 380;
     if (im.complete && im.naturalWidth) {
@@ -343,27 +408,6 @@ export function createTablet(camera) {
     }
     corners(ix - 10, iy - 10, is + 20, is + 20, 26, C.cyan, 3);
     text(`影像记录 · EV-${String(state.sel + 1).padStart(2, '0')}`, ix, iy + is + 44, 20, C.dim, 400, 'left', true);
-  }
-
-  function drawEvents(events) {
-    const rec = events.filter((e) => e.recorded);
-    if (!rec.length) {
-      text('尚无事件记录', 70, 360, 40, C.dim, 500);
-      text('收集全部关键线索后按 R 启动黑梦，在时间轴上记录关键时刻。', 70, 420, 26, C.dim);
-      return;
-    }
-    g.fillStyle = C.faint;
-    g.fillRect(118, 320, 2, events.length * 110 - 40);
-    events.forEach((e, i) => {
-      const y = 330 + i * 110;
-      g.beginPath();
-      g.arc(119, y + 2, 10, 0, Math.PI * 2);
-      g.fillStyle = e.recorded ? C.gold : 'rgba(255,207,106,0.15)';
-      g.fill();
-      text(e.recorded ? e.ts : '--:--.-', 160, y + 12, 26, e.recorded ? C.cyan : C.faint, 400, 'left', true);
-      text(e.recorded ? e.label : '未记录', 330, y + 12, 32, e.recorded ? C.white : C.faint, 500);
-      if (e.recorded) text(e.fact, 330, y + 56, 25, '#bfe4f7');
-    });
   }
 
   // ---------- 报告 ----------
@@ -472,7 +516,7 @@ export function createTablet(camera) {
   function showReport(key) {
     const i = state.data.reports.findIndex((r) => r.key === key);
     if (i < 0) return;
-    state.tab = 2;
+    state.tab = 1;
     state.repSel = i;
     state.typeT = 0;
     state.dirty = true;
@@ -537,8 +581,8 @@ export function createTablet(camera) {
     else if (code === 'KeyD') setTab((state.tab + 1) % TABS.length);
     else if (code === 'KeyW' && state.tab === 0) { state.sel = (state.sel + n - 1) % n; state.typeT = 0; }
     else if (code === 'KeyS' && state.tab === 0) { state.sel = (state.sel + 1) % n; state.typeT = 0; }
-    else if (code === 'KeyW' && state.tab === 2) { const m = state.data.reports.length; state.repSel = (state.repSel + m - 1) % m; state.typeT = 0; }
-    else if (code === 'KeyS' && state.tab === 2) { const m = state.data.reports.length; state.repSel = (state.repSel + 1) % m; state.typeT = 0; }
+    else if (code === 'KeyW' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + m - 1) % m; state.typeT = 0; }
+    else if (code === 'KeyS' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + 1) % m; state.typeT = 0; }
     else return false;
     state.dirty = true;
     return true;
@@ -590,8 +634,19 @@ export function createTablet(camera) {
     // 内容：举到位后开机，界面动画期间逐帧重绘
     if (state.open && state.k > 0.6) state.boot = Math.min(1, state.boot + dt * 1.8);
     // 开机、打字、确认进度、干扰期间逐帧重绘
-    const animating = state.open && (state.boot < 1 || state.typeT < 2.5 || state.data.confirm?.p > 0 || state.glitch > 0);
+    const animating = state.open && (state.boot < 1 || state.typeT < 2.5 || state.data.confirm?.p > 0 || state.glitch > 0 || !!state.hack);
     if (state.open && state.boot >= 1) state.typeT += dt;
+    // 接入画面：开机后计时，走完回调并回到普通页面
+    if (state.hack && state.open && state.boot >= 1) {
+      state.hack.t += dt;
+      if (state.hack.t >= state.hack.cfg.done) {
+        const f = state.hack.onDone;
+        state.hack = null;
+        state.typeT = 0;
+        state.dirty = true;
+        f?.();
+      }
+    }
     if (state.dirty || animating) {
       draw();
       applyBoot();
@@ -620,6 +675,13 @@ export function createTablet(camera) {
     nav,
     setData,
     showReport,
+    hack,
+    showClue(id) {
+      const i = state.data.clues.findIndex((c) => c.id === id);
+      if (i < 0) return;
+      state.tab = 0; state.sel = i; state.typeT = 0; state.dirty = true;
+    },
+    get hacking() { return !!state.hack; },
     glitch(sec = 0.5) { state.glitch = sec; state.dirty = true; },
     get open() { return state.open; },
     get amount() { return state.k; },   // 用于背景压暗与虚化

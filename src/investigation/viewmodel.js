@@ -23,7 +23,17 @@ const POSE = {
   hidden: { pos: new THREE.Vector3(0.24, -0.55, -0.3), rot: new THREE.Euler(-0.9, 0.2, 0.3) },
 };
 
-const dbg = { on: false, pos: new THREE.Vector3(0, 0, -0.4), rot: new THREE.Euler() };
+// 拿取证卡的手：姿态以卡头为原点（相机空间）。插卡时卡头推到卡槽位置
+const CARD_POSE = {
+  hidden: { pos: new THREE.Vector3(0.3, -0.5, -0.3), rot: new THREE.Euler(-0.9, 0.35, 0.4) },
+  ready: { pos: new THREE.Vector3(0.05, -0.06, -0.36), rot: new THREE.Euler(0, 0.25, 0) },
+};
+const CARD_INSERT_DEPTH = 0.03;   // 卡头越过卡槽口的深度
+const CARD_PULLBACK = 0.16;       // 推入前卡头停在卡槽外的距离
+const CARD_TINT = 0.5;
+const CARD_T = { lower: 0.3, raise: 0.45, push: 0.42, pull: 0.38, drop: 0.35 };
+
+const dbg = { on: false, pos: new THREE.Vector3(0, 0, -0.4), rot: new THREE.Euler(), card: CARD_POSE };
 if (import.meta.env.DEV) window.__vm = dbg;
 
 export function createViewmodel(overlayScene, camera) {
@@ -44,6 +54,80 @@ export function createViewmodel(overlayScene, camera) {
 
   const device = buildDevice();
   holder.add(device.group);
+
+  // 拿取证卡的手（另一个模型）：扫描枪放下到画面外后换上，插卡、拔卡后再换回
+  const cardHolder = new THREE.Group();
+  cardHolder.visible = false;
+  rig.add(cardHolder);
+  new GLTFLoader().load('/assets/card-arm.glb', (gltf) => {
+    const model = gltf.scene;
+    // 卡头朝 -Z；模型平移到卡头位于原点（卡头在模型中约为 (0.035, 0.492, 0.496)）
+    const S = 0.45;
+    model.rotation.y = Math.PI;
+    model.scale.setScalar(S);
+    model.position.set(0.035, -0.492, 0.496).multiplyScalar(S);
+    // 贴图比扫描枪手套亮，压暗到同一档
+    model.traverse((o) => { if (o.isMesh) o.material.color.multiplyScalar(CARD_TINT); });
+    cardHolder.add(model);
+  }, undefined, (error) => console.error('Failed to load card arm:', error));
+  // phase：null | lower | raise | push | hold | pull | drop
+  const card = { phase: null, t: 0, target: new THREE.Vector3(), cb: null, hide: false };
+  const cpA = new THREE.Vector3(), cpB = new THREE.Vector3(), cqA = new THREE.Quaternion(), cqB = new THREE.Quaternion();
+  const insertPos = new THREE.Vector3();
+  const insertRot = new THREE.Euler();
+
+  // target：卡槽口在相机空间的位置；dir：插入方向（相机空间，指向车身内）；up：相机空间的竖直方向
+  // 插到底时回调 onInserted。准备姿态停在卡槽外，沿插入方向推进
+  const _lm = new THREE.Matrix4();
+  function insertCard(target, dir, up, onInserted) {
+    card.target.copy(target);
+    insertPos.copy(target).addScaledVector(dir, CARD_INSERT_DEPTH);
+    insertRot.setFromRotationMatrix(_lm.lookAt(new THREE.Vector3(), dir, up));
+    CARD_POSE.ready.pos.copy(target).addScaledVector(dir, -CARD_PULLBACK);
+    CARD_POSE.ready.rot.copy(insertRot);
+    card.phase = 'lower'; card.t = 0; card.cb = onInserted;
+  }
+  // 倒放：拔出、放下到画面外，再换回扫描枪
+  function removeCard(onDone) {
+    card.phase = 'pull'; card.t = 0; card.cb = onDone;
+  }
+  function poseCard(a, b, u) {
+    const e = THREE.MathUtils.smootherstep(u, 0, 1);
+    cpA.lerpVectors(a.pos, b.pos, e);
+    cqA.setFromEuler(a.rot).slerp(cqB.setFromEuler(b.rot), e);
+    cardHolder.position.copy(cpA);
+    cardHolder.quaternion.copy(cqA);
+  }
+  function updateCard(dt) {
+    if (!card.phase) { cardHolder.visible = false; return; }
+    card.t += dt;
+    const P = card.phase;
+    const ins = { pos: insertPos, rot: insertRot };
+    const next = (n) => { card.phase = n; card.t = 0; };
+    const fire = () => { const f = card.cb; card.cb = null; f?.(); };
+    if (P === 'lower') {
+      // 扫描枪先收到画面外（st.hide 走满）
+      cardHolder.visible = false;
+      if (st.hide >= 1 && card.t >= CARD_T.lower) next('raise');
+    } else if (P === 'raise') {
+      cardHolder.visible = true;
+      poseCard(CARD_POSE.hidden, CARD_POSE.ready, card.t / CARD_T.raise);
+      if (card.t >= CARD_T.raise) next('push');
+    } else if (P === 'push') {
+      poseCard(CARD_POSE.ready, ins, card.t / CARD_T.push);
+      if (card.t >= CARD_T.push) { next('hold'); fire(); }
+    } else if (P === 'hold') {
+      poseCard(ins, ins, 1);
+    } else if (P === 'pull') {
+      poseCard(ins, CARD_POSE.ready, card.t / CARD_T.pull);
+      if (card.t >= CARD_T.pull) next('drop');
+    } else if (P === 'drop') {
+      poseCard(CARD_POSE.ready, CARD_POSE.hidden, card.t / CARD_T.drop);
+      if (card.t >= CARD_T.drop) { card.phase = null; cardHolder.visible = false; fire(); }
+    }
+    // 平板举起时手被挡在后面，直接隐藏，避免前臂压在平板边框上
+    if (card.hide) cardHolder.visible = false;
+  }
 
   const st = {
     hide: 1,                 // 0 显示，1 收起
@@ -81,9 +165,11 @@ export function createViewmodel(overlayScene, camera) {
   }
 
   function update(dt, visible) {
-    // 收起/显示
+    // 收起/显示（插卡期间扫描枪一直收在画面外）
+    visible = visible && !card.phase;
     st.hide = THREE.MathUtils.clamp(st.hide + (visible ? -dt * 3 : dt * 5), 0, 1);
-    rig.visible = st.hide < 1;
+    holder.visible = st.hide < 1;
+    rig.visible = holder.visible || !!card.phase;
     camera.updateMatrixWorld();
     rig.position.copy(camera.position);
     rig.quaternion.copy(camera.quaternion);
@@ -160,9 +246,15 @@ export function createViewmodel(overlayScene, camera) {
 
     device.flash = Math.max(0, device.flash - dt * 4);
     device.update(dt, visible && !!st.target, st.progress);
+    updateCard(dt);
   }
 
-  return { update, scan, analyze, emitterWorld, get scanning() { return st.scanT >= 0; } };
+  return {
+    update, scan, analyze, emitterWorld, insertCard, removeCard,
+    setCardHidden(on) { card.hide = on; },
+    get scanning() { return st.scanT >= 0; },
+    get cardPhase() { return card.phase; },
+  };
 }
 
 // ---------- 设备模型 ----------
