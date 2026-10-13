@@ -49,7 +49,6 @@ export function createInvestigation(scene, camera, crash, controls) {
   let lead = false;            // 第 2 轮：只有车门残漆可查，分析后解锁其余线索
   let glint = false;           // 残漆随双闪反光
   let paintTask = false;       // 第 1 次黑梦退出后，收起报告就去查车漆
-  let doubtSaid = false;
   let confirm = null;          // { p, state: 'idle' | 'suspended' }
   let holdConfirm = false;
   let reportT = 0;
@@ -281,16 +280,23 @@ export function createInvestigation(scene, camera, crash, controls) {
     // 分析做完留在黑梦里，按 Q 离开时才进入下一轮
   }
 
-  // 玩家主动退出，且本轮分析点已做完，才进入下一轮探索。第三轮还没有，停在现场。
+  // 分析做完后按 Q：打开平板，用本轮报告指出问题，再引导下一轮探索
   function advanceAfterDream() {
     if (!roundComplete() || roundDone[round]) return;
     const r = round;
     roundDone[r] = true;
-    if (r === 1) startRound2();
-    else {
-      setMode('explore');
-      ui.toast('第 2 次黑梦完成', '下一轮探索还没接上', 4500);
-    }
+    const key = ROUNDS[r].report;
+    if (!reports.includes(key)) reports.push(key);
+    confirm = null;
+    paintTask = r === 1;
+    setMode('explore');
+    setTimeout(() => {
+      if (mode !== 'explore') return;
+      setMode('report');
+      setTablet(true);
+      tablet.showReport(key);
+      syncTablet();
+    }, 500);
   }
 
   // ---------- 复核报告 ----------
@@ -308,21 +314,9 @@ export function createInvestigation(scene, camera, crash, controls) {
     syncTablet();
   }
 
-  // 第 1 次黑梦：分析过转向点再退出，才更新报告并布置现场任务
   function leaveRecon() {
     if (roundComplete()) advanceAfterDream();
     else setMode('explore');
-  }
-
-  function presentRound1() {
-    roundDone[1] = true;
-    if (!reports.includes('r1')) reports.push('r1');
-    confirm = null;
-    paintTask = true;
-    setMode('report');
-    setTablet(true);
-    tablet.showReport('r1');
-    syncTablet();
   }
 
   function closeReport(relock) {
@@ -331,8 +325,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     if (paintTask) {
       paintTask = false;
       startRound2();
-      ui.toast('新的任务', '返回现场，收集车门残漆、车旁胎痕和脱落饰条。', 5000);
-    } else if (roundDone[2]) ui.toast('第 2 次复核完成', '未完待续', 4500);
+    } else if (roundDone[2]) ui.toast('下一轮探索', '回到蓝车，核对转向是不是刮擦造成的。这一轮还没接上。', 5000);
   }
 
   function updateReport(dt) {
@@ -556,10 +549,8 @@ export function createInvestigation(scene, camera, crash, controls) {
     }
 
     // 车门残漆和普通线索一样：走近出现菱形，没有远处方向标记
-    const lc = clues.find((c) => c.lead);
     if (glint) props.setScrape(SCRAPE_ALPHA, crash.hazardLit ? 1.2 : 0.1);
     ui.setPointer(null);
-    if (lead && !lc.done && aimed === lc && !doubtSaid) { doubtSaid = true; ui.say(LINES.doubt); }
 
     if (analysisClue) ui.setPrompt(null);
     else if (aimed && aimed.done) ui.setPrompt(`按 E 查看：${aimed.name}`);
@@ -587,7 +578,11 @@ export function createInvestigation(scene, camera, crash, controls) {
     if (nextAim !== aimedProbe) holdT = 0;
     aimedProbe = nextAim;
     tickFinished(dt);
-    holdAnalyze(aimedProbe, dt, (c) => { if (c.key) ui.setCounter(keyProbes().filter((x) => x.done).length, keyProbes().length, '分析'); checkRoundDone(); });
+    holdAnalyze(aimedProbe, dt, (c) => {
+      if (c.id === 'p1turn') ui.say(LINES.dream1);
+      if (c.key) ui.setCounter(keyProbes().filter((x) => x.done).length, keyProbes().length, '分析');
+      checkRoundDone();
+    });
     if (holdT > 0) playing = false;
     const analysisClue = showAnalysis(aimedProbe);
 
