@@ -6,7 +6,8 @@
 
 | 路径 | 职责 |
 |------|------|
-| `index.html` | 启动壳、点击开始层、准星 |
+| `index.html` | 启动壳、加载界面（`#loading`）、Esc 暂停层、准星 |
+| `src/loading.js` | 加载进度、画面预热、点击开始和黑场淡出 |
 | `src/main.js` | 唯一编排：WebGPU、雾、灯光、后期、每帧更新 |
 | `package.json` | `dev` / `build` / `preview` |
 

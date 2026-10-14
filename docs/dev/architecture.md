@@ -4,7 +4,7 @@
 
 | 层 | 加功能时 |
 |----|----------|
-| `src/main.js` | 挂 update。不新开 `requestAnimationFrame` |
+| `src/main.js` | 挂 update。不新开 `requestAnimationFrame`（唯一例外：`loading.js` 在进入游戏前用自己的，就绪后停止） |
 | `bridge.js` `player.js` `cordon.js` `crash.js` | 可走空间。新障碍从 `DECK_Y` 这些常量派生 |
 | `city.js` `modelBuildings.js` `signs.js` `sky.js` | 不读调查模式 |
 | `src/investigation/` | 新交互放这里，不塞进 `main.js` |

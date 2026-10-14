@@ -79,5 +79,25 @@ export async function createActor(hex, segments) {
   }
   const duration = (name) => actions[name].getClip().duration;
 
-  return { root, pose, measure, duration };
+  // 程序化叠加：在 pose() 之后，把骨骼的 +Y 轴（骨骼方向）转向 dir（根节点本地坐标：+Z 正面，+Y 上，+X 人偶左侧）
+  // w 为混合权重（0 = 保持动作姿势，1 = 完全对准）。父骨骼要先于子骨骼调用
+  const bones = {};
+  const qW = new THREE.Quaternion(), qP = new THREE.Quaternion(), qR = new THREE.Quaternion(), qD = new THREE.Quaternion();
+  const yAxis = new THREE.Vector3(), dW = new THREE.Vector3();
+  function aim(boneName, dir, w) {
+    if (w <= 0) return;
+    const bone = bones[boneName] ??= root.getObjectByName(boneName);
+    root.getWorldQuaternion(qR);
+    dW.copy(dir).normalize().applyQuaternion(qR);
+    bone.getWorldQuaternion(qW);
+    yAxis.set(0, 1, 0).applyQuaternion(qW);
+    qD.setFromUnitVectors(yAxis, dW);
+    if (w < 1) qD.slerp(qP.identity(), 1 - w);
+    qW.premultiply(qD);
+    bone.parent.getWorldQuaternion(qP);
+    bone.quaternion.copy(qP.invert().multiply(qW));
+    bone.updateMatrixWorld(true);
+  }
+
+  return { root, pose, measure, duration, aim };
 }

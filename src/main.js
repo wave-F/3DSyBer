@@ -1,7 +1,9 @@
+// 加载界面必须第一个导入：在其他模块开始加载资源前挂上进度回调
+import { loading } from './loading.js';
 import * as THREE from 'three/webgpu';
 import {
   pass, mrt, output, normalView, metalness, roughness, vec2, vec3, float, sample, uniform,
-  packNormalToRGB, unpackRGBToNormal, renderOutput, screenUV, mix, smoothstep, luminance,
+  packNormalToRGB, unpackRGBToNormal, renderOutput, screenUV, mix, smoothstep, luminance, vec4,
   fog, color, exp, positionView, positionWorld, builtinAOContext, rtt,
 } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
@@ -17,17 +19,19 @@ import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
 import { buildBridge, DECK_Y, HALF_W } from './bridge.js';
 import { buildCity } from './city.js';
 import { buildCrash } from './crash.js';
+import { buildPoliceCar } from './policeCar.js';
 import { buildRain } from './rain.js';
 import { buildCordon, CORDON } from './cordon.js';
 import { createPlayer } from './player.js';
+import { createIntro } from './intro.js';
 import { buildSky, FOG_HEX } from './sky.js';
 import { clock, tick } from './investigation/clock.js';
 import { createInvestigation } from './investigation/state.js';
 import { addLightGroup } from './debugLights.js';
+import { HURT } from './investigation/finale.js';
 import { sound } from './audio/sound.js';
 
 sound.preload();
-document.getElementById('overlay').addEventListener('click', () => sound.start());
 
 const renderer = new THREE.WebGPURenderer();
 // Forward+ 分簇光照：每个像素只计算真正照到它的点光源（灯一盏不少，开销按覆盖范围算）
@@ -74,13 +78,17 @@ new HDRLoader().load('/assets/shanghai_bund_1k.hdr', (hdr) => {
 buildBridge(scene);
 const updateCity = buildCity(scene);
 const crash = buildCrash(scene);
+const police = buildPoliceCar(scene);
 const updateSky = buildSky(scene);
 const updateRain = buildRain(scene, camera);
 const updateCordon = buildCordon(scene);
 sound.setRainSpots(updateCity.rainSpots, { x: [-HALF_W, HALF_W], z: [CORDON.z0, CORDON.z1], y: DECK_Y + 1.7 });
 const updatePlayer = createPlayer(camera, document.body, document.getElementById('overlay'));
 const inv = createInvestigation(scene, camera, crash, updatePlayer.controls);
-if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; window.__renderer = renderer; window.__scene = scene; } // 开发时截图调机位用
+// 加载界面点击开始：这一下是用户手势，同时启动 FMOD 并锁定鼠标
+loading.onStart(() => { sound.start(); updatePlayer.controls.lock(); });
+const intro = createIntro({ camera, police, controls: updatePlayer.controls, inv });
+if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; window.__renderer = renderer; window.__scene = scene; window.__police = police; window.__intro = intro; } // 开发时截图调机位用
 
 // ---------- 后期 ----------
 // Separate pre-pass avoids feeding the shaded scene back into its own AO.
@@ -139,6 +147,7 @@ uiPass.getTexture('mask').type = THREE.UnsignedByteType;
 const uiMask = uiPass.getTextureNode('mask').r;
 const blurred = gaussianBlur(hdr, null, 4, { resolutionScale: 0.25 });
 hdr = mix(hdr, blurred.rgb.mul(0.16), tabletAmt);
+hdr = mix(hdr, blurred.rgb, HURT.blur);   // 结局：被撞后视线模糊（终端在后面单独叠加，不受影响）
 hdr = hdr.mul(float(1).sub(uiMask)).add(uiPass.getTextureNode('output').rgb);
 
 // 2. 辉光
@@ -155,14 +164,21 @@ const lum = luminance(hdr.rgb);
 const sat = smoothstep(0.4, 2.5, lum).mul(0.25).add(0.75);   // 越亮越饱和
 let graded = mix(vec3(lum), hdr.rgb, sat);
 graded = graded.mul(vec3(0.9, 1.02, 0.98)).add(vec3(0.0, 0.006, 0.005).mul(float(1).sub(lum).clamp()));
+graded = mix(graded, vec3(luminance(graded)).mul(vec3(1.04, 0.97, 0.96)), HURT.desat);   // 结局：失血去饱和
 
 // 4. 色调映射后：抗锯齿 → 色差 → 暗角 → 胶片颗粒
 const pipeline = new THREE.RenderPipeline(renderer);
 pipeline.outputColorTransform = false;
 let ldr = smaa(renderOutput(graded));
-ldr = chromaticAberration(ldr, uniform(0.05), vec2(0.5, 0.5), float(0.3));
+ldr = chromaticAberration(ldr, HURT.ca, vec2(0.5, 0.5), float(0.3));
 const vignette = smoothstep(0.85, 0.25, screenUV.sub(0.5).length());
 ldr = ldr.mul(mix(float(0.55), float(1), vignette));
+// 结局：暗角收紧（心跳）、白闪、眼皮
+const edge = screenUV.sub(0.5).length();
+ldr = ldr.mul(mix(float(1), smoothstep(0.72, 0.12, edge), HURT.vignette));
+ldr = mix(ldr, vec4(1, 1, 1, 1), HURT.white);
+const lidEdge = float(1).sub(HURT.lid).mul(0.62).sub(0.1);
+ldr = ldr.mul(float(1).sub(smoothstep(lidEdge, lidEdge.add(0.1), screenUV.y.sub(0.5).abs())));
 pipeline.outputNode = film(ldr, uniform(0.12));
 
 addEventListener('resize', () => {
@@ -176,14 +192,20 @@ renderer.setAnimationLoop(() => {
   const now = performance.now();
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
-  tick(dt);
-  updatePlayer(dt * inv.moveScale);
+  // Esc 只解锁鼠标并弹出「已暂停」。平板打开时的解锁不算暂停
+  const controls = updatePlayer.controls;
+  const paused = !controls.isLocked && !controls.keepOverlayHidden;
+  const step = paused ? 0 : dt;
+  tick(step);
+  if (intro.playing) intro.update(step);
+  else updatePlayer(step * inv.moveScale);
   crash.update(clock.dt, clock.elapsed);
+  police.update(clock.dt, clock.elapsed);
   updateRain(clock.dt);
-  updateCordon(dt, camera.position);
+  updateCordon(step, camera.position);
   updateSky(clock.dt, clock.elapsed);
   updateCity();
-  inv.update(dt);
+  inv.update(step);
   sound.update(dt, camera);
   tabletAmt.value = Math.min(1, inv.tablet.amount * 1.4);
   pipeline.render();

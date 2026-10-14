@@ -7,14 +7,23 @@ const CSS = `
 #inv-hud { left: 32px; top: 25%; transform: translateY(-6px) scale(1.5); transform-origin: left bottom; opacity: 0; transition: opacity .4s; }
 #inv-hud.on { opacity: 1; }
 #inv-hud .mode { font-size: 13px; letter-spacing: .32em; color: #6cc8ff; display: flex; align-items: center; gap: 10px; }
-#inv-hud .mode::before { content: ''; width: 8px; height: 8px; border: 1px solid #6cc8ff; transform: rotate(45deg); }
-#inv-hud .count { margin-top: 8px; font-size: 22px; font-weight: 300; }
+#inv-hud .mode::before { content: ''; width: 8px; height: 8px; border: 1px solid currentColor; transform: rotate(45deg); flex: none; }
+#inv-hud .count { margin-top: 8px; font-size: 22px; font-weight: 300; transition: opacity .32s ease, transform .32s ease; }
 #inv-hud .count small { font-size: 12px; opacity: .6; margin-left: 8px; letter-spacing: .2em; }
-#inv-hud .bar { margin-top: 8px; width: 220px; height: 2px; background: rgba(108,200,255,.2); }
+#inv-hud .count b { font-weight: 500; color: #ffcf4a; }
+#inv-hud .bar { margin-top: 8px; width: 220px; height: 2px; background: rgba(108,200,255,.2); transition: opacity .32s ease, transform .32s ease; }
 #inv-hud .bar i { display: block; height: 100%; width: 0; background: #6cc8ff; transition: width .4s; }
+#inv-hud.done .count { color: #b6f3c6; }
+#inv-hud.ready .mode, #inv-hud.ready .count { color: #ffcf4a; }
+#inv-hud.ready .mode::before { border-color: #ffcf4a; }
+#inv-hud.ready .bar i { background: #ffcf4a; }
+#inv-hud.out .count, #inv-hud.out .bar { opacity: 0; transform: translateY(-12px); }
+#inv-hud.in .count, #inv-hud.in .bar { animation: inv-task-in .42s ease; }
+@keyframes inv-task-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 #inv-solved { left: 32px; top: 25%; transform: translateY(-6px) scale(1.5); transform-origin: left bottom; font-size: 12px; letter-spacing: .3em; color: #ffb35c; opacity: 0; transition: opacity .4s; }
 #inv-solved.on { opacity: .9; }
 #inv-hint { left: 32px; bottom: 28px; font-size: 12px; opacity: .55; letter-spacing: .08em; line-height: 1.9; }
+#inv-hint.recon { left: 50%; bottom: 36px; width: min(900px, 86vw); transform: translateX(-50%); text-align: center; }
 #inv-hint b { display: inline-block; min-width: 18px; padding: 0 5px; margin-right: 6px; border: 1px solid rgba(223,242,255,.5); text-align: center; font-weight: 400; }
 #inv-markers { inset: 0; }
 .inv-mk { position: absolute; transform: translate(-50%, -50%) scale(1.5); transition: opacity .3s; }
@@ -100,6 +109,7 @@ const CSS = `
 .inv-evl3.near { background: rgba(255,207,74,.25); }
 #inv-sub { left: 50%; bottom: 128px; transform: translateX(-50%); max-width: 64vw; text-align: center; font-size: 22px; line-height: 1.6; letter-spacing: .06em; color: #f2f6fa; text-shadow: 0 2px 6px rgba(0,0,0,.95), 0 0 18px rgba(0,0,0,.7); opacity: 0; transition: opacity .25s; z-index: 6; }
 #inv-sub.on { opacity: 1; }
+#inv-sub.lift { bottom: calc(11vh + 36px); }
 #inv-sub .who { color: #6cc8ff; margin-right: 12px; font-size: 18px; letter-spacing: .2em; }
 #inv-sub.radio .who::before { content: '◉ '; color: #ff8a1a; }
 #inv-sub.inner { font-style: italic; color: #e6e0d4; }
@@ -115,6 +125,11 @@ const CSS = `
 #inv-cine::after { bottom: 0; }
 #inv-cine.on::before, #inv-cine.on::after { height: 11vh; }
 #inv-black { inset: 0; background: #000; opacity: 0; z-index: 9; }
+#inv-ending { inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; opacity: 0; transition: opacity 1.2s; }
+#inv-ending.on { opacity: 1; }
+#inv-ending h1 { margin: 0 0 22px; font-size: 34px; font-weight: 400; letter-spacing: .5em; color: #9fb4c4; }
+#inv-ending .ln { font-size: 19px; letter-spacing: .12em; color: #d8e2ea; opacity: 0; animation: inv-in .8s forwards; }
+#inv-ending .back { margin-top: 48px; font-size: 13px; letter-spacing: .3em; color: #ffcf4a; opacity: 0; animation: inv-in .8s forwards; }
 #inv-flash { inset: 0; background: radial-gradient(circle at 60% 55%, rgba(255,170,60,.55), rgba(255,120,20,.15) 60%, transparent); opacity: 0; z-index: 5; mix-blend-mode: screen; }
 `;
 
@@ -138,7 +153,7 @@ export function createUI() {
   style.textContent = CSS;
   document.head.appendChild(style);
 
-  const hud = el('inv-hud', '', `<div class="mode">分析模式</div><div class="count inv-mono">0 / 0<small>线索</small></div><div class="bar"><i></i></div>`);
+  const hud = el('inv-hud', '', `<div class="mode"><span>分析模式</span></div><div class="count inv-mono">0 / 0<small>线索</small></div><div class="bar"><i></i></div>`);
   const solved = el('inv-solved', '', '◆ 案件已重建');
   const hint = el('inv-hint');
   const markers = el('inv-markers');
@@ -162,12 +177,13 @@ export function createUI() {
   const cine = el('inv-cine');
   const black = el('inv-black');
   const flash = el('inv-flash');
+  const ending = el('inv-ending');
   let panelTimer = 0, toastTimer = 0, toastHold = null;
   let sayToken = 0;
 
   const HINTS = {
-    explore: '<b>Q</b>扫描线索　<b>E</b>按住分析　<b>TAB</b>平板',
-    exploreReady: '<b>Q</b>扫描线索　<b>E</b>按住分析　<b>R</b>启动黑梦　<b>TAB</b>平板',
+    explore: '<b>WASD</b>移动　<b>Shift</b>跑　<b>Q</b>扫描线索　<b>E</b>按住分析　<b>TAB</b>平板',
+    exploreReady: '<b>WASD</b>移动　<b>Shift</b>跑　<b>Q</b>扫描线索　<b>E</b>按住分析　<b>R</b>启动黑梦　<b>TAB</b>平板',
     recon: '<b>滚轮</b>拖动时间　<b>空格</b>播放 / 暂停　<b>E</b>记录事件 / 按住分析全息　<b>Q</b>退出黑梦',
   };
 
@@ -193,8 +209,9 @@ export function createUI() {
     setMode(mode, label) {
       this._mode = mode;
       hud.classList.toggle('on', mode === 'explore' || mode === 'recon');
-      hud.querySelector('.mode').textContent = label;
+      hud.querySelector('.mode span').textContent = label;
       hint.innerHTML = HINTS[mode === 'explore' && this._ready ? 'exploreReady' : mode] ?? '';
+      hint.classList.toggle('recon', mode === 'recon');
       if (mode !== 'explore' && mode !== 'recon') { markers.style.opacity = 0; this.setAnalysis(null); this.hidePanel(); }
       else markers.style.opacity = 1;
       if (mode !== 'explore') this.setPointer(null);
@@ -214,10 +231,53 @@ export function createUI() {
       for (const e of [hud, hint, markers, solved, document.getElementById('crosshair')]) if (e) e.style.visibility = on ? 'hidden' : '';
       if (on) { prompt.classList.remove('on'); this.setAnalysis(null); }
     },
+    // 线索计数位置改为显示任务目标（html），进度条清空
+    setObjective(html) {
+      clearTimeout(this._taskTimer);
+      clearTimeout(this._taskTimer2);
+      this._countStamp = `objective:${html}`;
+      this._taskReady = false;
+      hud.classList.remove('done', 'out', 'ready');
+      hud.querySelector('.count').innerHTML = html;
+      hud.querySelector('.bar i').style.width = '0%';
+      hud.classList.add('in');
+      setTimeout(() => hud.classList.remove('in'), 460);
+    },
     setSolved(text) { if (text) solved.textContent = text; solved.classList.toggle('on', !!text); },
     setCounter(done, total, label = '线索') {
-      hud.querySelector('.count').innerHTML = `${done} / ${total}<small>${label}</small>`;
-      hud.querySelector('.bar i').style.width = `${(done / total) * 100}%`;
+      const count = hud.querySelector('.count');
+      const bar = hud.querySelector('.bar i');
+      const taskDone = this._mode === 'explore' && label === '线索' && total > 0 && done >= total;
+      const stamp = `${this._mode}:${label}:${done}/${total}:${taskDone}`;
+      if (stamp === this._countStamp) return;
+      this._countStamp = stamp;
+      clearTimeout(this._taskTimer);
+      clearTimeout(this._taskTimer2);
+      const show = (html, width, ready) => {
+        count.innerHTML = html;
+        bar.style.width = width;
+        hud.classList.toggle('ready', ready);
+      };
+      // 线索刚满：先停在 3/3，再切成「按 R 构建黑梦」
+      if (taskDone && !this._taskReady) {
+        this._taskReady = true;
+        hud.classList.remove('in', 'out', 'ready');
+        hud.classList.add('done');
+        show(`${done} / ${total}<small>${label}完成</small>`, '100%', false);
+        this._taskTimer = setTimeout(() => {
+          hud.classList.add('out');
+          this._taskTimer2 = setTimeout(() => {
+            hud.classList.remove('done', 'out');
+            show('按 <b>R</b> 构建<small>黑梦</small>', '100%', true);
+            hud.classList.add('in');
+            setTimeout(() => hud.classList.remove('in'), 460);
+          }, 340);
+        }, 640);
+        return;
+      }
+      this._taskReady = taskDone;
+      hud.classList.remove('done', 'out', 'in');
+      show(taskDone ? '按 <b>R</b> 构建<small>黑梦</small>' : `${done} / ${total}<small>${label}</small>`, `${total ? (done / total) * 100 : 0}%`, taskDone);
     },
     // list: [{ id, x, y, show, done, aim, label }]
     updateMarkers(list) {
@@ -321,7 +381,7 @@ export function createUI() {
       const CELLS = 72;
       this._frac = frac;
       this._cells = CELLS;
-      this._evFrac = events.map((e) => frac(e.t));
+      this._evSpan = events.map((e) => [frac(e.t0 ?? e.t), frac(e.t1 ?? e.t)]);
       const jumpAt = jumpT == null ? null : Math.round(frac(jumpT) * CELLS);
       const before = jumpAt == null ? CELLS : jumpAt;
       const cell = (i) => `<i data-i="${i}"></i>`;
@@ -356,18 +416,23 @@ export function createUI() {
       const done = recorded.filter(Boolean).length;
       tl.querySelector('.count').textContent = countText;
       const cr = track.getBoundingClientRect();
+      const xAt = (f) => {
+        const x = Math.max(0, Math.min(n - 1, f * (n - 1)));
+        const i = Math.min(n - 1, Math.floor(x + 1e-6));
+        const cell = cells[i].getBoundingClientRect();
+        if (i >= n - 1) return cell.right;
+        const next = cells[i + 1].getBoundingClientRect();
+        return cell.left + (next.left - cell.left) * (x - i);
+      };
       tl.querySelectorAll('.ev').forEach((e) => {
         const i = +e.dataset.i;
         e.classList.toggle('rec', recorded[i]);
         e.classList.toggle('near', i === nearIdx);
-        const idx = Math.round((this._evFrac[i] ?? 0) * (n - 1));
-        const a = cells[Math.max(0, idx - 1)];
-        const b = cells[Math.min(n - 1, idx + 1)];
-        if (!a || !b) return;
-        const ar = a.getBoundingClientRect();
-        const br = b.getBoundingClientRect();
-        e.style.left = `${ar.left - cr.left}px`;
-        e.style.width = `${br.right - ar.left}px`;
+        const span = this._evSpan[i] ?? [0, 0];
+        const left = xAt(span[0]);
+        const right = xAt(span[1]);
+        e.style.left = `${left - cr.left}px`;
+        e.style.width = `${Math.max(2, right - left)}px`;
       });
     },
     // list: [{ x, y, show, rec, near }]
@@ -388,7 +453,8 @@ export function createUI() {
       if (radio) sound.play('ui/radio_on');
       const done = lines.reduce((p, l) => p.then(() => new Promise((res) => {
         if (token !== sayToken) return res();
-        sub.className = `inv on${l.who ? (radio && l.who !== '陈墨' ? ' radio' : '') : ' inner'}`;
+        const lift = cine.classList.contains('on') ? ' lift' : '';
+        sub.className = `inv on${l.who ? (radio && l.who !== '陈墨' ? ' radio' : '') : ' inner'}${lift}`;
         sub.innerHTML = l.who ? `<span class="who">${l.who}</span>${l.text}` : l.text;
         const ms = l.ms ?? 1400 + l.text.length * 140;
         setTimeout(() => { if (token === sayToken) sub.classList.remove('on'); setTimeout(res, 280); }, ms);
@@ -417,9 +483,18 @@ export function createUI() {
       ptr.style.top = `${cy + dy * k}px`;
       ar.style.transform = `rotate(${Math.atan2(dy, dx) + Math.PI / 2}rad)`;
     },
-    setCinema(on) { cine.classList.toggle('on', on); },
+    setCinema(on) { cine.classList.toggle('on', on); sub.classList.toggle('lift', on); },
+    hush() { sayToken++; sub.classList.remove('on'); },
     // 黑场：a 为不透明度，ms 为过渡时长
     black(a, ms = 0) { black.style.transition = `opacity ${ms}ms`; black.style.opacity = a; },
     flash(a, ms = 0) { flash.style.transition = `opacity ${ms}ms`; flash.style.opacity = a; },
+    // 结局黑场文字：{ title, lines, back }；传 null 隐藏
+    ending(d) {
+      if (!d) { ending.classList.remove('on'); return; }
+      ending.innerHTML = `<h1>${d.title}</h1>`
+        + d.lines.map((l, i) => `<div class="ln" style="animation-delay:${0.8 + i * 1.1}s">${l}</div>`).join('')
+        + `<div class="back" style="animation-delay:${1.2 + d.lines.length * 1.1}s">${d.back}</div>`;
+      ending.classList.add('on');
+    },
   };
 }

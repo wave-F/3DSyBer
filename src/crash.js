@@ -40,7 +40,7 @@ export function buildCrash(scene) {
 
   buildBrokenRail(scene);
   buildDebris(scene, r);
-  buildSkidMarks(scene);
+  const skids = buildSkidMarks(scene);
 
   // 车头起火的橙色闪烁光（放在车头前上方，离引擎盖约 0.8m，避免平方衰减把引擎盖打爆）
   const fireLight = new THREE.PointLight(0xff6a20, 6, 10, 2);
@@ -77,18 +77,21 @@ export function buildCrash(scene) {
     hazardOn = on;
     if (!on) { hazardLight.intensity = 0; car.hazardMat.emissiveIntensity = 0; }
   });
-  // info: { pristine: 未变形的模型副本（重建前半段用）, crashed: 变形后的模型（重建后半段用） }
+  // info: { pristine: 未变形的模型副本（重建前半段用）, crashed: 变形后的模型（重建后半段用）, door: 右车门节点（rotation.y 开合） }
   const onCarReady = (cb) => { if (ready) cb(ready); else readyCbs.push(cb); };
   return {
     update, carGroup: car.group, onCarReady, hazardMat: car.hazardMat,
-    setHazardOverride(o) { hazardOverride = o; },
+    skids, setHazardOverride(o) { hazardOverride = o; },
     get hazardLit() { return hazardLit; },
   };
 }
 
 // 超跑模型（Blender 导出：Draco 压缩 + WebP 贴图，约 3.5MB）
-// 模型本地坐标：地面 y=0，车头朝 +Z，车身左侧在 +X；节点 Body + Wheel_FL/FR/RL/RR
-const CAR_URL = '/assets/supercar.glb';
+// 模型本地坐标：地面 y=0，车头朝 +Z，车身左侧在 +X；节点 Body + Door_R + Wheel_FL/FR/RL/RR
+// Door_R：右侧（副驾）车门，原点在前铰链，绕本地 Y 轴转，正角度门尾外翻；导出时已带撞后外翻 7°
+// 源文件 art/supercar_door.blend，由 tools/blender/build_door_car.py 生成
+const CAR_URL = '/assets/supercar_door.glb';
+export const DOOR_AJAR = 7 * Math.PI / 180;
 const CAR_GLASS_URL = '/assets/supercar_glass_damage.glb';
 const CRUMPLE = 1; // 车头撞击变形强度，0 = 完好无损
 
@@ -129,6 +132,7 @@ function buildCar(onReady) {
     // 变形前保留一份独立几何的副本，给重建全息用
     const pristine = model.clone(true);
     pristine.traverse((o) => { if (o.isMesh) o.geometry = o.geometry.clone(); });
+    pristine.getObjectByName('Door_R').rotation.y = 0;   // 事故前车门是关着的
 
     const body = model.getObjectByName('Body');
     // The source shares one material across all windows. Replace that whole set
@@ -157,7 +161,7 @@ function buildCar(onReady) {
     group.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(wheel);
     wheel.position.y += DECK_Y + 0.01 - box.min.y;
-    onReady({ pristine, crashed: model, paintMeshes });
+    onReady({ pristine, crashed: model, paintMeshes, door: model.getObjectByName('Door_R') });
   }).catch((error) => {
     console.error('Failed to load the crash vehicle and replacement glazing', error);
   }).finally(() => draco.dispose());
@@ -416,5 +420,5 @@ function buildSkidMarks(scene) {
     end.clone().addScaledVector(forward, -5),
     end,
   );
-  addTireTracks(scene, curve, { offsets: [-0.8, 0.8], width: 0.245, seed: 404, slide: 0.45, opacity: 0.78 });
+  return addTireTracks(scene, curve, { offsets: [-0.8, 0.8], width: 0.245, seed: 404, slide: 0.45, opacity: 0.78 });
 }

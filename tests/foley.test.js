@@ -173,6 +173,7 @@ async function player() {
     'three/addons/controls/PointerLockControls.js': { PointerLockControls: Controls },
     './bridge.js': { DECK_Y: 0, HALF_W: 7 },
     './crash.js': { carCollider: { x: 100, z: 0, yaw: 0, minX: -1, maxX: 1, minZ: -1, maxZ: 1 } },
+    './policeCar.js': { policeCollider: { x: 100, z: 0, yaw: 0, minX: -1, maxX: 1, minZ: -1, maxZ: 1 } },
     './cordon.js': { CORDON: { z0: -1000, z1: 1000 }, CORDON_MARGIN: 1 },
     './audio/sound.js': { sound: { step: () => calls.push('step'), cloth: () => calls.push('cloth') } },
   }, { addEventListener: (name, fn) => { input[name] = fn; }, document: { addEventListener() {} } });

@@ -10,8 +10,9 @@ Fmod/**/.unsaved/
 Fmod/**/Build/
 \[\]/
 
-# Blender 场景源文件（体积大，不提交）
+# Blender 场景源文件（体积大，不提交）。city.blend 例外，给别人打开场景用
 art/*.blend
+!art/city.blend
 art/*.blend1
 art/tex/
 
