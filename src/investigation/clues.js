@@ -214,6 +214,7 @@ export const REPORTS = {
     tag: '复核报告 01', source: '黑梦回放 · 第 1 次重建',
     lines: ['回放中车辆发生非正常转向。', '转向发生在撞击护栏之前，单凭制动无法解释。', '推断：可能发生了碰撞。'],
     verdict: '建议：返回现场核查接触痕迹',
+    hint: '按 TAB 收起终端',
   },
   // confirm：报告下方出现「按住 E <hold> / TAB <decline>」
   //   按满 E 进入 ENDINGS[key] 假结局；TAB 时陈墨质问仪器（LINES[question]），报告按 revised 改写，确认条显示 suspended

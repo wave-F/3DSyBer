@@ -475,6 +475,7 @@ export function createTablet(camera) {
       g.fillStyle = 'rgba(255,207,106,0.35)';
       g.fillRect(x, ry - 34, 400, 2);
       text(c.result, x, ry + 12, 32, c.locked ? C.red : C.gold, 500);
+      if (c.action) drawAction(c.action, x, ry + 60);
       if (c.timeline) drawTimeline(c.timeline, x, ry + 112, Math.min(1, (state.typeT * 6 - c.lines.length - 1) / 3));
       if (c.prob == null) return;
       text('概率', x, ry + 66, 22, C.dim);
@@ -497,6 +498,18 @@ export function createTablet(camera) {
     }
     corners(ix - 10, iy - 10, is + 20, is + 20, 26, C.cyan, 3);
     text(`影像记录 · EV-${String(state.sel + 1).padStart(2, '0')}`, ix, iy + is + 44, 20, C.dim, 400, 'left', true);
+  }
+
+  // 线索详情下方的操作按钮（例如插入根钥）：点击或按 E
+  function drawAction(a, x, y) {
+    const w = 560, h = 76;
+    const hot = inside(x, y, w, h);
+    const pulse = 0.12 + 0.08 * Math.sin(performance.now() / 260);
+    g.fillStyle = hot ? 'rgba(255,207,106,0.28)' : `rgba(255,207,106,${pulse})`;
+    g.fillRect(x, y, w, h);
+    corners(x, y, w, h, 16, C.gold, 3);
+    text(`${a.label}  [E]`, x + w / 2, y + h / 2 + 11, 30, hot ? C.white : C.gold, 500, 'center');
+    region(x, y, w, h, () => a.fn());
   }
 
   // 时间轴：按真实间隔排开各时刻，p 为绘制进度（0~1）
@@ -549,40 +562,63 @@ export function createTablet(camera) {
     if (!r) return;
     text(r.source, x, 336, 22, C.dim, 400, 'left', true);
     text(r.tag, x, 392, 46, C.white, 500);
-    const shown = Math.floor(state.typeT * 5);
+    // 黑梦结束后报告逐字打出。约 24 字/秒，打完才出现确认按钮
+    let budget = Math.floor(state.typeT * 24);
+    const eat = (s) => {
+      if (!s || budget <= 0) return '';
+      const n = Math.min(s.length, budget);
+      budget -= n;
+      return s.slice(0, n);
+    };
     const maxW = CW - 70 - (x + 28);
     // 被质疑改写：原行划掉，追加一行；原判定划掉，下面写新判定
     const rv = r.revisedOn ? r.revised : null;
     const lines = rv ? [...r.lines, rv.add] : r.lines;
     let ly = 460;
+    let linesDone = true;
     lines.forEach((l, i) => {
-      if (i >= shown) return;
-      const struck = rv && rv.strike.includes(i);
+      const vis = eat(l);
+      if (!vis) { linesDone = false; return; }
+      if (vis.length < l.length) linesDone = false;
+      const struck = rv && rv.strike.includes(i) && vis.length === l.length;
       const added = rv && i === r.lines.length;
       g.fillStyle = added ? '#ff9a3a' : C.cyan;
       g.fillRect(x, ly - 10, 14, 3);
-      wrap(l, maxW, 30).forEach((row, k) => {
+      wrap(vis, maxW, 30).forEach((row, k) => {
         text(row, x + 28, ly + k * 44, 30, struck ? C.dim : added ? '#ffb066' : '#d6effc');
         if (struck) strike(x + 28, ly + k * 44 - 10, measure(row, 30));
       });
       ly += 58;
     });
-    if (shown > lines.length) {
-      const vy = 460 + lines.length * 58 + 30;
+    let verdictDone = false;
+    if (linesDone) {
+      const vy = ly + 30;
       g.fillStyle = 'rgba(255,207,106,0.35)';
       g.fillRect(x, vy - 40, 520, 2);
       if (rv) {
-        text(r.verdict, x, vy + 4, 28, C.dim, 500);
-        strike(x, vy - 6, measure(r.verdict, 28, 500));
-        text(rv.verdict, x, vy + 58, 36, '#ffb066', 500);
-        text(rv.note, x, vy + 110, 24, C.dim);
+        const oldV = eat(r.verdict);
+        const newV = oldV.length === r.verdict.length ? eat(rv.verdict) : '';
+        const note = newV.length === rv.verdict.length ? eat(rv.note) : '';
+        if (oldV) {
+          text(oldV, x, vy + 4, 28, C.dim, 500);
+          if (oldV.length === r.verdict.length) strike(x, vy - 6, measure(r.verdict, 28, 500));
+        }
+        if (newV) text(newV, x, vy + 58, 36, '#ffb066', 500);
+        if (note) text(note, x, vy + 110, 24, C.dim);
+        verdictDone = note.length === (rv.note || '').length && newV.length === rv.verdict.length;
       } else {
-        text(r.verdict, x, vy + 10, 36, C.gold, 500);
-        if (r.note) text(r.note, x, vy + 72, 24, C.dim);
-        if (r.hint) text(r.hint, x, vy + (r.note ? 118 : 72), 24, C.cyan);
+        const verdict = eat(r.verdict);
+        const note = verdict.length === r.verdict.length ? eat(r.note || '') : '';
+        const hint = !r.note || note.length === r.note.length ? eat(r.hint || '') : '';
+        if (verdict) text(verdict, x, vy + 10, 36, C.gold, 500);
+        if (note) text(note, x, vy + 72, 24, C.dim);
+        if (hint) text(hint, x, vy + (r.note ? 118 : 72), 24, C.cyan);
+        verdictDone = verdict.length === r.verdict.length
+          && note.length === (r.note || '').length
+          && hint.length === (r.hint || '').length;
       }
     }
-    if (r.confirm && shown > lines.length + 1) drawConfirm(x, !!rv, r.confirm);
+    if (r.confirm && verdictDone) drawConfirm(x, !!rv, r.confirm);
   }
 
   function strike(x, y, w) {
@@ -701,6 +737,7 @@ export function createTablet(camera) {
     else if (code === 'KeyS' && state.tab === 0) { state.sel = (state.sel + 1) % n; state.typeT = 0; }
     else if (code === 'KeyW' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + m - 1) % m; state.typeT = 0; }
     else if (code === 'KeyS' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + 1) % m; state.typeT = 0; }
+    else if (code === 'KeyE' && state.tab === 0 && state.data.clues[state.sel]?.action) { sound.play('ui/click'); state.data.clues[state.sel].action.fn(); return true; }
     else return false;
     sound.play('ui/hover');
     state.dirty = true;
@@ -740,7 +777,7 @@ export function createTablet(camera) {
     // 内容：举到位后开机，界面动画期间逐帧重绘
     if (state.open && state.k > 0.6) state.boot = Math.min(1, state.boot + dt * 1.8);
     // 开机、打字、确认进度、干扰期间逐帧重绘
-    const animating = state.open && (state.boot < 1 || state.typeT < 2.5 || state.data.confirm?.p > 0 || state.glitch > 0 || !!state.data.final || (!!state.hack && !state.hack.held));
+    const animating = state.open && (state.boot < 1 || state.typeT < 10 || state.data.confirm?.p > 0 || state.glitch > 0 || !!state.data.final || (!!state.hack && !state.hack.held));
     if (state.open && state.boot >= 1) state.typeT += dt;
     // 接入画面：开机后计时，走完回调并回到普通页面
     if (state.hack && !state.hack.held && state.open && state.boot >= 1) {

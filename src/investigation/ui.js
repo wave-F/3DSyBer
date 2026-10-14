@@ -114,10 +114,10 @@ const CSS = `
 #inv-tl .ev { position: absolute; z-index: 2; top: 0; height: 14px; background: rgba(255,207,74,.72); }
 #inv-tl .ev.rec { background: #ffcf4a; }
 #inv-tl .ev.near { box-shadow: 0 0 8px #ffcf4a; }
-#inv-sub { left: 50%; bottom: 128px; transform: translateX(-50%); max-width: 64vw; text-align: center; font-size: 22px; line-height: 1.6; letter-spacing: .06em; color: #f2f6fa; text-shadow: 0 2px 6px rgba(0,0,0,.95), 0 0 18px rgba(0,0,0,.7); opacity: 0; transition: opacity .25s; z-index: 6; }
+#inv-sub { left: 50%; bottom: 128px; transform: translateX(-50%); max-width: 64vw; text-align: center; font-size: 28px; line-height: 1.6; letter-spacing: .06em; color: #f2f6fa; text-shadow: 0 2px 6px rgba(0,0,0,.95), 0 0 18px rgba(0,0,0,.7); opacity: 0; transition: opacity .25s; z-index: 6; }
 #inv-sub.on { opacity: 1; }
 #inv-sub.lift { bottom: calc(11vh + 36px); }
-#inv-sub .who { color: #6cc8ff; margin-right: 12px; font-size: 18px; letter-spacing: .2em; }
+#inv-sub .who { color: #6cc8ff; margin-right: 12px; font-size: 22px; letter-spacing: .2em; }
 #inv-sub.radio .who::before { content: '◉ '; color: #ff8a1a; }
 #inv-sub.inner { font-style: italic; color: #e6e0d4; }
 #inv-dream { left: 50%; top: 50%; width: 200px; height: 200px; transform: translate(-50%, -50%); opacity: 0; transition: opacity .15s; z-index: 4; }
@@ -143,12 +143,29 @@ const CSS = `
 #inv-tip .row { display: flex; align-items: center; gap: 12px; margin-top: 10px; font-size: 15px; line-height: 1.5; letter-spacing: .04em; }
 #inv-tip .row b { flex: none; min-width: 52px; padding: 2px 6px; border: 1px solid rgba(223,242,255,.55); text-align: center; font-weight: 500; font-size: 13px; color: #ffcf4a; }
 #inv-tip .row i { flex: none; width: 52px; height: 10px; background: rgba(255,207,74,.72); }
+#inv-guide { left: 50%; bottom: 170px; transform: translate(-50%, 10px); display: flex; align-items: center; gap: 18px; padding: 14px 28px 14px 22px; border: 2px solid #ffcf4a; background: rgba(5,12,20,.8); box-shadow: 0 0 24px rgba(255,207,74,.35); font-size: 24px; letter-spacing: .1em; color: #ffe7a3; white-space: nowrap; opacity: 0; transition: opacity .3s, transform .3s; z-index: 6; }
+#inv-guide.on { opacity: 1; transform: translate(-50%, 0); animation: inv-guide-pulse 1.4s ease-in-out infinite; }
+#inv-guide b { font-weight: 500; color: #ffcf4a; }
+#inv-guide svg { flex: none; width: 30px; height: 46px; }
+#inv-guide .mouse { fill: none; stroke: #ffcf4a; stroke-width: 2.5; }
+#inv-guide .wheel { fill: #ffcf4a; animation: inv-wheel 1s ease-in-out infinite; }
+@keyframes inv-guide-pulse { 50% { box-shadow: 0 0 44px rgba(255,207,74,.75); border-color: #fff1c2; } }
+@keyframes inv-wheel { 0% { transform: translateY(5px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-6px); opacity: 0; } }
+#inv-tl .ev.goal { background: #ffcf4a; animation: inv-goal .9s ease-in-out infinite; }
+#inv-tl .ev.goal::after { content: '▼'; position: absolute; left: 50%; top: -30px; transform: translateX(-50%); font-size: 20px; color: #ffcf4a; text-shadow: 0 0 10px rgba(255,207,74,.9); animation: inv-goal-arrow .9s ease-in-out infinite; }
+@keyframes inv-goal { 50% { box-shadow: 0 0 16px 3px rgba(255,207,74,.9); } }
+@keyframes inv-goal-arrow { 50% { top: -22px; } }
 #inv-cine { inset: 0; z-index: 8; }
 #inv-cine::before, #inv-cine::after { content: ''; position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height .35s ease; }
 #inv-cine::before { top: 0; }
 #inv-cine::after { bottom: 0; }
 #inv-cine.on::before, #inv-cine.on::after { height: 11vh; }
 #inv-black { inset: 0; background: #000; opacity: 0; z-index: 9; }
+#inv-fin { inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; opacity: 0; transition: opacity 2s ease; }
+#inv-fin.on { opacity: 1; }
+#inv-fin .t1 { font-size: 46px; font-weight: 300; letter-spacing: .6em; text-indent: .6em; color: #d8e2ea; }
+#inv-fin .t2 { font-size: 22px; font-weight: 300; letter-spacing: .6em; text-indent: .6em; color: #ffcf4a; opacity: 0; transition: opacity 1.6s ease 1.4s; }
+#inv-fin.on .t2 { opacity: 1; }
 #inv-ending { inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; opacity: 0; transition: opacity 1.2s; }
 #inv-ending.on { opacity: 1; }
 #inv-ending h1 { margin: 0 0 22px; font-size: 30px; font-weight: 400; letter-spacing: .18em; color: #d8e2ea; }
@@ -216,22 +233,26 @@ export function createUI() {
   for (const e of [dreamEye, dreamPupil]) e.style.transformOrigin = '100px 100px';
   const rite = el('inv-rite', '', '<div class="t1 inv-mono">BLACKDREAM</div><div class="t2">黑梦 · 现场重建</div><div class="t3 inv-mono"></div>');
   const riteT1 = rite.querySelector('.t1');
+  // 第一次黑梦：引导玩家滚滚轮倒回异常时刻的大号提示（带滚轮动画）
+  const guide = el('inv-guide', '', `<svg viewBox="0 0 30 46"><rect class="mouse" x="2" y="2" width="26" height="42" rx="13"/><rect class="wheel" x="13" y="11" width="4" height="9" rx="2"/></svg><span></span>`);
+  const guideText = guide.querySelector('span');
   // 第一次黑梦倒回异常时刻后弹出的操作说明
   const tip = el('inv-tip', '', `<div class="tag inv-mono">BLACKDREAM · 操作</div><h3>在回放里找出异常</h3>
     <div class="row"><b>滚轮</b><span>拖动回放时间</span></div>
     <div class="row"><b>空格</b><span>播放 / 暂停</span></div>
     <div class="row"><i></i><span>黄色时段：可以分析的异常时刻</span></div>
     <div class="row"><b>E</b><span>按住分析</span></div>
-    <div class="row"><b>Q</b><span>退出黑梦</span></div>`);
+    <div class="row"><b>R</b><span>退出黑梦</span></div>`);
   const cine = el('inv-cine');
   const black = el('inv-black');
+  const fin = el('inv-fin', '', '<div class="t1">序章</div><div class="t2">完</div>');
   const ending = el('inv-ending');
   let panelTimer = 0, toastTimer = 0, toastHold = null;
   let sayToken = 0;
 
   const HINTS = {
     explore: '<b>WASD</b>移动　<b>Shift</b>跑　<b>Q</b>扫描线索　<b>E</b>按住分析　<b>TAB</b>平板',
-    recon: '<b>滚轮</b>拖动时间　<b>空格</b>播放 / 暂停　<b>E</b>按住分析　<b>Q</b>退出黑梦',
+    recon: '<b>滚轮</b>拖动时间　<b>空格</b>播放 / 暂停　<b>E</b>按住分析　<b>R</b>退出黑梦',
   };
 
   const markerEls = new Map();
@@ -281,6 +302,13 @@ export function createUI() {
       dreamTicks.style.transform = `rotate(${p * 60}deg)`;
     },
     setTip(on) { tip.classList.toggle('on', on); },
+    // 滚轮引导：html 为提示文字（null 隐藏）；goal 为时间轴上要闪烁、加箭头的黄块序号
+    setGuide(html, goal = -1) {
+      if (html && html !== this._guideHtml) guideText.innerHTML = html;
+      this._guideHtml = html;
+      guide.classList.toggle('on', !!html);
+      this._goal = html ? goal : -1;
+    },
     // 第一次进入黑梦的标题：a 为不透明度，k 为 0~1 的进度（字距逐渐拉开）
     setRite(a = 0, k = 0, code = '') {
       rite.style.opacity = a;
@@ -495,6 +523,7 @@ export function createUI() {
         const i = +e.dataset.i;
         e.classList.toggle('rec', recorded[i]);
         e.classList.toggle('near', i === nearIdx);
+        e.classList.toggle('goal', i === this._goal);
         const span = this._evSpan[i] ?? [0, 0];
         const left = xAt(span[0]);
         const right = xAt(span[1]);
@@ -521,6 +550,8 @@ export function createUI() {
     hush() { sayToken++; sub.classList.remove('on'); },
     // 黑场：a 为不透明度，ms 为过渡时长
     black(a, ms = 0) { black.style.transition = `opacity ${ms}ms`; black.style.opacity = a; },
+    // 终章字幕「序章 · 完」：结局动画黑屏后淡入
+    fin(on) { fin.classList.toggle('on', on); },
     // 结局黑场文字：{ title, lines, back }；传 null 隐藏
     ending(d) {
       if (!d) { ending.classList.remove('on'); return; }

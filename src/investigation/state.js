@@ -26,7 +26,7 @@ const CONFIRM_TIME = 1.8;   // 按住确认走满所需时间
 const SKIP_TIME = 1.0;      // 质询对话按住 TAB 跳过所需时间
 // 黑梦分析点完成后的独白（LINES 的键）
 const DREAM_LINES = { p1turn: 'dream1', p2gap: 'dream2', p3halo: 'dream3', p4halo: 'dream4', p4cut: 'dream4b' };
-const DREAM_EXIT_DELAY = 2500;   // 黑梦最后一个分析点完成后，至少停留这么久（毫秒）再自动弹出报告
+const DREAM_EXIT_DELAY = 4450;   // 结果面板在完成 0.45 秒后弹出，停留 4 秒。等它关掉再自动打开终端
 // 进入黑梦：按住 R 读满 → 回放立即开始播放，同时镜头缓慢转向 A 车起点（转向期间不能操作）
 // 只有第一次进入有标题 + 扫描波，之后只转镜头
 const DREAM_HOLD = 1.0;          // 按住 R 读满所需时间（秒）
@@ -143,6 +143,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   const roundKeys = () => clues.filter((c) => c.round === round && c.key);
   // 第 3、4 轮没有现场线索：读完车载数据 / 根钥展开原始字段才能进黑梦
   const gates = { 3: () => ins.done, 4: () => root.done };
+  const rootPending = () => round === 4 && root.picked && !root.done;   // 根钥已拾取、还没插入
   const reconReady = () => !!ROUNDS[round] && !roundDone[round] && roundKeys().every((c) => c.done) && (gates[round]?.() ?? true);
   const locked = () => document.pointerLockElement != null;
 
@@ -171,10 +172,13 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
 
   // 把当前调查进度同步给平板
   function syncTablet() {
+    // 第 4 轮根钥已拾取未用：锁住的车辆 B 原始记录下方出现「插入根钥」按钮
+    const rootAction = rootPending() ? { label: '插入根钥 · 读取原始字段', fn: startRoot } : null;
     tablet.setData({
       // 第 3 轮起只列出上一轮和本轮，避免列表过长
       clues: [...unlocked(), ...probes.filter((p) => p.done)]
-        .filter((c) => round < 3 || c.round >= round - 1),
+        .filter((c) => round < 3 || c.round >= round - 1)
+        .map((c) => (rootAction && c.id === 'dRaw' ? { ...c, action: rootAction } : c)),
       reports: reports.map((k) => ({ key: k, ...REPORTS[k], revisedOn: revised.has(k) })),
       confirm,
       status: statusText(),
@@ -296,6 +300,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     enter.on = false; enter.phase = null;
     if (rite.on) { rite.on = false; ui.setRite(0); }
     hideTip();
+    ui.setGuide(null);
     if (m === 'explore') {
       if (storyTask) showTask();
       else ui.setCounter(stageClues().filter((c) => c.done).length, stageClues().length);
@@ -430,7 +435,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
         recon.setTime(rt);
         followCar(dt);
         const hit = Math.abs(rt - enter.back1) <= PROBE_WINDOW;
-        ui.setPrompt(hit ? null : `滚动滚轮，把时间倒回 ${clockText(enter.back1)}`, true);
+        const goal = timedProbes().findIndex((c) => c.t === enter.back1);
+        ui.setGuide(hit ? null : `滚动<b>滚轮</b>，把时间倒回 <b class="inv-mono">${clockText(enter.back1)}</b>`, goal);
         if (hit) { playing = false; endEnter(); showTip(); }
         break;
       }
@@ -498,6 +504,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
         const first = !tablet.open && guideTablet;
         setTablet(!tablet.open);
         if (first) { guideTablet = false; tablet.showReport('initial'); }
+        else if (tablet.open && rootPending()) tablet.showClue('dRaw');
       }
       return;
     }
@@ -506,10 +513,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       return;
     }
     if (enter.on) return;   // 进入黑梦的过场：不响应操作
-    if (e.code === 'KeyQ') {
-      if (mode === 'explore') scan();
-      else if (mode === 'recon') leaveRecon();
-    }
+    if (e.code === 'KeyQ' && mode === 'explore') scan();
+    if (e.code === 'KeyR' && mode === 'recon' && !e.repeat) leaveRecon();
     if (e.code === 'KeyE') {
       holdKey = true;
       if (mode === 'recon' && !e.repeat) {
@@ -561,7 +566,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   }));
   const roundComplete = () => keyProbes().every((c) => c.done);
 
-  // 最后一个分析点完成：等独白说完（且至少停留 DREAM_EXIT_DELAY），自动离开黑梦并弹出报告
+  // 最后一个分析点完成：等结果面板关闭，独白没说完就再等它说完，然后自动离开黑梦并打开终端
   function scheduleDreamExit(said) {
     const r = round;
     const wait = new Promise((res) => { dreamExit = setTimeout(res, DREAM_EXIT_DELAY); });
@@ -588,7 +593,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   }
 
   // ---------- 复核报告 ----------
-  // Q 离开黑梦：分析已完成就直接出报告，否则回到现场
+  // R 离开黑梦：分析已完成就直接出报告，否则回到现场
   function leaveRecon() {
     if (roundComplete() && !roundDone[round]) advanceAfterDream();
     else setMode('explore');
@@ -718,7 +723,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     else if (round === 3 && !roundDone[3]) dream();
     else if (round === 3) ui.setObjective('核实<b>零号保障</b>的来源');
     else if (!root.picked) ui.setObjective('在驾驶舱里找<b>程叙的根钥</b>');
-    else if (!root.done) ui.setObjective('用<b>根钥</b>读取车辆 B 原始记录');
+    else if (!root.done) ui.setObjective('用<b>根钥</b>读取车辆 B 原始记录<small>TAB 打开平板</small>');
     else if (!roundDone[4]) dream();
     else ui.setObjective('回到<b>警车</b>');
   }
@@ -768,14 +773,19 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     Object.assign(raw, { locked: true, lines: def.lines, result: def.result, prob: def.prob });
     if (reports.includes('r4')) reports.splice(reports.indexOf('r4'), 1);
   }
-  // 拾取根钥后自动举起平板接入：切到报告模式（接入期间不能收起），播放接入画面
+  // 拾取根钥后自动举起平板，停在锁住的车辆 B 原始记录上，等玩家点「插入根钥」
   // said：拾取独白的 Promise，说完才接着播读取后的质问
   let keySaid = Promise.resolve();
-  function startRoot(said = Promise.resolve()) {
-    if (root.done || tablet.hacking) return;
+  function openRootTablet(said = Promise.resolve()) {
     keySaid = said;
-    setMode('report');
     setTablet(true);
+    tablet.showClue('dRaw');
+  }
+  // 点「插入根钥」：切到报告模式（接入期间不能收起），播放接入画面
+  function startRoot() {
+    if (!rootPending() || tablet.hacking) return;
+    setMode('report');
+    if (!tablet.open) setTablet(true);
     tablet.showClue('dRaw');
     tablet.hack(ROOT_HACK, onRootDone);
   }
@@ -1062,7 +1072,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     rootKey.setVisible(false);
     syncTablet();
     showTask();
-    startRoot(ui.say(LINES.keyFound));
+    openRootTablet(ui.say(LINES.keyFound));
   }
 
   // ---------- 真的确认（报告 02 归档 / 报告 03 移交）→ 假结局 ----------
@@ -1119,6 +1129,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       // 游戏结束：停在黑屏，释放鼠标但不弹暂停层
       controls.keepOverlayHidden = true;
       controls.unlock();
+      // 黑屏停一会儿，再淡入「序章 · 完」
+      setTimeout(() => ui.fin(true), 1200);
     });
   }
 
