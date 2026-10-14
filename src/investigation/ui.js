@@ -1,5 +1,10 @@
 // 调查界面：全部为 HTML 叠加层（细线、编号、等宽数字，接近底特律的界面风格）
 import { sound } from '../audio/sound.js';
+import { createDialoguePlayer } from '../audio/dialoguePlayer.js';
+import { LINES } from './clues.js';
+
+const voiceIds = new WeakMap();
+for (const [group, lines] of Object.entries(LINES)) lines.forEach((line, i) => voiceIds.set(line, `${group}_${String(i + 1).padStart(2, '0')}`));
 
 const CSS = `
 .inv { position: fixed; pointer-events: none; font-family: "PingFang SC", "Helvetica Neue", sans-serif; color: #dff2ff; user-select: none; }
@@ -179,7 +184,17 @@ export function createUI() {
   const flash = el('inv-flash');
   const ending = el('inv-ending');
   let panelTimer = 0, toastTimer = 0, toastHold = null;
-  let sayToken = 0;
+  const dialogue = createDialoguePlayer({
+    show(l, radio) {
+      const lift = cine.classList.contains('on') ? ' lift' : '';
+      sub.className = `inv on${l.who ? (radio && l.who !== '陈墨' ? ' radio' : '') : ' inner'}${lift}`;
+      sub.innerHTML = l.who ? `<span class="who">${l.who}</span>${l.text}` : l.text;
+    },
+    hide: () => sub.classList.remove('on'),
+    playVoice: (l) => sound.voice(voiceIds.get(l)),
+    radioOn: () => sound.play('ui/radio_on'),
+    radioOff: () => sound.play('ui/radio_off'),
+  });
 
   const HINTS = {
     explore: '<b>WASD</b>移动　<b>Shift</b>跑　<b>Q</b>扫描线索　<b>E</b>按住分析　<b>TAB</b>平板',
@@ -447,21 +462,9 @@ export function createUI() {
         e.classList.toggle('near', m.near);
       });
     },
-    // 字幕：逐条显示，返回 Promise。who 为空是内心独白；radio 为无线电通话
-    say(lines, { radio = false } = {}) {
-      const token = ++sayToken;
-      if (radio) sound.play('ui/radio_on');
-      const done = lines.reduce((p, l) => p.then(() => new Promise((res) => {
-        if (token !== sayToken) return res();
-        const lift = cine.classList.contains('on') ? ' lift' : '';
-        sub.className = `inv on${l.who ? (radio && l.who !== '陈墨' ? ' radio' : '') : ' inner'}${lift}`;
-        sub.innerHTML = l.who ? `<span class="who">${l.who}</span>${l.text}` : l.text;
-        const ms = l.ms ?? 1400 + l.text.length * 140;
-        setTimeout(() => { if (token === sayToken) sub.classList.remove('on'); setTimeout(res, 280); }, ms);
-      })), Promise.resolve());
-      if (radio) done.then(() => { if (token === sayToken) sound.play('ui/radio_off'); });
-      return done;
-    },
+    // 保留原中文字幕；有配音时等 FMOD 真正播完，无音频时用原阅读时长。
+    say(lines, options) { return dialogue.say(lines, options); },
+    updateDialogue(dt) { if (!document.hidden) dialogue.update(dt); },
     // 方向标记：目标在屏幕内时只显示文字，在屏幕外时箭头贴边指向目标
     setPointer(p) {
       if (!p) { ptr.classList.remove('on'); return; }
@@ -484,7 +487,7 @@ export function createUI() {
       ar.style.transform = `rotate(${Math.atan2(dy, dx) + Math.PI / 2}rad)`;
     },
     setCinema(on) { cine.classList.toggle('on', on); sub.classList.toggle('lift', on); },
-    hush() { sayToken++; sub.classList.remove('on'); },
+    hush() { dialogue.cancel(); },
     // 黑场：a 为不透明度，ms 为过渡时长
     black(a, ms = 0) { black.style.transition = `opacity ${ms}ms`; black.style.opacity = a; },
     flash(a, ms = 0) { flash.style.transition = `opacity ${ms}ms`; flash.style.opacity = a; },

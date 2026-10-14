@@ -2,6 +2,8 @@
 
 目标是写实：雨夜高架上的环境、角色的 Foley、克制的 UI 音，以及只给扫描 / 分析用的高科技音色。
 
+65 条英文角色配音已通过 `event:/voice/en/...` 接入，独立 `VoiceEN` Bank 与 `DIALOGUE` 路由；当前素材按用户确认的内部非商用用途生成，来源与授权限制见 `Fmod/voice-en-manifest.json`，详细流程见 [voice-en.md](voice-en.md)。原有字幕文本与手工音效混音保留。
+
 ## 流水线
 
 下图为首次制作流程；手工调音后的日常同步只运行 `audio:build`，不要重复执行素材、事件或混音生成。
@@ -48,7 +50,7 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 
 ## 混音结构
 
-总线 `AMB`（带低通）`FOLEY` `UI` `SCIFI` 都接 Master，音量以 Studio 当前设置为准。`AMB` 下分 `Bed` `City` `Crowd` `RainHits`。全部事件进 `Main` Bank；Snapshot、总线、VCA 自动进 `Master` Bank，**不要把 Snapshot 分配到 Main**：Studio 2.03.14 会在往这个 Bank 加事件时卡死。
+总线 `AMB`（带低通）`FOLEY` `UI` `SCIFI` 都接 Master，音量以 Studio 当前设置为准。`AMB` 下分 `Bed` `City` `Crowd` `RainHits`。音效进 `Main` Bank，英文配音单独进 `VoiceEN`，测试音在 `Preview`；Snapshot、总线、VCA 自动进 `Master` Bank，**不要把 Snapshot 分配到 Main**：Studio 2.03.14 会在往这个 Bank 加事件时卡死。新增 `DIALOGUE/{spoken,inner,radio,device}` 与 `vca:/Dialogue` 仅控制配音，不改既有路由。
 
 - 循环事件用时间线 + Loop Region：触发一次就一直循环。主轨上的 AHDSR 负责起播淡入，`stop(ALLOWFADEOUT)` 时淡出。没有参数。
 - `amb/rain` `amb/traffic` → `AMB/Bed`。2D 立体声铺底，跟着头走。
@@ -57,8 +59,9 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 - Snapshot（Overriding，强度用 AHDSR 淡入淡出；下列为初始制作值，手工调整后以 Studio 当前值为准）：
   - `Dream`（黑梦，1.5 s）：Bed -8 dB、City -20 dB、Crowd -26 dB、RainHits -12 dB，AMB 低通降到 1.1 kHz。
   - `Tablet`（平板举起，0.4 / 0.5 s）：AMB -7 dB（比平时低 5 dB）。
-- VCA：`Ambience`（AMB）、`SFX`（FOLEY + SCIFI）、`UI`。游戏不覆盖 VCA 音量；试听页首次启用读取当前值，只有手动拖动推子才改变该页的播放增益，不回写 Studio。
+- VCA：`Ambience`（AMB）、`SFX`（FOLEY + SCIFI）、`UI`、`Dialogue`（DIALOGUE）。游戏不覆盖 VCA 音量；试听页首次启用读取当前值，只有手动拖动推子才改变该页的播放增益，不回写 Studio。
 - 多变体事件（脚步、衣物）用 Multi Instrument 随机播放，并加音高 / 音量随机器。
+- 接线员广播：8 条派单员台词统一走 `DIALOGUE/radio`，窄带 400–3400 Hz、中频存在感、4:1 压缩与轻饱和；全部在 Studio 处理，不烘焙进源配音，不影响陈墨和仪器。参数与创作脚本见 [voice-en.md](voice-en.md)。
 
 ## 事件与触发点
 
@@ -75,6 +78,7 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 | `ui/panel_open` | 线索卡弹出 |
 | `ui/toast` / `ui/confirm` | 普通提示 / 常驻大提示 |
 | `ui/radio_on` / `radio_off` | 无线电通话开始 / 结束 |
+| `voice/en/<group>_<两位序号>` | `ui.say` 中对应的英文对白或独白，等待真实结束后进入下一句；暂停/取消与剧情队列同步 |
 | `ui/record` | 黑梦里记录事件 |
 | `scifi/scan_pulse` | Q 扫描。前 0.5 秒充能，与举枪同长，脉冲落在发射那一刻 |
 | `scifi/analyze_loop` | 按住 E 分析期间循环，音高随进度从 0.85 升到 1.4 |
@@ -93,7 +97,7 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 
 ## 素材出处
 
-全部为 Freesound 上的 CC0 素材，ID、标题和链接见 `Fmod/source/credits.json`。下载的是 Freesound 的 HQ 预览（128 kbps mp3），不是原始文件。原始 WAV 要登录下载；以后需要更高音质，用同名文件替换后重跑 `audio:design`。
+现有环境 / Foley / UI / scifi 来源为 Freesound 上的 CC0 素材，ID、标题和链接见 `Fmod/source/credits.json`。下载的是 Freesound 的 HQ 预览（128 kbps mp3），不是原始文件。原始 WAV 要登录下载；以后需要更高音质，用同名文件替换后重跑 `audio:design`。新制作的 ElevenLabs 配音不属于这份 CC0 清单，商用与音色授权须单独核验。
 
 ## 命令
 

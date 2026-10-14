@@ -1,0 +1,10 @@
+{
+  "provider": "elevenlabs",
+  "model": "eleven_v4",
+  "usage": "noncommercial-internal",
+  "voices": {
+    "chen": { "id": "CwhRBWXzGAHq8TQ4Fs17", "name": "Roger", "reason": "American, mature, conversational and resonant; restrained rather than a villain or announcer." },
+    "dispatch": { "id": "XrExE9yKIg1WjnnlVkGX", "name": "Matilda", "reason": "American professional female alto; brisk workaday dispatch delivery." },
+    "device": { "id": "SAz9YHcvj6GT2YYXdXww", "name": "River", "reason": "American neutral service voice; even, clear and non-threatening." }
+  }
+}

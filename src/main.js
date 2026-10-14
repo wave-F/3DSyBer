@@ -196,6 +196,7 @@ renderer.setAnimationLoop(() => {
   const controls = updatePlayer.controls;
   const paused = !controls.isLocked && !controls.keepOverlayHidden;
   const step = paused ? 0 : dt;
+  sound.setDialoguePaused(paused);
   tick(step);
   if (intro.playing) intro.update(step);
   else updatePlayer(step, inv.moveScale);

@@ -1,9 +1,11 @@
+import { VOICE_LINES } from './voiceEvents.js';
+
 // Bank 来自本仓库 Fmod/3DSyBer 工程。游戏和试听页共用；EVENTS 只给试听页列清单。
-export const BANKS = ['Master.strings.bank', 'Master.bank', 'Preview.bank', 'Main.bank'];
+export const BANKS = ['Master.strings.bank', 'Master.bank', 'Preview.bank', 'Main.bank', 'VoiceEN.bank'];
 
 // Mixer 对象：Fmod/setup-mix.js 创建
 export const SNAPSHOTS = { dream: 'snapshot:/Dream', tablet: 'snapshot:/Tablet' };
-export const VCAS = { ambience: 'vca:/Ambience', sfx: 'vca:/SFX', ui: 'vca:/UI' };
+export const VCAS = { ambience: 'vca:/Ambience', sfx: 'vca:/SFX', ui: 'vca:/UI', dialogue: 'vca:/Dialogue' };
 export const FOLEY = { step: 'foley/FootStep', cloth: 'foley/ClothFoley' };
 
 const e = (path, label, description, bank = 'Main.bank') => ({ path, label, description, bank, pitch: 1 });
@@ -36,4 +38,5 @@ export const EVENTS = [
   e('event:/scifi/dream_enter', '进入黑梦', '24dream_enter · 进入黑梦时单次触发'),
   e('event:/scifi/dream_exit', '离开黑梦', '25dream_exit · 离开黑梦时单次触发'),
   e('event:/test/ping', '测试提示音', '原创双音电子 Ping · 0.65 秒', 'Preview.bank'),
+  ...Object.entries(VOICE_LINES).map(([id, clip]) => e(clip.path, `${clip.speaker} · ${id}`, clip.text, 'VoiceEN.bank')),
 ];

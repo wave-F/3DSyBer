@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="MixerGroup" id="{da4202de-ed8d-4a9f-9ca5-37e18173c892}">
+		<property name="name">
+			<value>radio</value>
+		</property>
+		<relationship name="effectChain">
+			<destination>{939e3fc3-e264-4953-86a9-e6afd5c59d69}</destination>
+		</relationship>
+		<relationship name="panner">
+			<destination>{fa523389-8066-4e8d-ac50-84341c3ec66d}</destination>
+		</relationship>
+		<relationship name="output">
+			<destination>{47dbbbe3-69ee-46a4-967b-ac01bb74df71}</destination>
+		</relationship>
+	</object>
+	<object class="MixerBusEffectChain" id="{939e3fc3-e264-4953-86a9-e6afd5c59d69}">
+		<relationship name="effects">
+			<destination>{5775976c-0185-44a8-9fb3-0d8902a781bb}</destination>
+			<destination>{917761c5-e963-415c-b774-4e113778b9cd}</destination>
+			<destination>{f6b30f29-2850-4df3-820e-51b9de756fcb}</destination>
+			<destination>{8e33d68c-47ed-4c26-9bff-5f017806cc9c}</destination>
+		</relationship>
+	</object>
+	<object class="MixerBusPanner" id="{fa523389-8066-4e8d-ac50-84341c3ec66d}" />
+	<object class="MixerBusFader" id="{5775976c-0185-44a8-9fb3-0d8902a781bb}" />
+	<object class="MultibandEqEffect" id="{917761c5-e963-415c-b774-4e113778b9cd}">
+		<property name="filterTypeA">
+			<value>5</value>
+		</property>
+		<property name="filterTypeB">
+			<value>2</value>
+		</property>
+		<property name="filterTypeC">
+			<value>9</value>
+		</property>
+		<property name="frequencyA">
+			<value>400</value>
+		</property>
+		<property name="frequencyB">
+			<value>3400</value>
+		</property>
+		<property name="frequencyC">
+			<value>1900</value>
+		</property>
+		<property name="qualityC">
+			<value>1.10000002</value>
+		</property>
+		<property name="gainC">
+			<value>2</value>
+		</property>
+	</object>
+	<object class="CompressorEffect" id="{f6b30f29-2850-4df3-820e-51b9de756fcb}">
+		<property name="threshold">
+			<value>-20</value>
+		</property>
+		<property name="ratio">
+			<value>4</value>
+		</property>
+		<property name="attackTime">
+			<value>4</value>
+		</property>
+		<property name="releaseTime">
+			<value>90</value>
+		</property>
+		<property name="gain">
+			<value>2.5</value>
+		</property>
+	</object>
+	<object class="DistortionEffect" id="{8e33d68c-47ed-4c26-9bff-5f017806cc9c}">
+		<property name="level">
+			<value>0.0500000007</value>
+		</property>
+	</object>
+</objects>

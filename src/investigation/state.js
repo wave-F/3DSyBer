@@ -506,7 +506,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       pressureCall();
     } else if (key === 'r3' && suspended && !after3Said) {
       after3Said = true;
-      setTimeout(() => ui.say(LINES.after3).then(() => {
+      setTimeout(() => ui.say(LINES.after3).then((completed) => {
+        if (!completed) return;
         if (round !== 3) return;
         startRound4();
         ui.toast('新的疑点', '程叙的根钥可能还在驾驶舱里', 4500);
@@ -517,11 +518,12 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       ui.toast('信息量达到重建要求', '黑梦已就绪 · 按 R 启动回放', 4000);
     } else if (round === 4 && roundDone[4] && !finale) {
       finale = 'index';
-      setTimeout(() => ui.say(LINES.after4).then(showTargetIndex), 600);
+      setTimeout(() => ui.say(LINES.after4).then((completed) => { if (completed) showTargetIndex(); }), 600);
     } else if (finale === 'index') {
       finale = 'done';
       showTask();
-      setTimeout(() => ui.say(LINES.target).then(() => {
+      setTimeout(() => ui.say(LINES.target).then((completed) => {
+        if (!completed) return;
         if (finale !== 'done' || mode !== 'explore') return;
         startDeath();
       }), 600);
@@ -547,7 +549,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     confirm.text = '复核质询中…';
     holdConfirm = false;
     syncTablet();
-    ui.say(LINES[cf.question]).then(() => {
+    ui.say(LINES[cf.question]).then((completed) => {
+      if (!completed) return;
       if (mode !== 'report' || confirm?.key !== key) return;
       revised.add(key);
       confirm.state = 'suspended';
@@ -562,7 +565,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   // 收起挂起的报告 02：派单员催单，陈墨拒绝交单，给出第 3 轮目标
   function pressureCall() {
     setTimeout(() => {
-      ui.say(LINES.call2, { radio: true }).then(() => {
+      ui.say(LINES.call2, { radio: true }).then((completed) => {
+        if (!completed) return;
         startRound3();
         ui.toast('新的疑点', '撬开右侧车门 · 驾驶舱转向柱下方有检修接口', 4500);
       });
@@ -921,7 +925,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     rootKey.setVisible(false);
     syncTablet();
     showTask();
-    ui.say(LINES.keyFound).then(() => {
+    ui.say(LINES.keyFound).then((completed) => {
+      if (!completed) return;
       if (round === 4 && !root.done) ui.toast('取得 · 程叙的根钥', 'TAB 打开平板 · 读取车辆 B 原始记录', 4500);
     });
   }
@@ -942,7 +947,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       tablet.toggle(false);
       setMode('ending');
       syncTestBtns();
-      ui.say(LINES[end.radio], { radio: true }).then(() => {
+      ui.say(LINES[end.radio], { radio: true }).then((completed) => {
+        if (!completed) return;
         if (mode !== 'ending') return;
         ui.black(1, 1400);
         setTimeout(() => {
@@ -1259,6 +1265,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     },
     get moveScale() { return intro ? 0 : mode === 'report' || mode === 'ending' || mode === 'insert' || mode === 'death' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
     update(realDt) {
+      ui.updateDialogue(realDt);
       tablet.update(realDt);
       ui.setTabletOpen(tablet.amount > 0.05);
       sound.setTablet(tablet.open);

@@ -61,7 +61,7 @@ volume.disabled = true;
 
 // 混音：VCA 推子 + Snapshot 开关，FMOD 就绪后才生效
 const vcaInputs = new Map();
-const vcaLabels = { ambience: '环境 Ambience', sfx: '音效 SFX', ui: '界面 UI' };
+const vcaLabels = { ambience: '环境 Ambience', sfx: '音效 SFX', ui: '界面 UI', dialogue: '英文配音 Dialogue' };
 for (const [key, path] of Object.entries(VCAS)) {
   const label = document.createElement('label');
   label.className = 'volume';

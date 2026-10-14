@@ -7,6 +7,7 @@ import * as THREE from 'three/webgpu';
 import * as tsl from 'three/tsl';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import * as events from '../src/audio/events.js';
+import * as voiceEvents from '../src/audio/voiceEvents.js';
 
 // 运行真实游戏模块，仅替换浏览器 / 音频输出依赖，不需要 WebGPU 或声卡。
 async function load(path, imports, globals = {}) {
@@ -17,7 +18,7 @@ async function load(path, imports, globals = {}) {
     initializeImportMeta(meta) { meta.env = { DEV: false }; },
   });
   await module.link((name) => {
-    const values = imports[name];
+    const values = imports[name] ?? (name === './voiceEvents.js' ? voiceEvents : undefined);
     assert.ok(values, `Missing test dependency: ${name}`);
     return new SyntheticModule(Object.keys(values), function () {
       for (const [key, value] of Object.entries(values)) this.setExport(key, value);
@@ -105,6 +106,37 @@ test('默认单次播放不写实例音量，试听工具可显式调整', async
   assert.ok(events.EVENTS.every((event) => !Object.hasOwn(event, 'volume')));
   fmod.play({ path: 'event:/foley/FootStep', volume: 0.5 });
   assert.deepEqual(gains, [0.5]);
+});
+
+test('真实对话实例等 STOPPED 后释放，暂停和取消不会重复 release', async () => {
+  const { FmodRuntime } = await load('src/audio/fmodRuntime.js', { './events.js': events });
+  const runtime = new FmodRuntime();
+  runtime.ready = true;
+  runtime.module = { OK: 0, STUDIO_PLAYBACK_STOPPED: 0, STUDIO_STOP_IMMEDIATE: 1 };
+  runtime.system = { update: () => 0 };
+  let state = 1, releases = 0;
+  const pauses = [];
+  runtime.instance = () => ({
+    setPaused(value) { pauses.push(value); return 0; }, start: () => 0, stop: () => 0,
+    getPlaybackState(out) { out.val = state; return 0; }, release() { releases++; },
+    setVolume() { assert.fail('Voice must not override Studio gain'); },
+  });
+  const voice = runtime.playVoice('event:/voice/en/opening_01');
+  runtime.setVoicesPaused(true);
+  runtime.setVoicesPaused(false);
+  runtime.update();
+  assert.equal(releases, 0);
+  state = 0;
+  runtime.update();
+  assert.equal(await voice.done, true);
+  voice.stop();
+  assert.equal(releases, 1);
+  assert.deepEqual(pauses, [false, true, false]);
+  state = 1;
+  const cancelled = runtime.playVoice('event:/voice/en/opening_02');
+  cancelled.stop(); cancelled.stop();
+  assert.equal(await cancelled.done, false);
+  assert.equal(releases, 2);
 });
 
 test('scifi 替换素材后沿用原事件路径 / 分析起停，不覆盖 Studio 音量', async () => {

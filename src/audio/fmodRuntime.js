@@ -38,6 +38,7 @@ export class FmodRuntime {
   vcas = new Map();
   // 保留有效句柄直到 STOPPED 再 release，避免操作已释放的一次性实例。
   oneShots = new Set();
+  voices = new Map();
 
   check(result, label) {
     if (result !== this.module.OK) throw new Error(`FMOD ${label}: ${this.module.ErrorString(result)}`);
@@ -141,6 +142,32 @@ export class FmodRuntime {
     } catch (error) { inst.release(); throw error; }
   }
 
+  // 对话实例持有到结束；停止 / 失败都会 settle，不能让剧情永远等不到。
+  playVoice(path, paused = false) {
+    const inst = this.instance(path);
+    if (!inst) return null;
+    let settle;
+    const done = new Promise((resolve) => { settle = resolve; });
+    const finish = (ok) => {
+      if (!this.voices.delete(inst)) return;
+      inst.release();
+      settle(ok);
+    };
+    this.voices.set(inst, finish);
+    try {
+      this.check(inst.setPaused(paused), `pause ${path}`);
+      this.check(inst.start(), `voice ${path}`);
+    } catch (error) { finish(false); throw error; }
+    return { done, stop: () => {
+      if (!this.voices.has(inst)) return;
+      try { inst.stop(this.module.STUDIO_STOP_IMMEDIATE); } finally { finish(false); }
+    } };
+  }
+
+  setVoicesPaused(paused) {
+    for (const inst of this.voices.keys()) this.check(inst.setPaused(paused), 'pause dialogue');
+  }
+
   // 循环事件：触发一次后由 FMOD 的 Loop Region 一直循环。position 给 3D 事件定位
   startLoop(path, position) {
     if (!this.ready) return;
@@ -242,12 +269,22 @@ export class FmodRuntime {
         this.oneShots.delete(inst);
       }
     }
+    for (const [inst, finish] of this.voices) {
+      const state = {};
+      const result = inst.getPlaybackState(state);
+      if (result !== this.module.OK) finish(false);
+      else if (state.val === this.module.STUDIO_PLAYBACK_STOPPED) finish(true);
+    }
   }
 
   dispose() {
     this.disposed = true;
     this.ready = false;
     this.stopOneShots();
+    for (const [inst, finish] of this.voices) {
+      inst.stop(this.module.STUDIO_STOP_IMMEDIATE);
+      finish(false);
+    }
     for (const inst of this.loops.values()) {
       inst.stop(this.module.STUDIO_STOP_IMMEDIATE);
       inst.release();
