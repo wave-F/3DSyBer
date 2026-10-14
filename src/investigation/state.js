@@ -39,14 +39,14 @@ const CONFIRM_TIME = 1.8;   // 按住确认走满所需时间
 //   → 陈墨质问仪器 → 按 R 黑梦 4（边界生成 / 黄车切入 / A 车去向）→ 复核报告 04（系统主动制造事故）
 //   → 收起后对象索引（处置目标：注销）→ 独白 → 结局动画
 // 结局（src/investigation/finale.js）：跑车撞飞陈墨 → 地上的终端自动写报告并归档 → 黑屏
-export function createInvestigation(scene, camera, crash, controls) {
+export function createInvestigation(scene, camera, crash, controls, gait) {
   const props = buildTwistProps(scene, crash);
   const fx = createAnalysisFx(scene, camera);
   const ui = createUI();
   preloadClueImages(CLUES);
   const recon = createRecon(scene, crash);
   const tablet = createTablet(camera);
-  const vm = createViewmodel(tablet.uiScene, camera);
+  const vm = createViewmodel(tablet.uiScene, camera, gait);
   const slot = buildCardSlot(crash);
   const rootKey = buildRootKey(crash);
   // 右侧车门：开局外翻 7°，第 3 轮撬到 55°

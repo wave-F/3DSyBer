@@ -230,8 +230,8 @@ async function player() {
   };
 }
 
-test('走跑共用逐步触发，跑步步频更快，斜走不额外加速', async () => {
-  for (const [running, diagonal, expected] of [[false, false, 21], [true, false, 27], [false, true, 21]]) {
+test('脚步跟随设备晃动频率，跑步更快，斜走不额外加速', async () => {
+  for (const [running, diagonal, expected] of [[false, false, 25], [true, false, 44], [false, true, 25]]) {
     const p = await player();
     p.key('KeyW');
     if (running) p.key('ShiftLeft');
@@ -245,6 +245,65 @@ test('走跑共用逐步触发，跑步步频更快，斜走不额外加速', as
     assert.equal(p.calls.filter((c) => c === 'step').length, expected);
     assert.ok(p.calls.every((c) => c === 'step'));
   }
+});
+
+test('不同帧率 / 走跑切换 / 黑梦减速时，每次设备下沉只落一步且渲染共用步相', async () => {
+  for (const fps of [30, 60, 144]) {
+    const p = await player();
+    p.camera.quaternion.identity();
+    const { createViewmodel } = await load('src/investigation/viewmodel.js', {
+      'three/webgpu': THREE, 'three/tsl': tsl,
+      'three/addons/loaders/GLTFLoader.js': { GLTFLoader: class { load() {} } },
+      '../audio/sound.js': { sound: { cloth() {} } },
+    }, { performance: { now: () => 0 } });
+    const overlay = new THREE.Scene();
+    const gait = p.update.gait;
+    const vm = createViewmodel(overlay, p.camera, gait);
+    const holder = overlay.children[0].children[0];
+    // 先拿稳设备，呼吸时钟固定，避免把姿态插值 / 呼吸误当成行走晃动。
+    for (let i = 0; i < fps; i++) { p.update(1 / fps); vm.update(1 / fps, true); }
+    p.key('KeyW');
+    for (let i = 0; i < fps * 8; i++) {
+      p.key('ShiftLeft', i >= fps * 2 && i < fps * 4);
+      const scale = i >= fps * 5 ? 0.5 : 1;
+      const before = gait.phase;
+      const previousCalls = p.calls.length;
+      const previousSpeed = gait.speed;
+      const previousZ = p.camera.position.z;
+      p.update(1 / fps, scale);
+      vm.update(1 / fps, true);
+      const expectedSpeed = previousSpeed + (Math.abs(p.camera.position.z - previousZ) * fps - previousSpeed) * Math.min(1, 8 / fps);
+      assert.ok(Math.abs(gait.phase - before - (1.6 + expectedSpeed * 1.55) / fps) < 1e-10);
+      const landed = Math.floor((gait.phase + Math.PI / 2) / Math.PI) > Math.floor((before + Math.PI / 2) / Math.PI);
+      assert.deepEqual(p.calls.slice(previousCalls), landed ? ['step'] : [], `${fps} fps, frame ${i}`);
+      assert.ok(Math.abs(holder.position.x - (0.21 + Math.cos(gait.phase) * 0.012 * gait.amplitude)) < 1e-10);
+      assert.ok(Math.abs(holder.position.y - (-0.24 - Math.abs(Math.sin(gait.phase)) * 0.014 * gait.amplitude)) < 1e-10);
+    }
+    // 枪身的减速余摆仍可继续，但停步后不多补脚步声。
+    p.key('KeyW', false);
+    p.calls.length = 0;
+    for (let i = 0; i < fps; i++) { p.update(1 / fps); vm.update(1 / fps, true); }
+    assert.deepEqual(p.calls, ['cloth']);
+  }
+});
+
+test('平板 / 暂停 / 相机跳点不推进落脚，不会恢复时补播', async () => {
+  const p = await player();
+  p.key('KeyW');
+  p.frames(60);
+  p.calls.length = 0;
+  const phase = p.update.gait.phase;
+  for (let i = 0; i < 120; i++) p.update(1 / 60, 0);
+  assert.equal(p.update.gait.phase, phase);
+  assert.equal(p.update.gait.amplitude, 0);
+  assert.deepEqual(p.calls, []);
+  p.camera.position.z += 10;
+  p.update(1 / 60);
+  assert.equal(p.update.gait.phase, phase);
+  assert.deepEqual(p.calls, []);
+  p.update(1 / 60);
+  assert.ok(p.update.gait.phase > phase);
+  assert.ok(p.calls.length <= 1);
 });
 
 test('撞墙 / 静止不持续出脚步，停步只补一次衣物声', async () => {

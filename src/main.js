@@ -84,7 +84,7 @@ const updateRain = buildRain(scene, camera);
 const updateCordon = buildCordon(scene);
 sound.setRainSpots(updateCity.rainSpots, { x: [-HALF_W, HALF_W], z: [CORDON.z0, CORDON.z1], y: DECK_Y + 1.7 });
 const updatePlayer = createPlayer(camera, document.body, document.getElementById('overlay'));
-const inv = createInvestigation(scene, camera, crash, updatePlayer.controls);
+const inv = createInvestigation(scene, camera, crash, updatePlayer.controls, updatePlayer.gait);
 // 加载界面点击开始：这一下是用户手势，同时启动 FMOD 并锁定鼠标
 loading.onStart(() => { sound.start(); updatePlayer.controls.lock(); });
 const intro = createIntro({ camera, police, controls: updatePlayer.controls, inv });
@@ -198,7 +198,7 @@ renderer.setAnimationLoop(() => {
   const step = paused ? 0 : dt;
   tick(step);
   if (intro.playing) intro.update(step);
-  else updatePlayer(step * inv.moveScale);
+  else updatePlayer(step, inv.moveScale);
   crash.update(clock.dt, clock.elapsed);
   police.update(clock.dt, clock.elapsed);
   updateRain(clock.dt);

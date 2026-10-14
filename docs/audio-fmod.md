@@ -67,7 +67,7 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 | `amb/rain` `amb/traffic` `amb/Amb_1..4` `amb/Amb_5_rain` `amb/Amb_6_rain` | 第一次点击「点击开始」时各触发一次，之后一直循环 |
 | `snapshot:/Dream` | 进入 / 离开黑梦 |
 | `snapshot:/Tablet` | 平板打开期间 |
-| `foley/FootStep` | `player.js` 按实际走过的距离单次触发：走 1.9 m、跑 3.0 m 一步；普通探索约 0.475 s / 0.375 s 一步。步频改变触发间隔，不额外改变素材音高；走 / 跑切换保留步相，撞墙不持续响，暂停 / 平板 / 过场不累积步数 |
+| `foley/FootStep` | 与手持设备的 8 字行走晃动共用 `player.js` 的 `gait`；每次竖直下沉到最低点（`phase = π/2 + nπ`）单次触发。保留原设备的平滑速度 / 频率，稳态走路约 0.403 s、跑步约 0.224 s 一步；只改触发间隔，不改音量或素材音高。走 / 跑切换保留步相，撞墙 / 静止不落脚，暂停 / 平板 / 过场 / 相机跳点不补播 |
 | `foley/ClothFoley` | 每一步与 FootStep 叠加；停步、原地明显转身（约 20°，最短间隔 0.35 s）、扫描仪拿出 / 收起、Q 扫描举起 / 放下、分析举起 / 放下、平板拿出 / 收起时各单次触发；静止待机、细小视角抖动和呼吸动画不触发 |
 | `ui/panel_open` / `panel_close` | 打开 / 收起平板，保留原有 UI 声，与衣物声独立叠加 |
 | `ui/hover` | 平板上指向新按钮；W/A/S/D 切页切条目 |
@@ -84,6 +84,8 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 `src/audio/sound.js` 是游戏侧入口：页面加载时预载 Bank，在开始点击里初始化，在主循环里 `update`。FMOD 没就绪或出错时，所有调用都是空操作，只在控制台警告，不影响游戏。切到后台时静音。
 
 角色动作统一使用 `sound.step()`（FootStep + ClothFoley）和 `sound.cloth()`（仅 ClothFoley）；新动作也走这两个入口。Foley 事件路径大小写与 Studio 完全一致，均为单次事件，不启动循环；素材、随机音高和混音由 Studio 保持控制。手工修改后保存工程并执行 `npm run audio:build` 同步浏览器 Bank。
+
+`main.js` 每帧先以真实帧时长更新玩家（移动倍率单独传入，黑梦减速也保持实际速度），再把同一份 `updatePlayer.gait` 经调查状态传给 `viewmodel.js` 渲染。不要在设备里再建独立的走路计时器，也不要重新按步长定时播放脚步；设备隐藏时步相仍正常工作。静止呼吸、视角弹簧和分析动作不触发脚步。
 
 ## 试听
 

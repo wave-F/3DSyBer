@@ -17,7 +17,7 @@ export const EVENTS = [
   e('event:/amb/Amb_4', '远处城市（循环 · 3D）', '远处楼群点声源 · AMB/City · 30–300 m'),
   e('event:/amb/Amb_5_rain', '雨打楼体 A（循环 · 3D）', '每栋楼朝桥立面一个点声源，与 B 交替 · AMB/RainHits · 6–45 m'),
   e('event:/amb/Amb_6_rain', '雨打楼体 B（循环 · 3D）', '每栋楼朝桥立面一个点声源，与 A 交替 · AMB/RainHits · 6–45 m'),
-  e(`event:/${FOLEY.step}`, '脚步', '走 / 跑共用 · 游戏按实际步频逐步触发，每一步叠加衣物声'),
+  e(`event:/${FOLEY.step}`, '脚步', '走 / 跑共用 · 跟随手持设备每次行走下沉触发，每一步叠加衣物声'),
   e(`event:/${FOLEY.cloth}`, '衣物动作', '每一步、停步、转身、扫描仪拿放 / 举落、平板拿放 · 单次播放'),
   e('event:/ui/panel_open', 'UI 面板出现', '平板开机 / 线索卡弹出'),
   e('event:/ui/panel_close', 'UI 面板关闭', '平板收起'),
