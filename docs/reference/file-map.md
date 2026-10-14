@@ -40,6 +40,7 @@
 | `src/investigation/tablet.js` | 平板 UI：线索、报告与确认归档、接入画面 |
 | `src/investigation/finale.js` | 结局：陈墨被撞、终端自动写报告并归档、黑屏 |
 | `src/investigation/viewmodel.js` | 第一人称手与袖 |
+| `src/investigation/pryArm.js` | 第 3 轮撬门的手和撬棍（`public/assets/pry-arm.glb`，Blender 做的动画 + 撬门机位）；源脚本 `tools/blender/build_pry_anim.py`、`export_pry_anim.py` |
 | `src/investigation/analysisFx.js` | 按住分析的扫描表现 |
 | `src/investigation/props.js` | 第 2 轮道具（第二道胎痕、车门残漆贴花） |
 | `src/investigation/actors.js` | 重建人形 |

@@ -220,7 +220,7 @@ export function createUI() {
     <div class="row"><b>滚轮</b><span>拖动回放时间</span></div>
     <div class="row"><b>空格</b><span>播放 / 暂停</span></div>
     <div class="row"><i></i><span>黄色时段：可以分析的异常时刻</span></div>
-    <div class="row"><b>E</b><span>停在黄色时段，走近全息菱形（8 m 内）按住分析</span></div>
+    <div class="row"><b>E</b><span>按住分析</span></div>
     <div class="row"><b>Q</b><span>退出黑梦</span></div>`);
   const cine = el('inv-cine');
   const black = el('inv-black');
@@ -230,7 +230,7 @@ export function createUI() {
 
   const HINTS = {
     explore: '<b>WASD</b>移动　<b>Shift</b>跑　<b>Q</b>扫描线索　<b>E</b>按住分析　<b>TAB</b>平板',
-    recon: '<b>滚轮</b>拖动时间　<b>空格</b>播放 / 暂停　停在黄色时段、走近全息　<b>E</b>按住分析　<b>Q</b>退出黑梦',
+    recon: '<b>滚轮</b>拖动时间　<b>空格</b>播放 / 暂停　<b>E</b>按住分析　<b>Q</b>退出黑梦',
   };
 
   const markerEls = new Map();

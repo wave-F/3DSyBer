@@ -6,6 +6,7 @@ import { createRecon } from './recon.js';
 import { buildTwistProps } from './props.js';
 import { createTablet } from './tablet.js';
 import { createViewmodel } from './viewmodel.js';
+import { createPryArm, PRY_INSERT, PRY_HIT } from './pryArm.js';
 import { CLUES, PROBES, ROUNDS, REPORTS, LINES, ENDINGS, CARD_HACK, ROOT_HACK, TARGET_INDEX } from './clues.js';
 import { buildCardSlot, buildRootKey } from './cardSlot.js';
 import { metalCreak, metalPop } from './sfx.js';
@@ -34,7 +35,6 @@ const DREAM_RITE = 2.6;          // 第一次进入：标题显示总时长（�
 const GUIDE_WAIT = 0.8;          // 镜头转到 A 车起点后，等这么久再开车
 const GUIDE_FOLLOW = 4;          // 跟车镜头的跟随速度（越大越紧）
 const GUIDE_END = 0.8;           // 播完后停这么久，陈墨开口
-const GUIDE_REWIND = 1.4;        // 时间轴倒回异常时刻的时长
 const TIP_TIME = 15;             // 操作说明最长显示时间
 
 // 流程（下车后自动弹出系统初判，收起后交还控制）：
@@ -65,8 +65,10 @@ export function createInvestigation(scene, camera, crash, controls) {
   // 右侧车门：开局外翻 7°，第 3 轮撬到 55°
   const DOOR_OPEN = 55 * Math.PI / 180;
   const door = { node: null, handle: new THREE.Vector3(), out: new THREE.Vector3() };
+  let pryArm = null;   // 撬门的手和撬棍（挂在车模根节点下）
   crash.onCarReady(({ door: node }) => {
     door.node = node;
+    pryArm = createPryArm(node.parent);
     // 把手点：门尾上部外侧（车门本地坐标，原点在前铰链，车尾 -Z、外侧 -X）
     const box = new THREE.Box3().setFromBufferAttribute(node.geometry.attributes.position);
     door.box = box;
@@ -77,11 +79,6 @@ export function createInvestigation(scene, camera, crash, controls) {
     if (!door.node) return door.handle;
     door.node.updateMatrixWorld(true);
     return door.handle.copy(door.handleLocal).applyMatrix4(door.node.matrixWorld);
-  }
-  // 撬棍支点：门关死时门尾外侧所在的位置（B 柱边），和把手同高。门怎么转它都不动
-  function doorPillar() {
-    const local = new THREE.Vector3(door.box.min.x, door.handleLocal.y, door.box.min.z - 0.01);
-    return local.applyMatrix4(doorClosedMatrix());
   }
   const death = createFinale({ scene, camera, tablet, ui });
   let deathForce = false;   // 开发调试：鼠标没锁定也继续播放
@@ -129,8 +126,8 @@ export function createInvestigation(scene, camera, crash, controls) {
   let holdR = false, dreamHold = 0;   // 按住 R 构建黑梦的进度（0~1）
   let firstDream = true;              // 第一次进入黑梦有完整过场
   // 进入黑梦的过场：on 期间锁定视角与操作，镜头从 (yaw0, pitch0) 转到 A 车起点
-  // phase：turn | wait | watch | end | talk | rewind（后四个只在第一次黑梦的引导里出现）
-  const enter = { on: false, phase: null, guide: false, t: 0, yaw0: 0, pitch0: 0, dYaw: 0, pitch1: 0, back0: 0, back1: 0 };
+  // phase：turn | wait | watch | end | talk | scrub（后五个只在第一次黑梦的引导里出现）
+  const enter = { on: false, phase: null, guide: false, t: 0, yaw0: 0, pitch0: 0, dYaw: 0, pitch1: 0, back1: 0 };
   const rite = { on: false, t: 0 };   // 第一次进入黑梦的标题
   let tipT = 0;                       // 黑梦操作说明剩余显示时间
   const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -324,7 +321,7 @@ export function createInvestigation(scene, camera, crash, controls) {
 
   // 切到黑梦，镜头缓慢转向 A 车起点
   // 之后的黑梦：回放立即开始播放，转完交还操作
-  // 第一次黑梦（引导）：转向 → 稍等 → 播放，镜头全程跟车 → 播完陈墨说有问题 → 时间轴倒回第一个异常时刻并暂停 → 弹出操作说明、交还操作
+  // 第一次黑梦（引导）：转向 → 稍等 → 播放，镜头全程跟车 → 播完陈墨说有问题 → 玩家滚滚轮倒回第一个异常时刻 → 暂停、弹出操作说明、交还操作
   function enterDream() {
     setMode('recon');
     const first = firstDream;
@@ -409,25 +406,23 @@ export function createInvestigation(scene, camera, crash, controls) {
           const target = timedProbes().find((c) => !c.done);
           if (!target) { endEnter(); break; }
           enter.phase = 'talk';
-          enter.back0 = rt;
           enter.back1 = target.t;
           const r = round;
           ui.say(LINES.dreamGuide(clockText(target.t))).then(() => {
-            if (mode === 'recon' && round === r && enter.phase === 'talk') { enter.phase = 'rewind'; enter.t = 0; }
+            if (mode === 'recon' && round === r && enter.phase === 'talk') { enter.phase = 'scrub'; enter.t = 0; }
           });
         }
         break;
       case 'talk':
         followCar(dt);
         break;
-      // 时间轴倒回异常时刻，车跟着倒退，镜头继续跟
-      case 'rewind': {
-        const u = Math.min(1, enter.t / GUIDE_REWIND);
-        const e = u * u * (3 - 2 * u);
-        rt = enter.back0 + (enter.back1 - enter.back0) * e;
+      // 玩家自己滚滚轮倒回异常时刻（只响应滚轮），车跟着倒退，镜头继续跟。进入异常时段即暂停、交还操作
+      case 'scrub': {
         recon.setTime(rt);
         followCar(dt);
-        if (u >= 1) { endEnter(); showTip(); }
+        const hit = Math.abs(rt - enter.back1) <= PROBE_WINDOW;
+        ui.setPrompt(hit ? null : `滚动滚轮，把时间倒回 ${clockText(enter.back1)}`, true);
+        if (hit) { playing = false; endEnter(); showTip(); }
         break;
       }
     }
@@ -540,7 +535,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     ui.say(LINES.opening, { radio: true });
   }
   addEventListener('wheel', (e) => {
-    if (mode !== 'recon' || enter.on) return;
+    if (mode !== 'recon' || (enter.on && enter.phase !== 'scrub')) return;
     playing = false;
     rt = THREE.MathUtils.clamp(rt + e.deltaY * 0.0025, 0, R().duration);
   }, { passive: true });
@@ -724,7 +719,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     round = 3;
     storyTask = true;
     ins.done = false; ins.phase = null;
-    pry.done = false; pry.phase = null; setDoor(DOOR_AJAR); vm.pryEnd();
+    pry.done = false; pry.phase = null; setDoor(DOOR_AJAR); pryArm?.hide();
     slot.setState('idle');
     if (mode === 'explore') setMode('explore');
     syncTablet();
@@ -734,7 +729,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     after3Said = false;
     roundDone[3] = false;
     ins.done = false; ins.phase = null;
-    pry.done = false; pry.phase = null; setDoor(DOOR_AJAR); vm.pryEnd();
+    pry.done = false; pry.phase = null; setDoor(DOOR_AJAR); pryArm?.hide();
     slot.setState('idle');
     clues.forEach((c) => { if (c.round === 3) { c.unlocked = false; c.done = false; } });
     probes.forEach((p) => { if (p.round === 3) p.done = false; });
@@ -918,6 +913,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     return PRY_KEYS[PRY_KEYS.length - 1][1];
   }
   // 镜头走到门尾斜后方、站在门的外侧：门向外张开时从画面前方扫过，不会撞到镜头
+  // 撬棍模型加载好后，机位用 Blender 里摆好的 PryCam（和手、撬棍的动画对齐）
   function startPry() {
     if (!door.node || pry.phase || pry.done) return;
     setMode('insert');
@@ -938,8 +934,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     look.y -= 0.1;
     _m.lookAt(pry.camTo, look, camera.up);
     pry.quatTo.setFromRotationMatrix(_m);
-    pry.out = out;
-    pry.pillar = doorPillar();
+    if (pryArm?.ready) pryArm.camPose(pry.camTo, pry.quatTo);
   }
   function updatePry(dt) {
     pry.t += dt;
@@ -957,21 +952,18 @@ export function createInvestigation(scene, camera, crash, controls) {
         ui.toast('车门已撬开', '转向柱下方有检修接口 · 瞄准按 E 插卡', 4000);
         return;
       }
-      // 镜头到位：右手举起撬棍插进门缝，插稳后开始撬
-      pry.phase = 'brace'; pry.t = 0;
-      camera.position.copy(pry.camTo);
-      camera.quaternion.copy(pry.quatTo);
-      camera.updateMatrixWorld();
-      _m.copy(camera.matrixWorld).invert();
-      vm.pryStart(pry.pillar.clone().applyMatrix4(_m), pry.out.clone().transformDirection(_m), {
-        onHit: () => metalPop({ gain: 0.22 }),
-        onReady: () => { pry.phase = 'pry'; pry.t = 0; pry.sfx = 0; },
-      });
+      // 镜头到位：右手举起撬棍插进门缝，插稳后开始撬（模型没加载好就直接撬）
+      if (pryArm?.ready) { pry.phase = 'brace'; pry.hit = false; pryArm.set(0); }
+      else { pry.phase = 'pry'; pry.sfx = 0; }
+      pry.t = 0;
       return;
     }
     if (pry.phase === 'brace') {
       camera.position.copy(pry.camTo);
       camera.quaternion.copy(pry.quatTo);
+      pryArm.set(pry.t);
+      if (!pry.hit && pry.t >= PRY_HIT) { pry.hit = true; metalPop({ gain: 0.22 }); }
+      if (pry.t >= PRY_INSERT) { pry.phase = 'pry'; pry.t = 0; pry.sfx = 0; }
       return;
     }
     // pry：车门按关键帧张开，镜头跟着用力的节奏晃
@@ -982,7 +974,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     }
     const deg = pryAngle(pry.t);
     setDoor(deg * Math.PI / 180);
-    vm.pryDrive(pry.t, deg);
+    pryArm?.set(PRY_INSERT + pry.t);
     const tug = pry.t < 1.3 ? Math.max(0, Math.sin(pry.t * 9)) * 0.012 : 0;
     const jolt = Math.max(0, 1 - Math.abs(pry.t - 1.4) / 0.25) * 0.03;
     camera.position.copy(pry.camTo);
@@ -992,7 +984,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     if (pry.t >= PRY_END) {
       pry.done = true;
       setDoor(DOOR_OPEN);
-      vm.pryEnd();
+      pryArm?.hide();
       pry.phase = 'camOut'; pry.t = 0;
     }
   }
