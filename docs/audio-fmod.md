@@ -19,7 +19,7 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 
 - `scripts/freesound.mjs`：`search` 检索 CC0 素材，`get <id> <name>` 下载并登记出处，`fetch` 按 `credits.json` 重新下载。原始 mp3 不入库。
 - `scripts/sound-design.mjs`：编辑工程。每个输出是若干片段（素材、起点、长度、处理链、偏移、增益）的混音，再过母带链。脚步起点来自 onset 分析。环境声用尾部叠回开头做无缝循环，按 LUFS 标准化；单发音效按峰值标准化。传参只渲染名字匹配的文件，例如 `npm run audio:design -- step_walk`。
-- `Fmod/build-events.js`：每次只重建 `ui` `scifi` 两个文件夹；手工制作的 `amb`、`foley/FootStep`、`foley/ClothFoley` 和 `test/ping` 不动。不要把手工精修的事件放在 `ui` / `scifi`，否则下次会被覆盖。
+- `Fmod/build-events.js`：首次创作脚本，会重建 `ui` / `scifi` 并重设总线增益。**当前 `scifi` 已手工替换素材，不可用于日常同步**，否则会丢失替换和调音；手工制作的 `amb`、`foley/FootStep`、`foley/ClothFoley` 和 `test/ping` 不动。
 - `Fmod/setup-mix.js`：只增改不重建，可重复执行。`amb` 是在 Studio 里手工做的，脚本只给它加路由、Spatializer、Snapshot、VCA；手工 Foley 仅接回 `FOLEY` 总线并分配到 `Main` Bank。跑完 `audio:events` 后要再跑一次。
 - CLI 读的是磁盘内容，Studio 里改完要先保存。
 
@@ -30,6 +30,21 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 游戏不设置事件、总线或 VCA 的额外增益，已移除衣物、UI、分析声的代码音量倍率。后续新增动作也只触发事件，不在代码里调音。音量、随机音量、Snapshot、距离衰减均由 Studio 控制；黑梦 / 平板仍正常切换已制作的 Snapshot。
 
 `audio:events` / `audio:mix` 默认拒绝执行；只有重新创作事件 / 混音且明确接受覆盖风险时才用 `FMOD_ALLOW_REAUTHOR=1 npm run audio:events` 或 `FMOD_ALLOW_REAUTHOR=1 npm run audio:mix`。日常调音同步不要运行 `audio:design` / `audio:events` / `audio:mix`。
+
+### 手工替换的 scifi 素材
+
+以下替换已同步到 Web Bank；保持原事件路径、触发时机、分析进度音高与停止逻辑，不在 Web 中设置事件 / 总线 / VCA 音量。后续音量只在 Studio 调整，保存后运行 `audio:build` 和 `build`。
+
+| Event（`event:/scifi/`） | Studio 素材 |
+|------------------------|-------------|
+| `scan_pulse` | `20Scan_enter.wav` |
+| `analyze_loop` | `21Scan_progress.wav` |
+| `analyze_complete` | `22Scan_complete.wav` |
+| `analyze_cancel` | `23Scan_cancel.wav` |
+| `dream_enter` | `24dream_enter.wav` |
+| `dream_exit` | `25dream_exit.wav` |
+
+`npm run test:audio` 覆盖这组事件的路径、分析起停、音高以及不写音量的约束。当前分析素材由 Studio 定义为约 2.89 秒，游戏分析仍为 1.4 秒，完成或中断时照常停止；不为同步而重建 Loop Region 或包络。
 
 ## 混音结构
 
@@ -86,7 +101,7 @@ npm run audio:design   # 渲染编辑后的 WAV
 npm run audio:events   # 重新创作事件（默认阻止，须显式 FMOD_ALLOW_REAUTHOR=1）
 npm run audio:mix      # 重建混音（默认阻止，须显式 FMOD_ALLOW_REAUTHOR=1）
 npm run audio:build    # 构建 Bank 并同步到 public/fmod/
-npm run test:audio     # Foley 触发回归测试（无需浏览器 / 声卡）
+npm run test:audio     # Foley / scifi 触发与音量保护回归测试（无需浏览器 / 声卡）
 ```
 
 默认使用 `/Applications/FMOD Studio.app/Contents/MacOS/fmodstudio`（2.03.14），可以用 `FMOD_STUDIO_BIN` 指定其他路径。浏览器端的 `fmodstudioL.js` / `.wasm` 要和 Studio 版本兼容。

@@ -39,7 +39,7 @@
 	</object>
 	<object class="MasterTrack" id="{ec50f950-14a0-4f89-8db4-61eca39ad888}">
 		<relationship name="modules">
-			<destination>{00ec7a47-352c-4f7f-99be-2a64a182c132}</destination>
+			<destination>{bce9dcbd-1a40-48b9-9189-5e1ad7f21413}</destination>
 		</relationship>
 		<relationship name="mixerGroup">
 			<destination>{33fab9b0-8d0b-4d84-87a7-5950311eb679}</destination>
@@ -60,10 +60,7 @@
 	<object class="MarkerTrack" id="{ac556dab-aa6b-4d9d-b31f-d1c4a6e465bf}" />
 	<object class="Timeline" id="{f335953f-14c9-4faf-8557-fa00301e8419}">
 		<relationship name="modules">
-			<destination>{00ec7a47-352c-4f7f-99be-2a64a182c132}</destination>
-		</relationship>
-		<relationship name="markers">
-			<destination>{c0846fb4-c16d-48bf-9463-a883b6a18792}</destination>
+			<destination>{bce9dcbd-1a40-48b9-9189-5e1ad7f21413}</destination>
 		</relationship>
 	</object>
 	<object class="EventMixerMaster" id="{33fab9b0-8d0b-4d84-87a7-5950311eb679}">
@@ -80,12 +77,12 @@
 			<destination>{f6fa202c-1ce1-401d-a9b8-604c3d638857}</destination>
 		</relationship>
 	</object>
-	<object class="SingleSound" id="{00ec7a47-352c-4f7f-99be-2a64a182c132}">
+	<object class="SingleSound" id="{bce9dcbd-1a40-48b9-9189-5e1ad7f21413}">
 		<property name="length">
-			<value>6</value>
+			<value>2.8921088435374149</value>
 		</property>
 		<relationship name="audioFile">
-			<destination>{66711ce0-c474-4924-8618-97e6943a72dd}</destination>
+			<destination>{0f15adc3-d572-4490-918f-8c85d58c2c65}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusEffectChain" id="{06e46b41-06fd-4407-8c51-8c6693bd26a5}">
@@ -94,20 +91,6 @@
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{699271ab-ca10-4575-9ccd-3a107367e733}" />
-	<object class="LoopRegion" id="{c0846fb4-c16d-48bf-9463-a883b6a18792}">
-		<property name="position">
-			<value>0</value>
-		</property>
-		<property name="length">
-			<value>6</value>
-		</property>
-		<relationship name="timeline">
-			<destination>{f335953f-14c9-4faf-8557-fa00301e8419}</destination>
-		</relationship>
-		<relationship name="markerTrack">
-			<destination>{ac556dab-aa6b-4d9d-b31f-d1c4a6e465bf}</destination>
-		</relationship>
-	</object>
 	<object class="ADSRModulator" id="{30265b89-9f54-4cbb-9bfa-6b2e2f70d926}">
 		<property name="nameOfPropertyBeingModulated">
 			<value>volume</value>

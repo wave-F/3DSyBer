@@ -107,6 +107,50 @@ test('默认单次播放不写实例音量，试听工具可显式调整', async
   assert.deepEqual(gains, [0.5]);
 });
 
+test('scifi 替换素材后沿用原事件路径 / 分析起停，不覆盖 Studio 音量', async () => {
+  const paths = [
+    'event:/scifi/scan_pulse', 'event:/scifi/analyze_loop',
+    'event:/scifi/analyze_complete', 'event:/scifi/analyze_cancel',
+    'event:/scifi/dream_enter', 'event:/scifi/dream_exit',
+  ];
+  assert.deepEqual(events.EVENTS.filter((event) => event.path.startsWith('event:/scifi/')).map((event) => event.path), paths);
+  const { FmodRuntime: Runtime } = await load('src/audio/fmodRuntime.js', { './events.js': events });
+  const calls = [], pitches = [], warnings = [];
+  class FmodRuntime extends Runtime {
+    ready = true;
+    module = { OK: 0, STUDIO_STOP_ALLOWFADEOUT: 'fadeout' };
+    instance(path) {
+      calls.push(['instance', path]);
+      return {
+        setVolume() { assert.fail(`不应覆盖 ${path} 的 Studio 音量`); },
+        setPitch(value) { pitches.push([path, value]); return 0; },
+        start() { calls.push(['start', path]); return 0; },
+        stop(mode) { calls.push(['stop', path, mode]); return 0; },
+        release() { calls.push(['release', path]); },
+      };
+    }
+    setVolume() { assert.fail('游戏不应修改 Master 音量'); }
+    setVcaVolume() { assert.fail('游戏不应修改 VCA 音量'); }
+  }
+  const { sound } = await load('src/audio/sound.js', {
+    './fmodRuntime.js': { FmodRuntime }, './events.js': events,
+  }, { document: { addEventListener() {} }, console: { warn: (...args) => warnings.push(args) } });
+  for (const path of paths.filter((path) => !path.endsWith('/analyze_loop'))) {
+    sound.play(path.slice('event:/'.length), { volume: 0.1 });
+  }
+  sound.analyze(0);
+  sound.analyze(0.5);
+  sound.analyze(1);
+  sound.analyze(null);
+  sound.analyze(null);
+  for (const path of paths) {
+    assert.equal(calls.filter(([action, name]) => action === 'start' && name === path).length, 1);
+  }
+  assert.deepEqual(pitches.filter(([path]) => path.endsWith('/analyze_loop')).map(([, pitch]) => pitch), [0.85, 1.125, 1.4]);
+  assert.deepEqual(calls.filter(([action]) => action === 'stop'), [['stop', 'event:/scifi/analyze_loop', 'fadeout']]);
+  assert.deepEqual(warnings, []);
+});
+
 test('事件 / 混音重建必须显式授权，默认不会启动 Studio', () => {
   const env = { ...process.env };
   delete env.FMOD_ALLOW_REAUTHOR;
