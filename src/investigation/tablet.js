@@ -149,6 +149,11 @@ export function createTablet(camera) {
   screen.position.z = 0.002;
   for (const m of [glassMat, screenMat]) m.mrtNode = NO_MASK;
   holder.add(glass, screen);
+  // 掉在地上时屏幕背后加一块不透明的黑底：否则透明屏幕会透出路面，字看不清
+  const backing = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ color: 0x010407 }));
+  backing.position.z = -0.0005;
+  backing.visible = false;
+  holder.add(backing);
   rig.visible = false;
   let flickT = 0;
 
@@ -165,6 +170,7 @@ export function createTablet(camera) {
     repSel: 0,                    // 报告页选中的报告
     glitch: 0,                    // 强干扰剩余时间（报告被质疑改写、接入画面开始时）
     hack: null,                   // 插卡接入画面：{ t, cfg, onDone }
+    world: null,                  // 结局：平板掉在地上，固定在世界坐标 { pos, quat }，不再跟随相机
   };
   const sway = { yaw: 0, pitch: 0, vx: 0, vy: 0 };
   let lastYaw = 0, lastPitch = 0;
@@ -234,6 +240,7 @@ export function createTablet(camera) {
     g.fillStyle = 'rgba(40,110,160,0.07)';
     g.fillRect(0, 0, CW, CH);
     corners(24, 24, CW - 48, CH - 48, 46, C.cyan, 4);
+    if (state.data.final) { drawFinal(state.data.final); return; }
     if (state.hack) { drawHack(); return; }
 
     // 顶栏
@@ -262,6 +269,83 @@ export function createTablet(camera) {
 
     if (state.tab === 0) drawClues(clues);
     else drawReport();
+  }
+
+  // ---------- 结局：事故报告（自动打字、自动归档）----------
+  // f：{ head, title, status, source, tag, lines, verdict, labels, typed（已打出的字数）, showVerdict }
+  // 确认条读 state.data.confirm（由结局演出逐帧推进）
+  function drawFinal(f) {
+    text(f.head, 70, 104, 26, C.dim, 400, 'left', true);
+    text(f.title, 70, 150, 40, C.white, 500);
+    text(f.status, CW - 70, 150, 34, C.gold, 500, 'right');
+    g.fillStyle = C.faint;
+    g.fillRect(70, 190, CW - 140, 2);
+    text(f.source, 70, 254, 22, C.dim, 400, 'left', true);
+    text(f.tag, 70, 316, 46, C.white, 500);
+
+    // 逐字打出，末尾一个闪烁的光标
+    let left = f.typed, ly = 410, caret = null;
+    const maxW = CW - 70 - 98;
+    for (const l of f.lines) {
+      if (left <= 0) break;
+      const s = l.slice(0, left);
+      left -= l.length;
+      g.fillStyle = C.cyan;
+      g.fillRect(70, ly - 10, 14, 3);
+      const rows = wrap(s, maxW, 34);
+      rows.forEach((row, k) => text(row, 98, ly + k * 48, 34, '#d6effc'));
+      caret = { x: 98 + measure(rows[rows.length - 1], 34) + 6, y: ly + (rows.length - 1) * 48 };
+      ly += rows.length * 48 + 20;
+    }
+    const typing = f.typed < f.lines.join('').length;
+    if (caret && typing && Math.floor(uiTime.value * 3) % 2 === 0) {
+      g.fillStyle = C.cyan;
+      g.fillRect(caret.x, caret.y - 30, 16, 36);
+    }
+    if (f.showVerdict) {
+      g.fillStyle = 'rgba(255,207,106,0.35)';
+      g.fillRect(70, 640, 640, 2);
+      text(f.verdict, 70, 704, 42, C.gold, 500);
+    }
+    if (state.data.confirm) drawConfirm(70, false, f.labels);
+    drawCracks();
+  }
+
+  // 摔裂的屏幕：从右上角放射出去的裂纹，固定种子
+  const cracks = (() => {
+    let s = 7;
+    const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+    const ox = 1290, oy = 230, out = [];
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + rnd() * 0.5;
+      const pts = [[ox, oy]];
+      let x = ox, y = oy, ang = a;
+      const n = 3 + Math.floor(rnd() * 4);
+      for (let k = 0; k < n; k++) {
+        const len = 40 + rnd() * 140;
+        ang += (rnd() - 0.5) * 0.7;
+        x += Math.cos(ang) * len; y += Math.sin(ang) * len;
+        pts.push([x, y]);
+      }
+      out.push(pts);
+    }
+    return { ox, oy, lines: out };
+  })();
+  function drawCracks() {
+    g.strokeStyle = 'rgba(210,240,255,0.32)';
+    g.lineWidth = 2;
+    for (const pts of cracks.lines) {
+      g.beginPath();
+      pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+      g.stroke();
+    }
+    g.beginPath();
+    g.arc(cracks.ox, cracks.oy, 34, 0.3, 4.6);
+    g.stroke();
+    g.fillStyle = 'rgba(210,240,255,0.18)';
+    g.beginPath();
+    g.arc(cracks.ox, cracks.oy, 12, 0, Math.PI * 2);
+    g.fill();
   }
 
   // ---------- 插卡接入画面 ----------
@@ -507,6 +591,7 @@ export function createTablet(camera) {
       } else {
         text(r.verdict, x, vy + 10, 36, C.gold, 500);
         if (r.note) text(r.note, x, vy + 72, 24, C.dim);
+        if (r.hint) text(r.hint, x, vy + (r.note ? 118 : 72), 24, C.cyan);
       }
     }
     if (r.confirm && shown > lines.length + 1) drawConfirm(x, !!rv, r.confirm);
@@ -562,7 +647,7 @@ export function createTablet(camera) {
   // ---------- 鼠标 ----------
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
-  const canPoint = () => state.open && state.k > 0.9 && state.boot >= 1 && !document.pointerLockElement;
+  const canPoint = () => !state.world && state.open && state.k > 0.9 && state.boot >= 1 && !document.pointerLockElement;
   // 屏幕坐标 → 平板画布坐标（未指向平板时返回 null）
   function pick(e) {
     ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
@@ -640,40 +725,24 @@ export function createTablet(camera) {
   function update(dt) {
     const target = state.open ? 1 : 0;
     const speed = state.open ? 2.2 : 3.5;     // 举起约 0.45 秒，收起约 0.3 秒
-    state.k = THREE.MathUtils.clamp(state.k + Math.sign(target - state.k) * dt * speed, 0, 1);
+    // 掉在地上时机身一直可见，open 只表示屏幕是否点亮
+    state.k = state.world ? 1 : THREE.MathUtils.clamp(state.k + Math.sign(target - state.k) * dt * speed, 0, 1);
     rig.visible = state.k > 0;
     if (!rig.visible) return;
-
-    // 跟随相机
-    camera.updateMatrixWorld();
-    rig.position.copy(camera.position);
-    rig.quaternion.copy(camera.quaternion);
-
-    // 视角转动时平板稍微滞后（弹簧），加上呼吸起伏
-    const e = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
-    let dy = e.y - lastYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-    const dp = e.x - lastPitch;
-    lastYaw = e.y; lastPitch = e.x;
-    sway.vx += (-dy * 1.2 - sway.yaw) * 60 * dt - sway.vx * 10 * dt;
-    sway.vy += (-dp * 1.2 - sway.pitch) * 60 * dt - sway.vy * 10 * dt;
-    sway.yaw += sway.vx * dt;
-    sway.pitch += sway.vy * dt;
-    sway.yaw = THREE.MathUtils.clamp(sway.yaw, -0.08, 0.08);
-    sway.pitch = THREE.MathUtils.clamp(sway.pitch, -0.08, 0.08);
-
     const t = performance.now() / 1000;
-    const x = state.open ? easeOutBack(state.k) : easeIn(state.k);
-    holder.position.lerpVectors(HIDDEN.pos, SHOWN.pos, x);
-    holder.position.x += sway.yaw * 0.25;
-    holder.position.y += sway.pitch * 0.25 + Math.sin(t * 1.6) * 0.0025;
-    qa.setFromEuler(HIDDEN.rot);
-    qb.setFromEuler(new THREE.Euler(SHOWN.rot.x + sway.pitch * 0.6 + Math.sin(t * 1.1) * 0.006, sway.yaw * 0.6, Math.sin(t * 0.8) * 0.004));
-    holder.quaternion.slerpQuaternions(qa, qb, Math.min(1, x));
+
+    if (state.world) {
+      rig.position.copy(state.world.pos);
+      rig.quaternion.copy(state.world.quat);
+      holder.position.set(0, 0, 0);
+      holder.quaternion.identity();
+    } else followCamera(dt, t);
+    backing.visible = !!state.world;
 
     // 内容：举到位后开机，界面动画期间逐帧重绘
     if (state.open && state.k > 0.6) state.boot = Math.min(1, state.boot + dt * 1.8);
     // 开机、打字、确认进度、干扰期间逐帧重绘
-    const animating = state.open && (state.boot < 1 || state.typeT < 2.5 || state.data.confirm?.p > 0 || state.glitch > 0 || (!!state.hack && !state.hack.held));
+    const animating = state.open && (state.boot < 1 || state.typeT < 2.5 || state.data.confirm?.p > 0 || state.glitch > 0 || !!state.data.final || (!!state.hack && !state.hack.held));
     if (state.open && state.boot >= 1) state.typeT += dt;
     // 接入画面：开机后计时，走完回调并回到普通页面
     if (state.hack && !state.hack.held && state.open && state.boot >= 1) {
@@ -693,9 +762,10 @@ export function createTablet(camera) {
       tex.needsUpdate = true;
       state.dirty = false;
     }
-    const a = state.open ? 1 : state.k;
+    // 地上的平板：屏幕没点亮时完全不显示界面
+    const a = state.world ? (state.open ? 1 : 0) : state.open ? 1 : state.k;
     screenMat.opacity = a;
-    glassMat.opacity = a;
+    glassMat.opacity = state.world ? 1 : a;
     // 全息偶发闪烁：平均约 4 秒一次，持续不到 0.1 秒
     flickT -= dt;
     if (flickT <= 0 && Math.random() < dt * 0.25) flickT = 0.06 + Math.random() * 0.05;
@@ -706,6 +776,33 @@ export function createTablet(camera) {
     tint.value.setRGB(1, 1, 1).lerp(_orange, Math.min(1, state.glitch * 3));
     // 状态灯呼吸（亮度略高于辉光阈值，带一点光晕）
     body.ledMat.color.setHex(0x30e0ff).multiplyScalar(1.2 + Math.sin(t * 2.4) * 0.8);
+  }
+
+  // 跟随相机：举起 / 收起动画 + 视角滞后 + 呼吸
+  function followCamera(dt, t) {
+    camera.updateMatrixWorld();
+    rig.position.copy(camera.position);
+    rig.quaternion.copy(camera.quaternion);
+
+    // 视角转动时平板稍微滞后（弹簧），加上呼吸起伏
+    const e = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+    let dy = e.y - lastYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    const dp = e.x - lastPitch;
+    lastYaw = e.y; lastPitch = e.x;
+    sway.vx += (-dy * 1.2 - sway.yaw) * 60 * dt - sway.vx * 10 * dt;
+    sway.vy += (-dp * 1.2 - sway.pitch) * 60 * dt - sway.vy * 10 * dt;
+    sway.yaw += sway.vx * dt;
+    sway.pitch += sway.vy * dt;
+    sway.yaw = THREE.MathUtils.clamp(sway.yaw, -0.08, 0.08);
+    sway.pitch = THREE.MathUtils.clamp(sway.pitch, -0.08, 0.08);
+
+    const x = state.open ? easeOutBack(state.k) : easeIn(state.k);
+    holder.position.lerpVectors(HIDDEN.pos, SHOWN.pos, x);
+    holder.position.x += sway.yaw * 0.25;
+    holder.position.y += sway.pitch * 0.25 + Math.sin(t * 1.6) * 0.0025;
+    qa.setFromEuler(HIDDEN.rot);
+    qb.setFromEuler(new THREE.Euler(SHOWN.rot.x + sway.pitch * 0.6 + Math.sin(t * 1.1) * 0.006, sway.yaw * 0.6, Math.sin(t * 0.8) * 0.004));
+    holder.quaternion.slerpQuaternions(qa, qb, Math.min(1, x));
   }
 
   return {
@@ -724,6 +821,13 @@ export function createTablet(camera) {
     get hacking() { return !!state.hack && !state.hack.held; },
     glitch(sec = 0.5) { state.glitch = sec; state.dirty = true; },
     get open() { return state.open; },
-    get amount() { return state.k; },   // 用于背景压暗与虚化
+    get amount() { return state.world ? 0 : state.k; },   // 用于背景压暗与虚化（掉在地上时不压暗）
+    // 结局：平板固定在世界坐标（屏幕先不亮，toggle(true) 点亮）；release 恢复跟随相机
+    placeAt(pos, quat) {
+      state.world = { pos: pos.clone(), quat: quat.clone() };
+      state.open = false; state.hack = null; state.boot = 0; state.typeT = 0;
+      state.hover = null; state.dirty = true;
+    },
+    release() { state.world = null; state.open = false; state.k = 0; },
   };
 }

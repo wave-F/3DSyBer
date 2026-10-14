@@ -108,6 +108,7 @@ const CSS = `
 .inv-evl3.near { background: rgba(255,207,74,.25); }
 #inv-sub { left: 50%; bottom: 128px; transform: translateX(-50%); max-width: 64vw; text-align: center; font-size: 22px; line-height: 1.6; letter-spacing: .06em; color: #f2f6fa; text-shadow: 0 2px 6px rgba(0,0,0,.95), 0 0 18px rgba(0,0,0,.7); opacity: 0; transition: opacity .25s; z-index: 6; }
 #inv-sub.on { opacity: 1; }
+#inv-sub.lift { bottom: calc(11vh + 36px); }
 #inv-sub .who { color: #6cc8ff; margin-right: 12px; font-size: 18px; letter-spacing: .2em; }
 #inv-sub.radio .who::before { content: '◉ '; color: #ff8a1a; }
 #inv-sub.inner { font-style: italic; color: #e6e0d4; }
@@ -377,7 +378,7 @@ export function createUI() {
       const CELLS = 72;
       this._frac = frac;
       this._cells = CELLS;
-      this._evFrac = events.map((e) => frac(e.t));
+      this._evSpan = events.map((e) => [frac(e.t0 ?? e.t), frac(e.t1 ?? e.t)]);
       const jumpAt = jumpT == null ? null : Math.round(frac(jumpT) * CELLS);
       const before = jumpAt == null ? CELLS : jumpAt;
       const cell = (i) => `<i data-i="${i}"></i>`;
@@ -412,18 +413,23 @@ export function createUI() {
       const done = recorded.filter(Boolean).length;
       tl.querySelector('.count').textContent = countText;
       const cr = track.getBoundingClientRect();
+      const xAt = (f) => {
+        const x = Math.max(0, Math.min(n - 1, f * (n - 1)));
+        const i = Math.min(n - 1, Math.floor(x + 1e-6));
+        const cell = cells[i].getBoundingClientRect();
+        if (i >= n - 1) return cell.right;
+        const next = cells[i + 1].getBoundingClientRect();
+        return cell.left + (next.left - cell.left) * (x - i);
+      };
       tl.querySelectorAll('.ev').forEach((e) => {
         const i = +e.dataset.i;
         e.classList.toggle('rec', recorded[i]);
         e.classList.toggle('near', i === nearIdx);
-        const idx = Math.round((this._evFrac[i] ?? 0) * (n - 1));
-        const a = cells[Math.max(0, idx - 1)];
-        const b = cells[Math.min(n - 1, idx + 1)];
-        if (!a || !b) return;
-        const ar = a.getBoundingClientRect();
-        const br = b.getBoundingClientRect();
-        e.style.left = `${ar.left - cr.left}px`;
-        e.style.width = `${br.right - ar.left}px`;
+        const span = this._evSpan[i] ?? [0, 0];
+        const left = xAt(span[0]);
+        const right = xAt(span[1]);
+        e.style.left = `${left - cr.left}px`;
+        e.style.width = `${Math.max(2, right - left)}px`;
       });
     },
     // list: [{ x, y, show, rec, near }]
@@ -443,7 +449,8 @@ export function createUI() {
       const token = ++sayToken;
       return lines.reduce((p, l) => p.then(() => new Promise((res) => {
         if (token !== sayToken) return res();
-        sub.className = `inv on${l.who ? (radio && l.who !== '陈墨' ? ' radio' : '') : ' inner'}`;
+        const lift = cine.classList.contains('on') ? ' lift' : '';
+        sub.className = `inv on${l.who ? (radio && l.who !== '陈墨' ? ' radio' : '') : ' inner'}${lift}`;
         sub.innerHTML = l.who ? `<span class="who">${l.who}</span>${l.text}` : l.text;
         const ms = l.ms ?? 1400 + l.text.length * 140;
         setTimeout(() => { if (token === sayToken) sub.classList.remove('on'); setTimeout(res, 280); }, ms);
@@ -470,7 +477,8 @@ export function createUI() {
       ptr.style.top = `${cy + dy * k}px`;
       ar.style.transform = `rotate(${Math.atan2(dy, dx) + Math.PI / 2}rad)`;
     },
-    setCinema(on) { cine.classList.toggle('on', on); },
+    setCinema(on) { cine.classList.toggle('on', on); sub.classList.toggle('lift', on); },
+    hush() { sayToken++; sub.classList.remove('on'); },
     // 黑场：a 为不透明度，ms 为过渡时长
     black(a, ms = 0) { black.style.transition = `opacity ${ms}ms`; black.style.opacity = a; },
     flash(a, ms = 0) { flash.style.transition = `opacity ${ms}ms`; flash.style.opacity = a; },

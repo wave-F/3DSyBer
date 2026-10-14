@@ -3,7 +3,7 @@ import { CAR_POS } from './crash.js';
 import { DECK_Y } from './bridge.js';
 import { POLICE_POS, POLICE_YAW } from './policeCar.js';
 
-// 开场：高角度跟车 → 正面看停车 → 车内看任务 → 第一人称下车
+// 开场：高角度跟车 → 正面看停车 → 回到车内 → 第一人称下车 → 打开终端
 // 坐着看向现场 → 转头伸手开门 → 侧身探出车门 → 起身退到门外 → 回身关门 → 转向事故车走两步，交还控制
 // 关键帧坐标为警车组本地坐标（米，车头 +Z，驾驶门在 +X 侧）；h 为相对车头的水平朝向（+ 向驾驶门一侧），p 为俯仰（+ 抬头）
 // 仅在鼠标锁定时推进（暂停即暂停）；空格跳过
@@ -100,7 +100,8 @@ export function createIntro({ camera, police, controls, inv }) {
   }
 
   function frameChase() {
-    const u = smooth(clamp01(t / CHASE));
+    // 俯视跟车保持匀速，减速留到正面停车
+    const u = clamp01(t / CHASE);
     placeCar(Z0 + (Z1 - Z0) * u);
     camera.position.set(g.position.x - 3.5, DECK_Y + 18, g.position.z - 16);
     look.set(g.position.x, DECK_Y + 1.4, g.position.z + 12);
@@ -118,12 +119,7 @@ export function createIntro({ camera, police, controls, inv }) {
   addEventListener('keydown', (e) => {
     if (!playing) return;
     if (e.code === 'Space' && (controls.isLocked || phase === 'brief')) finish();
-    if (phase === 'brief' && e.code === 'Tab' && !e.repeat) {
-      inv.closeArrival();
-      phase = 'exit';
-      t = 1.55;
-      sample(t);
-    }
+    if (phase === 'brief' && e.code === 'Tab' && !e.repeat) finish();
   });
 
   inv.startIntro();
@@ -141,18 +137,22 @@ export function createIntro({ camera, police, controls, inv }) {
       if (phase === 'brief') return;
       t += dt;
       if (phase === 'chase') {
+        inv.beginOpening();
         frameChase();
         if (t >= CHASE) { phase = 'park'; t = 0; }
       } else if (phase === 'park') {
         framePark();
-        if (t >= PARK) {
+        if (t >= PARK + 0.3) {
           placeCar(POLICE_POS.z);
-          phase = 'brief';
+          phase = 'exit';
+          t = 0;
           sample(0);
-          inv.openArrival();
         }
-      } else if (t >= END) finish();
-      else sample(t);
+      } else if (t >= END) {
+        sample(END);
+        phase = 'brief';
+        inv.openArrival();
+      } else sample(t);
     },
   };
 }

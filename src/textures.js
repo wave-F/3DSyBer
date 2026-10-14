@@ -232,27 +232,23 @@ export function loadTexture(name, srgb = true) {
   return t;
 }
 
-// 水洼遮罩：可平铺的灰度斑块
+// 水洼遮罩：整座桥一张，约 10 px/m。不平铺，避免沿路每 11 米重复
 export function puddleTexture() {
-  const S = 512;
-  const [c, g] = canvas(S, S);
+  const S = 128, H = 5120;
+  const [c, g] = canvas(S, H);
   g.fillStyle = '#000';
-  g.fillRect(0, 0, S, S);
+  g.fillRect(0, 0, S, H);
   const r = rng(31);
-  for (let i = 0; i < 90; i++) {
-    const x = r() * S, y = r() * S, rad = 10 + r() * 60;
-    for (const ox of [-S, 0, S]) {
-      for (const oy of [-S, 0, S]) {
-        const grad = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, rad);
-        grad.addColorStop(0, 'rgba(255,255,255,0.55)');
-        grad.addColorStop(1, 'rgba(255,255,255,0)');
-        g.fillStyle = grad;
-        g.fillRect(x + ox - rad, y + oy - rad, rad * 2, rad * 2);
-      }
-    }
+  for (let i = 0; i < 700; i++) {
+    const x = r() * S, y = r() * H, rad = 4 + r() * r() * 48;
+    const grad = g.createRadialGradient(x, y, 0, x, y, rad);
+    grad.addColorStop(0, 'rgba(255,255,255,0.6)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
   }
   const t = toTexture(c, false);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   return t;
 }
 

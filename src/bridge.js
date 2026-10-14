@@ -162,7 +162,7 @@ function roadMaterial() {
   const W = HALF_W * 2 - 1, L = HALF_L * 2;
   const aUV = uv().mul(vec2(W / 4, L / 4));
   const lane = texture(lanes, uv().mul(vec2(1, L / 14)));
-  const puddle = smoothstep(0.15, 0.7, texture(puddles, uv().mul(vec2(W / 11, L / 11))).r);
+  const puddle = smoothstep(0.15, 0.7, texture(puddles, uv()).r);
 
   const mat = new THREE.MeshStandardNodeMaterial();
   const base = mix(texture(diff, aUV).rgb.mul(0.5), lane.rgb.mul(0.7), lane.a);

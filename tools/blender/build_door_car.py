@@ -36,6 +36,76 @@ def append_door():
     return door
 
 
+CABIN_SRC = ROOT / 'art' / 'k042_cabin_parts.blend'   # K042 拆分件 Seat / SteeringColumn（已应用世界变换）
+CABIN_FLOOR = 0.24       # 座舱地板高度（射线测得 0.237）
+DRIVER_X = 0.33          # 驾驶位（左侧，+X）横向中心
+SEAT_S, SEAT_BACK_Y = 0.75, 0.30      # 座椅缩放；靠背最后端 y（后隔板约 0.30）
+STEER_S, STEER_Y, STEER_Z = 0.8, -0.47, 0.60   # 方向盘缩放；盘面（最靠后端）y；转向柱中心高度
+
+
+def cabin_material(name, part):
+    """K042 拆分件的材质槽换成游戏材质（crash.js 按名字识别）"""
+    if 'Slot #3.' in name:
+        name = 'Leather' if part == 'Seat' else 'PlasticMatte'
+    m = bpy.data.materials.get('GC_' + name)
+    return m or bpy.data.materials['GC_PlasticMatte']
+
+
+def load_part(name, part, scale, ratio):
+    with bpy.data.libraries.load(str(CABIN_SRC)) as (src, dst):
+        dst.objects = [name]
+    ob = dst.objects[0]
+    bpy.context.scene.collection.objects.link(ob)
+    me = ob.data
+    pts = [v.co for v in me.vertices]
+    lo = Vector([min(p[i] for p in pts) for i in range(3)]); hi = Vector([max(p[i] for p in pts) for i in range(3)])
+    c = (lo + hi) / 2
+    me.transform(Matrix.Scale(scale, 4) @ Matrix.Translation(-c))
+    # 材质槽压到用到的几种游戏材质
+    used = {}
+    for p in me.polygons:
+        gm = cabin_material(me.materials[p.material_index].name, part)
+        p.material_index = used.setdefault(gm.name, len(used))
+    me.materials.clear()
+    for n in used:
+        me.materials.append(bpy.data.materials[n])
+    if ratio < 1:
+        mod = ob.modifiers.new('dec', 'DECIMATE'); mod.ratio = ratio
+        bpy.context.view_layer.objects.active = ob
+        bpy.ops.object.modifier_apply(modifier='dec')
+    size = (hi - lo) * scale
+    return ob, size
+
+
+def add_cabin(body):
+    """原车座舱只有一个皮革壳。撬开车门后能看到里面，补上两把座椅和驾驶位转向柱，合并进 Body"""
+    parts = []
+    for side in (1, -1):
+        seat, size = load_part('Seat_W', 'Seat', SEAT_S, 0.12)
+        seat.location = (DRIVER_X * side, SEAT_BACK_Y - size.y / 2, CABIN_FLOOR + size.z / 2)
+        parts.append(seat)
+    steer, size = load_part('SteeringColumn_W', 'Steer', STEER_S, 0.5)
+    steer.location = (DRIVER_X, STEER_Y - size.y / 2, STEER_Z)
+    parts.append(steer)
+    # 卡槽锚点：转向柱下方、朝副驾一侧（-X），给 cardSlot.js 用
+    bpy.context.view_layer.update()
+    me = steer.data
+    mw = steer.matrix_world
+    pts = [mw @ v.co for v in me.vertices]
+    low = [p for p in pts if p.z < STEER_Z - size.z * 0.15 and p.y < STEER_Y - 0.05]
+    anchor = Vector((min(p.x for p in low), sum(p.y for p in low) / len(low), sum(p.z for p in low) / len(low))) if low else Vector((DRIVER_X - 0.08, STEER_Y - 0.12, STEER_Z - 0.08))
+    print('CABIN_SLOT_BLENDER', tuple(round(x, 3) for x in anchor))
+    print('STEER bbox', tuple(round(min(p[i] for p in pts), 3) for i in range(3)), tuple(round(max(p[i] for p in pts), 3) for i in range(3)))
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in parts:
+        o.select_set(True)
+    body.select_set(True)
+    bpy.context.view_layer.objects.active = body
+    bpy.ops.object.join()
+    body['cabin_slot'] = list(anchor)
+    return anchor
+
+
 def remove_old_door(body, door):
     """删掉车身里和车门零件重合的面（游戏车身是 K042 合并后的版本，车门那块还在里面）"""
     dm = door.data
@@ -165,6 +235,8 @@ def render(door, tag_angles):
         lo = bpy.data.objects.new(name, ld); sc.collection.objects.link(lo)
         lo.location = loc
         lo.rotation_euler = (Vector((0, 0, 0.5)) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler()
+    ld = bpy.data.lights.new('CabinFill', 'POINT'); ld.energy = 40   # 审阅用：照亮座舱
+    lo = bpy.data.objects.new('CabinFill', ld); sc.collection.objects.link(lo); lo.location = (-0.3, -0.1, 0.85)
     cd = bpy.data.cameras.new('Cam'); cd.lens = 35
     cam = bpy.data.objects.new('Cam', cd); sc.collection.objects.link(cam); sc.camera = cam
     views = {
@@ -172,13 +244,15 @@ def render(door, tag_angles):
         'front34': (-3.4, -3.0, 1.4),
         'close': (-2.2, 1.2, 1.05),
         'inside': (-1.9, -0.4, 1.0),
+        'cabin': (-1.25, -0.05, 0.95),
     }
+    targets = {'inside': (-0.2, -0.2, 0.45), 'cabin': (0.3, -0.5, 0.5)}
     RENDERS.mkdir(parents=True, exist_ok=True)
     for ang in tag_angles:
         door.rotation_euler = (0, 0, math.radians(ang))
         for k, loc in views.items():
             cam.location = loc
-            target = Vector((-0.6, 0.0, 0.5)) if k != 'inside' else Vector((-0.2, -0.2, 0.45))
+            target = Vector(targets.get(k, (-0.6, 0.0, 0.5)))
             cam.rotation_euler = (target - Vector(loc)).to_track_quat('-Z', 'Y').to_euler()
             sc.render.filepath = str(RENDERS / f'{k}_{int(ang):02d}.png')
             bpy.ops.render.render(write_still=True)
@@ -208,6 +282,7 @@ def main():
     door = append_door()
     remove_old_door(body, door)
     setup_door(door, body)
+    add_cabin(body)
     door.rotation_euler = (0, 0, math.radians(AJAR))
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT))
     print('SAVED', OUT)

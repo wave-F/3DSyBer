@@ -2,7 +2,8 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <title>Cyber Bridge</title>
+    <title>零号事故 · ZERO PRIORITY</title>
+    <link rel="preload" as="image" href="/assets/keyart.jpg" />
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
       canvas { display: block; }
@@ -12,14 +13,157 @@
         background: rgba(0, 0, 0, 0.55); color: #e8f6ff; cursor: pointer;
         font-family: "PingFang SC", sans-serif; user-select: none;
       }
-      #overlay h1 { margin: 0; font-size: 36px; color: #3ff; text-shadow: 0 0 12px #3ff; }
+      #overlay h1 { margin: 0 0 8px; font-size: 36px; font-weight: 500; letter-spacing: .4em; color: #e8f6ff; }
+      #overlay .sub { margin: 0 0 18px; font-size: 15px; letter-spacing: .3em; color: #ffcf6a; }
       #overlay p { margin: 0; opacity: 0.8; }
       #overlay.hidden { display: none; }
+
+      /* ---------- 加载界面：主视觉 + 标题 + 耳机提示 + 进度条，加载完成后点击任意位置开始 ---------- */
+      #loading {
+        position: fixed; inset: 0; z-index: 1000; overflow: hidden; background: #000;
+        font-family: "PingFang SC", "Helvetica Neue", sans-serif; color: #eef6ff; user-select: none;
+      }
+      #loading.ready { cursor: pointer; }
+      #loading.gone { display: none; }
+      /* 主视觉：缓慢推近 */
+      .ld-art {
+        position: absolute; inset: -2%; background: url(/assets/keyart.jpg) center 40% / cover no-repeat;
+        animation: ld-push 40s ease-out forwards, ld-in 2.4s ease-out both;
+        filter: saturate(1.05) brightness(.92);
+      }
+      @keyframes ld-push { from { transform: scale(1.0); } to { transform: scale(1.1) translate(-1%, 0.5%); } }
+      @keyframes ld-in { from { opacity: 0; } to { opacity: 1; } }
+      /* 压暗：左侧给标题、底部给耳机和进度条，四角暗角 */
+      .ld-shade {
+        position: absolute; inset: 0;
+        background:
+          linear-gradient(90deg, rgba(0,0,0,.78) 0%, rgba(0,0,0,.42) 34%, rgba(0,0,0,0) 62%),
+          linear-gradient(0deg, rgba(0,0,0,.92) 0%, rgba(0,0,0,.55) 26%, rgba(0,0,0,0) 52%),
+          radial-gradient(ellipse at 60% 40%, rgba(0,0,0,0) 45%, rgba(0,0,0,.55) 100%);
+      }
+      /* 雨丝：两层斜向条纹，速度不同 */
+      .ld-rain, .ld-rain::after {
+        position: absolute; inset: -20% -10%; pointer-events: none;
+        background-image: repeating-linear-gradient(100deg, rgba(200,225,255,0) 0 46px, rgba(200,225,255,.08) 46px 47px, rgba(200,225,255,0) 47px 113px);
+        background-size: 100% 260px;
+        animation: ld-rain .55s linear infinite;
+      }
+      .ld-rain::after { content: ''; inset: 0; opacity: .7; background-size: 100% 170px; animation-duration: .38s; filter: blur(.6px); }
+      @keyframes ld-rain { from { background-position: 0 0; } to { background-position: -46px 260px; } }
+      /* 扫描线和噪点般的轻微闪烁 */
+      .ld-scan {
+        position: absolute; inset: 0; pointer-events: none; mix-blend-mode: overlay; opacity: .35;
+        background: repeating-linear-gradient(0deg, rgba(0,0,0,.5) 0 1px, rgba(0,0,0,0) 1px 3px);
+        animation: ld-flicker 7s steps(1) infinite;
+      }
+      @keyframes ld-flicker { 0%, 100% { opacity: .35; } 61% { opacity: .55; } 62% { opacity: .3; } 63% { opacity: .5; } 64% { opacity: .35; } }
+
+      /* 标题 */
+      .ld-title { position: absolute; left: 8vw; top: 24vh; }
+      .ld-title h1 {
+        margin: 0; font-size: clamp(56px, 7.4vw, 140px); font-weight: 600; letter-spacing: .16em; line-height: 1.05;
+        color: #f4f9ff; text-shadow: 0 0 28px rgba(160,210,255,.25);
+        animation: ld-title 2.2s cubic-bezier(.2,.7,.2,1) .4s both, ld-glitch 9s steps(1) 3s infinite;
+      }
+      @keyframes ld-title { from { opacity: 0; letter-spacing: .4em; filter: blur(8px); } to { opacity: 1; letter-spacing: .16em; filter: blur(0); } }
+      /* 偶发的色散抖动 */
+      @keyframes ld-glitch {
+        0%, 100% { text-shadow: 0 0 28px rgba(160,210,255,.25); transform: none; }
+        40% { text-shadow: -3px 0 rgba(255,60,80,.7), 3px 0 rgba(60,220,255,.7); transform: translateX(2px); }
+        41% { text-shadow: 2px 0 rgba(255,60,80,.6), -2px 0 rgba(60,220,255,.6); transform: translateX(-1px); }
+        42% { text-shadow: 0 0 28px rgba(160,210,255,.25); transform: none; }
+      }
+      .ld-title .rule { width: 0; height: 2px; margin: 26px 0 18px; background: linear-gradient(90deg, #ffffff, rgba(255,255,255,0)); animation: ld-rule 1.4s ease-out 1.6s forwards; }
+      @keyframes ld-rule { to { width: min(420px, 30vw); } }
+      .ld-title .en {
+        font: 500 clamp(14px, 1.15vw, 22px) "SF Mono", Menlo, monospace; letter-spacing: .62em; color: #bfe4ff;
+        animation: ld-fade 1.4s ease-out 2s both;
+      }
+      @keyframes ld-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+      /* 耳机提示：整个加载期间都在 */
+      .ld-phones {
+        position: absolute; left: 50%; bottom: 19vh; transform: translateX(-50%);
+        display: flex; flex-direction: column; align-items: center; gap: 18px;
+        animation: ld-fade 1.2s ease-out .9s both;
+      }
+      .ld-icon { position: relative; width: 84px; height: 84px; display: grid; place-items: center; color: #f4f9ff; }
+      .ld-icon svg { width: 56px; height: 56px; filter: drop-shadow(0 0 10px rgba(160,210,255,.45)); }
+      /* 声波：三圈从耳机向外扩散 */
+      .ld-icon i {
+        position: absolute; inset: 0; border: 1.5px solid rgba(190,228,255,.7); border-radius: 50%;
+        animation: ld-wave 2.7s cubic-bezier(.2,.6,.3,1) infinite; opacity: 0;
+      }
+      .ld-icon i:nth-child(2) { animation-delay: .9s; }
+      .ld-icon i:nth-child(3) { animation-delay: 1.8s; }
+      @keyframes ld-wave { 0% { transform: scale(.75); opacity: .8; } 100% { transform: scale(2.3); opacity: 0; } }
+      .ld-phones .zh { font-size: clamp(18px, 1.45vw, 26px); font-weight: 500; letter-spacing: .32em; color: #f4f9ff; text-shadow: 0 2px 12px rgba(0,0,0,.8); }
+      .ld-phones .en2 { margin-top: -8px; font: 400 clamp(10px, .78vw, 13px) "SF Mono", Menlo, monospace; letter-spacing: .3em; color: rgba(191,228,255,.7); }
+
+      /* 进度条 */
+      .ld-bar { position: absolute; left: 8vw; right: 8vw; bottom: 7.5vh; transition: opacity .6s; animation: ld-fade 1s ease-out 1.2s both; }
+      .ld-bar .row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+      .ld-bar .st { font-size: 14px; letter-spacing: .24em; color: rgba(225,240,255,.78); }
+      .ld-bar .pc { font: 500 15px "SF Mono", Menlo, monospace; letter-spacing: .12em; color: #f4f9ff; }
+      .ld-bar .track { position: relative; height: 2px; background: rgba(255,255,255,.14); }
+      .ld-bar .fill {
+        position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, rgba(160,210,255,.5), #ffffff);
+        box-shadow: 0 0 10px rgba(180,220,255,.8); transition: width .25s linear;
+      }
+      /* 进度条头部的亮点 */
+      .ld-bar .fill::after { content: ''; position: absolute; right: -3px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: #fff; box-shadow: 0 0 14px 4px rgba(190,228,255,.9); }
+      #loading.hide-bar .ld-bar { opacity: 0; animation: none; }
+      /* 进度条藏起之后才淡入「点击开始」 */
+      .ld-start {
+        position: absolute; left: 0; right: 0; bottom: 7.5vh; text-align: center; opacity: 0; pointer-events: none;
+        transition: opacity .8s ease-out;
+      }
+      #loading.ready .ld-start { opacity: 1; }
+      .ld-start .zh { font-size: clamp(18px, 1.35vw, 24px); font-weight: 500; letter-spacing: .5em; color: #ffffff; animation: ld-breath 2.4s ease-in-out infinite; }
+      .ld-start .en { margin-top: 10px; font: 400 12px "SF Mono", Menlo, monospace; letter-spacing: .5em; color: rgba(191,228,255,.65); animation: ld-breath 2.4s ease-in-out infinite; }
+      @keyframes ld-breath { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+      /* 点击后：黑场盖住，再连同黑场一起淡出，露出游戏 */
+      .ld-black { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .6s ease-in; }
+      #loading.closing .ld-black { opacity: 1; }
+      #loading.fading { opacity: 0; transition: opacity 1.1s ease-out; }
     </style>
   </head>
   <body>
-    <div id="overlay">
-      <h1>点击开始</h1>
+    <div id="loading">
+      <div class="ld-art"></div>
+      <div class="ld-rain"></div>
+      <div class="ld-shade"></div>
+      <div class="ld-scan"></div>
+      <div class="ld-title">
+        <h1>零号事故</h1>
+        <div class="rule"></div>
+        <div class="en">ZERO PRIORITY</div>
+      </div>
+      <div class="ld-phones">
+        <div class="ld-icon">
+          <i></i><i></i><i></i>
+          <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 40v-8a20 20 0 0 1 40 0v8" />
+            <rect x="8" y="37" width="11" height="19" rx="4" />
+            <rect x="45" y="37" width="11" height="19" rx="4" />
+          </svg>
+        </div>
+        <div class="zh">佩戴耳机，获得最佳游戏体验</div>
+        <div class="en2">HEADPHONES RECOMMENDED</div>
+      </div>
+      <div class="ld-bar">
+        <div class="row"><span class="st">正在载入程序</span><span class="pc">0%</span></div>
+        <div class="track"><div class="fill"></div></div>
+      </div>
+      <div class="ld-start">
+        <div class="zh">点击任意位置开始</div>
+        <div class="en">CLICK ANYWHERE TO START</div>
+      </div>
+      <div class="ld-black"></div>
+    </div>
+    <div id="overlay" class="hidden">
+      <h1>已暂停</h1>
+      <div class="sub">点击继续</div>
       <p>WASD 移动 · Shift 奔跑 · 鼠标环顾 · Esc 暂停</p>
       <p>靠近可疑处按住 E 分析 · 找不到线索时按 Q 扫描</p>
     </div>

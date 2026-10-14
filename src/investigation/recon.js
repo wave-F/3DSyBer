@@ -6,7 +6,7 @@ import { createActor } from './actors.js';
 import { markKeep } from './mask.js';
 import { addTireTracks } from '../tireTracks.js';
 import { ROUNDS } from './clues.js';
-import { uniform, vec3, float, uv, sin, texture } from 'three/tsl';
+import { uniform, vec3, float, uv, texture, attribute, abs, fract, step, smoothstep } from 'three/tsl';
 
 const BLUE = 0x3fb8ff;
 const ORANGE = 0xff8a1a;
@@ -74,51 +74,183 @@ const YAW_W = -0.9;               // 绕竖直轴的慢转
 const SIM_DT = 1 / 600, SIM_LEN = 3.0;
 const FALL_HIDE_Y = DECK_Y - 12;  // 髋部掉到桥面下这么深后隐藏
 const B_GONE_T = 4.0;
-const P0_R = 3.2;                 // 零号保障边界半径（米）
-const P0_WALL = 1.1;              // 光墙高度
+// 零号保障：画成黄车占用的「保障通道」，而不是罩在车上的光环
+// P0 是道路协同里的一条优先级数据，它的作用是清出路权，所以只画路面：
+// 沿黄车路线向前铺一段车道宽的保留区（虚线边、极淡的填充、远端渐隐），加一行贴地的路面标字
+// 颜色是冷灰白，亮度压在车辆全息体之下；虚线按路线里程固定在路面上，车往前开时像在一路征用前方路面
+const P0_HALF = 1.5;              // 通道半宽（米），约一条车道
+const P0_BACK = 2.6;              // 从车尾往后多铺的长度（米）
+const P0_AHEAD = 18;              // 车头前方保留的长度（米）
+const P0_SEG = 48;                // 通道沿路线的分段数
+const P0_DASH = 1.2;              // 边线虚线周期（米）
+const P0_Y = 0.05;                // 离桥面高度，避免与路面打架
+const P0_TEXT_AHEAD = 5.5;        // 路面标字在车辆中心前方多远（米）
+const P0_WRITE = 0.3;             // 黑梦 4 写入时通道从车尾铺到远端的时长（秒）
 
-function buildP0() {
+// 按里程查路线：把轨迹按固定时间步密集采样成「累计里程 → 位置」表，超出两端时沿端点切线外推
+function buildArcTable(track, t1) {
+  const N = Math.ceil(t1 / 0.002);
+  const xs = new Float32Array(N + 1), zs = new Float32Array(N + 1), ds = new Float32Array(N + 1);
+  const ts = new Float32Array(N + 1);
+  const s = { p: new THREE.Vector3(), yaw: 0 };
+  let d = 0;
+  for (let i = 0; i <= N; i++) {
+    const t = (t1 * i) / N;
+    track.sample(t, s);
+    if (i > 0) d += Math.hypot(s.p.x - xs[i - 1], s.p.z - zs[i - 1]);
+    xs[i] = s.p.x; zs[i] = s.p.z; ds[i] = d; ts[i] = t;
+  }
+  // 端点切线（取一段距离外的点，避免轨迹两端速度为零时方向不稳）
+  const dirAt = (i, j) => {
+    const dx = xs[j] - xs[i], dz = zs[j] - zs[i];
+    const l = Math.hypot(dx, dz) || 1;
+    return [dx / l, dz / l];
+  };
+  const head = dirAt(0, Math.min(N, 20));
+  const tail = dirAt(Math.max(0, N - 20), N);
+  const total = d;
+  // 里程 → 下标（二分）
+  const find = (dist) => {
+    let lo = 0, hi = N;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (ds[m] <= dist) lo = m; else hi = m; }
+    return lo;
+  };
+  return {
+    // 时间 → 里程
+    distAt(t) {
+      const f = THREE.MathUtils.clamp((t / t1) * N, 0, N);
+      const i = Math.min(N - 1, Math.floor(f)), u = f - i;
+      return ds[i] + (ds[i + 1] - ds[i]) * u;
+    },
+    // 里程 → 位置与切线方向（写入 out: {x, z, dx, dz}）
+    at(dist, out) {
+      if (dist <= 0) {
+        out.dx = head[0]; out.dz = head[1];
+        out.x = xs[0] + head[0] * dist; out.z = zs[0] + head[1] * dist;
+        return out;
+      }
+      if (dist >= total) {
+        out.dx = tail[0]; out.dz = tail[1];
+        out.x = xs[N] + tail[0] * (dist - total); out.z = zs[N] + tail[1] * (dist - total);
+        return out;
+      }
+      const i = find(dist);
+      const seg = ds[i + 1] - ds[i];
+      const u = seg > 1e-6 ? (dist - ds[i]) / seg : 0;
+      out.x = xs[i] + (xs[i + 1] - xs[i]) * u;
+      out.z = zs[i] + (zs[i + 1] - zs[i]) * u;
+      // 切线取前后各约 1 m 的弦，平滑一些
+      const a = find(Math.max(0, dist - 1)), b = Math.min(N, find(Math.min(total, dist + 1)) + 1);
+      const dx = xs[b] - xs[a], dz = zs[b] - zs[a];
+      const l = Math.hypot(dx, dz);
+      if (l > 1e-6) { out.dx = dx / l; out.dz = dz / l; }
+      return out;
+    },
+  };
+}
+
+function buildP0(arc) {
   const group = new THREE.Group();
   group.visible = false;
-  const glow = uniform(1);
+  const glow = uniform(1);    // 整体亮度
+  const reveal = uniform(1);  // 通道从车尾铺到远端的进度（0~1），黑梦 4 写入时用
+  const textK = uniform(1);   // 路面标字亮度
   const add = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false };
-  // 贴地圆环
-  const ringMat = markKeep(new THREE.MeshBasicNodeMaterial(add));
-  ringMat.colorNode = vec3(1, 1, 1).mul(glow).mul(2.2);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(P0_R - 0.07, P0_R, 128), ringMat);
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.06;
-  // 光墙：底部最亮，向上渐隐，带细竖纹
-  const wallMat = markKeep(new THREE.MeshBasicNodeMaterial(add));
-  const fade = float(1).sub(uv().y).pow(2.2);
-  const ribs = sin(uv().x.mul(Math.PI * 2 * 48)).mul(0.25).add(0.75);
-  wallMat.colorNode = vec3(0.85, 0.93, 1).mul(fade).mul(ribs).mul(glow).mul(0.55);
-  const wall = new THREE.Mesh(new THREE.CylinderGeometry(P0_R, P0_R, P0_WALL, 128, 1, true), wallMat);
-  wall.position.y = P0_WALL / 2 + 0.05;
-  // 标牌：始终朝向镜头
+  const TINT = vec3(0.74, 0.82, 0.9);
+
+  // 通道：一条沿路线的三角带，每帧按当前车位重算顶点
+  const verts = (P0_SEG + 1) * 2;
+  const pos = new Float32Array(verts * 3);
+  const dist = new Float32Array(verts);    // 路线里程（米），给虚线用，固定在路面上
+  const along = new Float32Array(verts);   // 0 车尾 → 1 远端
+  const uvs = new Float32Array(verts * 2); // x：0 左边线 → 1 右边线
+  const index = [];
+  for (let i = 0; i <= P0_SEG; i++) {
+    const f = i / P0_SEG;
+    along[i * 2] = f; along[i * 2 + 1] = f;
+    uvs[i * 4] = 0; uvs[i * 4 + 1] = f;
+    uvs[i * 4 + 2] = 1; uvs[i * 4 + 3] = f;
+    if (i < P0_SEG) {
+      const a = i * 2;
+      index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  const posAttr = new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage);
+  const distAttr = new THREE.BufferAttribute(dist, 1).setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute('position', posAttr);
+  geo.setAttribute('p0dist', distAttr);
+  geo.setAttribute('p0along', new THREE.BufferAttribute(along, 1));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  geo.setIndex(index);
+
+  const laneMat = markKeep(new THREE.MeshBasicNodeMaterial(add));
+  {
+    const f = attribute('p0along', 'float');
+    const d = attribute('p0dist', 'float');
+    const across = abs(uv().x.mul(2).sub(1));                  // 0 中线 → 1 边线
+    const edge = smoothstep(0.955, 0.985, across);              // 边线约 5 cm
+    const dash = step(0.45, fract(d.div(P0_DASH)));             // 虚线，固定在路面里程上
+    const fill = float(0.035).add(across.pow(6).mul(0.04));     // 极淡的填充，靠边略亮
+    const ends = smoothstep(0, 0.05, f).mul(float(1).sub(smoothstep(0.55, 1, f)));
+    const shown = step(f, reveal);                               // 写入时只显示已铺到的部分
+    const front = float(1).sub(smoothstep(0, 0.06, abs(f.sub(reveal)))).mul(float(1).sub(step(0.999, reveal))).mul(0.5); // 正在铺的前沿
+    laneMat.colorNode = TINT.mul(edge.mul(dash).mul(0.5).add(fill).add(front)).mul(ends).mul(shown).mul(glow);
+  }
+  const lane = new THREE.Mesh(geo, laneMat);
+  lane.frustumCulled = false;
+
+  // 路面标字：像路面标线一样平铺在通道里，字头朝行驶方向（从车后方看是正的）
   const c = document.createElement('canvas');
-  c.width = 512; c.height = 128;
+  c.width = 512; c.height = 192;
   const g = c.getContext('2d');
-  g.strokeStyle = '#ffffff'; g.lineWidth = 4;
-  g.strokeRect(6, 14, 500, 100);
   g.fillStyle = '#ffffff';
-  g.font = '600 64px "SF Mono", Menlo, monospace';
+  g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText('P0', 30, 66);
-  g.font = '500 30px "PingFang SC", sans-serif';
-  g.fillText('零号保障 · ZERO PRIORITY', 130, 66);
+  g.font = '600 92px "SF Mono", Menlo, monospace';
+  g.fillText('P0', 256, 62);
+  g.font = '500 38px "PingFang SC", sans-serif';
+  g.fillText('零号保障 · 让行区', 256, 150);
   const map = new THREE.CanvasTexture(c);
   map.colorSpace = THREE.SRGBColorSpace;
-  const tagMat = markKeep(new THREE.SpriteNodeMaterial({ ...add, side: THREE.FrontSide }));
-  tagMat.colorNode = texture(map).rgb.mul(texture(map).a).mul(glow).mul(1.6);
-  const tag = new THREE.Sprite(tagMat);
-  tag.scale.set(2.4, 0.6, 1);
-  tag.position.y = 2.1;
-  group.add(ring, wall, tag);
+  map.anisotropy = 8;
+  const textMat = markKeep(new THREE.MeshBasicNodeMaterial(add));
+  textMat.colorNode = TINT.mul(texture(map).a).mul(textK).mul(glow).mul(0.45);
+  const text = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.825), textMat);
+  text.rotation.x = -Math.PI / 2; // 平放后，贴图的「上」朝向本地 -Z
+  const textHolder = new THREE.Group();
+  textHolder.add(text);
+  textHolder.position.y = DECK_Y + P0_Y + 0.005;
+
+  group.add(lane, textHolder);
+  const pt = { x: 0, z: 0, dx: 0, dz: 1 };
   return {
     group,
-    // s：缩放；k：亮度倍数
-    set(s, k) { ring.scale.setScalar(s); wall.scale.set(s, 1, s); glow.value = k; },
+    // t：回放时间（黄车所在位置）；k：亮度倍数；r：铺开进度；tk：标字亮度
+    set(t, k, r, tk) {
+      const d0 = arc.distAt(t);
+      const a = d0 - P0_BACK, b = d0 + P0_AHEAD;
+      for (let i = 0; i <= P0_SEG; i++) {
+        const dd = a + ((b - a) * i) / P0_SEG;
+        arc.at(dd, pt);
+        // 左法线（行驶方向的左侧）：(dz, -dx)
+        const nx = pt.dz * P0_HALF, nz = -pt.dx * P0_HALF;
+        const j = i * 6;
+        pos[j] = pt.x + nx; pos[j + 1] = DECK_Y + P0_Y; pos[j + 2] = pt.z + nz;
+        pos[j + 3] = pt.x - nx; pos[j + 4] = DECK_Y + P0_Y; pos[j + 5] = pt.z - nz;
+        dist[i * 2] = dd; dist[i * 2 + 1] = dd;
+      }
+      posAttr.needsUpdate = true;
+      distAttr.needsUpdate = true;
+      arc.at(d0 + P0_TEXT_AHEAD, pt);
+      textHolder.position.x = pt.x;
+      textHolder.position.z = pt.z;
+      // 让本地 -Z 对准行驶方向：(−sinθ, −cosθ) = (dx, dz)
+      textHolder.rotation.y = Math.atan2(-pt.dx, -pt.dz);
+      glow.value = k;
+      reveal.value = r;
+      textK.value = tk;
+    },
   };
 }
 
@@ -226,9 +358,9 @@ export function createRecon(scene, crash) {
   // 第二段黑梦才有黄车，胎痕跟着这条路线铺在回放里，探索时不显示
   const bSkids = addTireTracks(root, TRACK_B.curve, { offsets: [-0.85, 0.85], width: 0.265, seed: 811, opacity: 0.75, keep: true });
 
-  // 零号保障边界：贴地白环 + 向上渐隐的光墙 + 「P0」标牌，跟着黄车走
-  // actors.p0 为出现时刻：黑梦 3 为 0（看起来一直都有），黑梦 4 在两车接近时突然生成并闪一下
-  const p0 = buildP0();
+  // 零号保障：黄车前方的保障通道 + 路面标字，跟着黄车走（见 buildP0）
+  // actors.p0 为出现时刻：黑梦 3 为 0（看起来一直都有），黑梦 4 在两车接近时被写入，通道从车尾一路铺到前方
+  const p0 = buildP0(buildArcTable(TRACK_B, B_GONE_T));
   root.add(p0.group);
 
   let actors = { carB: true };
@@ -272,12 +404,13 @@ export function createRecon(scene, crash) {
     const appear = actors.p0;
     p0.group.visible = appear != null && carB.visible && t >= appear;
     if (p0.group.visible) {
-      p0.group.position.set(carB.position.x, DECK_Y, carB.position.z);
-      // 突然生成：先放大、过曝、闪两下，0.4 秒内落定
+      // 写入：不闪不爆，通道在 P0_WRITE 秒内从车尾铺到远端，边线短暂提亮后回落；标字在通道铺过它之后淡入
       const k = appear > 0 ? t - appear : Infinity;
-      const flare = Math.exp(-k * 7);
-      const blink = k < 0.18 && Math.floor(k * 40) % 2 === 1 ? 0.15 : 1;
-      p0.set(1 + flare * 0.5, (1 + flare * 3) * blink);
+      const r = Math.min(1, k / P0_WRITE);
+      const lift = 1 + 0.6 * Math.exp(-k * 5);
+      const textAt = (P0_BACK + P0_TEXT_AHEAD) / (P0_BACK + P0_AHEAD);
+      const tk = THREE.MathUtils.clamp((k - textAt * P0_WRITE) / 0.15, 0, 1);
+      p0.set(t, lift, r, tk);
     }
 
     if (victim) updateVictim(t);
