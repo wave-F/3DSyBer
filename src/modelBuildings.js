@@ -36,7 +36,10 @@ const UP = new THREE.Vector3(0, 1, 0);
 const MAX_LIGHTS = 4;
 const BOX_GLOW = '#ffe6b0';
 
-// 占地矩形（世界坐标，含外挑件），供程序楼避让
+// 占地矩形 [x0, x1, z0, z1]（世界坐标，含外挑件）
+export const MODEL_FOOTPRINTS = LAYOUT.footprints;
+
+// 占地矩形加边距，供程序楼避让
 export function modelFootprints(margin = 3) {
   return LAYOUT.footprints.map(([x0, x1, z0, z1]) => ({ x0: x0 - margin, x1: x1 + margin, z0: z0 - margin, z1: z1 + margin }));
 }

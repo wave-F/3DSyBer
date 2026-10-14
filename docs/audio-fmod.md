@@ -1,65 +1,109 @@
-# 3DSyBer · FMOD 音频工作台
+# 3DSyBer · FMOD 音频
 
-## 打开
+目标是写实：雨夜高架上的环境、角色的 Foley、克制的 UI 音，以及只给扫描 / 分析用的高科技音色。
 
-- **FMOD Studio 工程**：`Fmod/3DSyBer/3DSyBer.fspro`
-- **独立试听页**：运行 `npm run dev`，访问终端地址的 `/audio.html`。
-- **测试 Event**：`event:/test/ping`，位于 `Preview` Bank。
+## 流水线
 
-工程由 FMOD Studio **2.03.14** 新建，含完整 Metadata 和原创测试 WAV，可直接在 Studio 中编辑。测试音是 0.65 秒、660 / 990 Hz 双音电子 Ping（48 kHz / 16-bit / mono）。
+下图为首次制作流程；手工调音后的日常同步只运行 `audio:build`，不要重复执行素材、事件或混音生成。
 
-游戏入口没有导入音频模块，也不会加载 Bank 或发声。试听页仅使用本工程新导出的 `Master.bank`、`Master.strings.bank`、`Preview.bank`；旧 SFX / Ambience Bank 已移除。`fmodstudioL.js` 与 `.wasm` 是参考工程提供的 FMOD 通用运行库，不含声音内容。
+```text
+Freesound (CC0)  →  Fmod/source/*.mp3 + credits.json        npm run audio:fetch
+   ↓ 剪辑 / 分层 / EQ / 回声 / 淡变 / 标准化（DAW 式 EDL）    npm run audio:design
+Fmod/3DSyBer/Assets/{amb,foley,ui,scifi}/*.wav
+   ↓ FMOD Studio 脚本建 Event / 总线 / Bank                    npm run audio:events
+   ↓ 在手工 amb 事件上搭 3D / 子总线 / Snapshot / VCA          npm run audio:mix
+Fmod/3DSyBer/3DSyBer.fspro
+   ↓ 构建 Desktop Bank 并同步                                  npm run audio:build
+public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
+```
 
-## 日常制作流程
+- `scripts/freesound.mjs`：`search` 检索 CC0 素材，`get <id> <name>` 下载并登记出处，`fetch` 按 `credits.json` 重新下载。原始 mp3 不入库。
+- `scripts/sound-design.mjs`：编辑工程。每个输出是若干片段（素材、起点、长度、处理链、偏移、增益）的混音，再过母带链。脚步起点来自 onset 分析。环境声用尾部叠回开头做无缝循环，按 LUFS 标准化；单发音效按峰值标准化。传参只渲染名字匹配的文件，例如 `npm run audio:design -- step_walk`。
+- `Fmod/build-events.js`：首次创作脚本，会重建 `ui` / `scifi` 并重设总线增益。**当前 `scifi` 已手工替换素材，不可用于日常同步**，否则会丢失替换和调音；手工制作的 `amb`、`foley/FootStep`、`foley/ClothFoley` 和 `test/ping` 不动。
+- `Fmod/setup-mix.js`：只增改不重建，可重复执行。`amb` 是在 Studio 里手工做的，脚本只给它加路由、Spatializer、Snapshot、VCA；手工 Foley 仅接回 `FOLEY` 总线并分配到 `Main` Bank。跑完 `audio:events` 后要再跑一次。
+- CLI 读的是磁盘内容，Studio 里改完要先保存。
 
-1. 在 Studio 打开 `Fmod/3DSyBer/3DSyBer.fspro`。
-2. 创建 / 编辑 Event，导入素材并分配到 Bank，然后保存。
-3. 在 `src/audio/events.js` 登记预览事件（路径、名称、描述、Bank）；新增 Bank 时也更新 `BANKS` 数组。
-4. 执行 `npm run audio:build`：使用本机 FMOD Studio 构建 Desktop Bank，并同步到 `public/fmod/`。
-5. 刷新 `/audio.html`，点击「启用音频」或事件的「播放」。
+### 手工调音后的同步（默认流程）
 
-本页支持主音量、停止全部、后台停止试听和加载错误提示。默认不自动播放，也不依赖游戏场景。
+在 Studio 保存工程后，只运行 `npm run audio:build`，再运行 `npm run build` 更新 Web 产物。前者仅编译 / 复制 Bank，不重建事件、不改 Studio 音量；后者仅打包 Web。
 
-> CLI 构建读取磁盘内容，请先在 Studio 保存修改。FMOD Studio 升级时，浏览器 JS / WASM 也应保持版本兼容。
+游戏不设置事件、总线或 VCA 的额外增益，已移除衣物、UI、分析声的代码音量倍率。后续新增动作也只触发事件，不在代码里调音。音量、随机音量、Snapshot、距离衰减均由 Studio 控制；黑梦 / 平板仍正常切换已制作的 Snapshot。
+
+`audio:events` / `audio:mix` 默认拒绝执行；只有重新创作事件 / 混音且明确接受覆盖风险时才用 `FMOD_ALLOW_REAUTHOR=1 npm run audio:events` 或 `FMOD_ALLOW_REAUTHOR=1 npm run audio:mix`。日常调音同步不要运行 `audio:design` / `audio:events` / `audio:mix`。
+
+### 手工替换的 scifi 素材
+
+以下替换已同步到 Web Bank；保持原事件路径、触发时机、分析进度音高与停止逻辑，不在 Web 中设置事件 / 总线 / VCA 音量。后续音量只在 Studio 调整，保存后运行 `audio:build` 和 `build`。
+
+| Event（`event:/scifi/`） | Studio 素材 |
+|------------------------|-------------|
+| `scan_pulse` | `20Scan_enter.wav` |
+| `analyze_loop` | `21Scan_progress.wav` |
+| `analyze_complete` | `22Scan_complete.wav` |
+| `analyze_cancel` | `23Scan_cancel.wav` |
+| `dream_enter` | `24dream_enter.wav` |
+| `dream_exit` | `25dream_exit.wav` |
+
+`npm run test:audio` 覆盖这组事件的路径、分析起停、音高以及不写音量的约束。当前分析素材由 Studio 定义为约 2.89 秒，游戏分析仍为 1.4 秒，完成或中断时照常停止；不为同步而重建 Loop Region 或包络。
+
+## 混音结构
+
+总线 `AMB`（带低通）`FOLEY` `UI` `SCIFI` 都接 Master，音量以 Studio 当前设置为准。`AMB` 下分 `Bed` `City` `Crowd` `RainHits`。全部事件进 `Main` Bank；Snapshot、总线、VCA 自动进 `Master` Bank，**不要把 Snapshot 分配到 Main**：Studio 2.03.14 会在往这个 Bank 加事件时卡死。
+
+- 循环事件用时间线 + Loop Region：触发一次就一直循环。主轨上的 AHDSR 负责起播淡入，`stop(ALLOWFADEOUT)` 时淡出。没有参数。
+- `amb/rain` `amb/traffic` → `AMB/Bed`。2D 立体声铺底，跟着头走。
+- `amb/Amb_1` `Amb_2` `Amb_4` → `AMB/City`，`amb/Amb_3`（人群）→ `AMB/Crowd`。
+- `amb/Amb_5_rain` `Amb_6_rain`（雨打物体）→ `AMB/RainHits`，范围 6–45 m。`city.js` 给每栋楼朝桥的立面外 1 m、桥面高度放一个声源点（立面超过 24 m 放两个），两种素材交替使用；每个实例随机起点、音高 ±6%，避免多个实例同相叠加。离玩家活动范围超过 45 m 的点不建实例，现在共 21 个。都是 3D 点声源，用 FMOD Spatializer（Inverse Tapered，User 包络），到最大距离时静音。位置写在 `src/audio/sound.js` 的 `EMITTERS`。听者每帧跟着相机的位置和朝向走；FMOD 用右手坐标系（`INIT_3D_RIGHTHANDED`），与 three.js 相同，单位米。
+- Snapshot（Overriding，强度用 AHDSR 淡入淡出；下列为初始制作值，手工调整后以 Studio 当前值为准）：
+  - `Dream`（黑梦，1.5 s）：Bed -8 dB、City -20 dB、Crowd -26 dB、RainHits -12 dB，AMB 低通降到 1.1 kHz。
+  - `Tablet`（平板举起，0.4 / 0.5 s）：AMB -7 dB（比平时低 5 dB）。
+- VCA：`Ambience`（AMB）、`SFX`（FOLEY + SCIFI）、`UI`。游戏不覆盖 VCA 音量；试听页首次启用读取当前值，只有手动拖动推子才改变该页的播放增益，不回写 Studio。
+- 多变体事件（脚步、衣物）用 Multi Instrument 随机播放，并加音高 / 音量随机器。
+
+## 事件与触发点
+
+| Event | 触发 |
+|-------|------|
+| `amb/rain` `amb/traffic` `amb/Amb_1..4` `amb/Amb_5_rain` `amb/Amb_6_rain` | 第一次点击「点击开始」时各触发一次，之后一直循环 |
+| `snapshot:/Dream` | 进入 / 离开黑梦 |
+| `snapshot:/Tablet` | 平板打开期间 |
+| `foley/FootStep` | 与手持设备的 8 字行走晃动共用 `player.js` 的 `gait`；每次竖直下沉到最低点（`phase = π/2 + nπ`）单次触发。保留原设备的平滑速度 / 频率，稳态走路约 0.403 s、跑步约 0.224 s 一步；只改触发间隔，不改音量或素材音高。走 / 跑切换保留步相，撞墙 / 静止不落脚，暂停 / 平板 / 过场 / 相机跳点不补播 |
+| `foley/ClothFoley` | 每一步与 FootStep 叠加；停步、原地明显转身（约 20°，最短间隔 0.35 s）、扫描仪拿出 / 收起、Q 扫描举起 / 放下、分析举起 / 放下、平板拿出 / 收起时各单次触发；静止待机、细小视角抖动和呼吸动画不触发 |
+| `ui/panel_open` / `panel_close` | 打开 / 收起平板，保留原有 UI 声，与衣物声独立叠加 |
+| `ui/hover` | 平板上指向新按钮；W/A/S/D 切页切条目 |
+| `ui/click` / `ui/deny` | 平板上点到按钮 / 点到空白或平板外；测试按钮 |
+| `ui/panel_open` | 线索卡弹出 |
+| `ui/toast` / `ui/confirm` | 普通提示 / 常驻大提示 |
+| `ui/radio_on` / `radio_off` | 无线电通话开始 / 结束 |
+| `ui/record` | 黑梦里记录事件 |
+| `scifi/scan_pulse` | Q 扫描。前 0.5 秒充能，与举枪同长，脉冲落在发射那一刻 |
+| `scifi/analyze_loop` | 按住 E 分析期间循环，音高随进度从 0.85 升到 1.4 |
+| `scifi/analyze_complete` / `analyze_cancel` | 分析完成 / 中途松开或移开准星 |
+| `scifi/dream_enter` / `dream_exit` | 进入 / 离开黑梦 |
+
+`src/audio/sound.js` 是游戏侧入口：页面加载时预载 Bank，在开始点击里初始化，在主循环里 `update`。FMOD 没就绪或出错时，所有调用都是空操作，只在控制台警告，不影响游戏。切到后台时静音。
+
+角色动作统一使用 `sound.step()`（FootStep + ClothFoley）和 `sound.cloth()`（仅 ClothFoley）；新动作也走这两个入口。Foley 事件路径大小写与 Studio 完全一致，均为单次事件，不启动循环；素材、随机音高和混音由 Studio 保持控制。手工修改后保存工程并执行 `npm run audio:build` 同步浏览器 Bank。
+
+`main.js` 每帧先以真实帧时长更新玩家（移动倍率单独传入，黑梦减速也保持实际速度），再把同一份 `updatePlayer.gait` 经调查状态传给 `viewmodel.js` 渲染。不要在设备里再建独立的走路计时器，也不要重新按步长定时播放脚步；设备隐藏时步相仍正常工作。静止呼吸、视角弹簧和分析动作不触发脚步。
+
+## 试听
+
+`npm run dev` 后打开 `/audio.html`，可以单独试听全部事件（清单在 `src/audio/events.js`），也可以显式推 VCA、开关 Snapshot；默认不写入音量，启用音频后才可拖动推子。循环事件会一直播，点「停止全部」停止。
+
+## 素材出处
+
+全部为 Freesound 上的 CC0 素材，ID、标题和链接见 `Fmod/source/credits.json`。下载的是 Freesound 的 HQ 预览（128 kbps mp3），不是原始文件。原始 WAV 要登录下载；以后需要更高音质，用同名文件替换后重跑 `audio:design`。
 
 ## 命令
 
 ```sh
-npm run audio:create-test  # 生成测试 WAV 并创建测试 Event；已有素材和 Event 不覆盖
-npm run audio:build        # 构建并同步 Bank
-npm run dev               # 开发服务器，打开 /audio.html
-npm run build             # 同时构建游戏和试听页，产物 dist/audio.html
-npm run preview           # 预览生产构建
+npm run audio:fetch    # 按 credits.json 下载原始素材
+npm run audio:design   # 渲染编辑后的 WAV
+npm run audio:events   # 重新创作事件（默认阻止，须显式 FMOD_ALLOW_REAUTHOR=1）
+npm run audio:mix      # 重建混音（默认阻止，须显式 FMOD_ALLOW_REAUTHOR=1）
+npm run audio:build    # 构建 Bank 并同步到 public/fmod/
+npm run test:audio     # Foley / scifi 触发与音量保护回归测试（无需浏览器 / 声卡）
 ```
 
-默认使用 macOS `/Applications/FMOD Studio.app/Contents/MacOS/fmodstudio`。可用 `FMOD_STUDIO_BIN` 环境变量指定其他安装位置。脚本使用 FMOD 官方脚本 API 与命令行模式，无需在 Studio 中启用 TCP 脚本服务。
-
-## 目录
-
-```text
-Fmod/
-  3DSyBer/
-    3DSyBer.fspro       Studio 工程入口
-    Metadata/          Event / Bank / Mixer 等源配置，纳入版本控制
-    Assets/test/       原创 ping.wav，纳入版本控制
-    Build/Desktop/     Studio 导出目录，忽略版本控制
-  create-test-event.js  幂等测试事件创建脚本
-scripts/
-  generate-test-tone.mjs
-  fmod.mjs             构建及 Bank 同步
-public/fmod/           网页运行库与当前工程 Bank
-src/audio/events.js    试听清单
-src/audio/fmodRuntime.js
-src/audio-bench.js
-src/audio-bench.css
-audio.html
-```
-
-`.cache`、`.user`、`.unsaved` 与 `Build` 都是本地工作文件，不提交。`public/fmod/*.bank` 是网页发布资源，纳入版本控制。整个目录可移动；Studio 使用默认的项目相对 `Build` 目录，脚本没有硬编码工程绝对路径。
-
-## 检查
-
-- 首次打开不自动发声；点击播放应听见一个短双音 Ping。
-- 停止全部 / 切后台应停止当前事件；调音量后重新播放可比较响度。
-- Network 中仅出现本工程的三个 Bank，无 CozyTavern 音效或 Bank。
-- 游戏 `/` 页面不应请求 FMOD 运行库或 Bank。
+默认使用 `/Applications/FMOD Studio.app/Contents/MacOS/fmodstudio`（2.03.14），可以用 `FMOD_STUDIO_BIN` 指定其他路径。浏览器端的 `fmodstudioL.js` / `.wasm` 要和 Studio 版本兼容。

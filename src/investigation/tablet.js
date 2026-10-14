@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { sound } from '../audio/sound.js';
 import { mrt, float, uv, vec2, vec3, color, smoothstep, sin, fract, texture, uniform } from 'three/tsl';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { uiTime } from './clock.js';
@@ -648,6 +649,8 @@ export function createTablet(camera) {
     if (!canPoint()) return;
     state.hover = pick(e);
     const r = state.hover && hitTest(state.hover);
+    if (r && !(r.x === state.hoverRegion?.x && r.y === state.hoverRegion?.y)) sound.play('ui/hover');
+    state.hoverRegion = r;
     document.body.style.cursor = r ? (r.cursor ?? 'pointer') : '';
     state.dirty = true;
   });
@@ -655,8 +658,11 @@ export function createTablet(camera) {
     if (!canPoint()) return;
     if (e.target.closest('button')) return;
     const p = pick(e);
+    // 点到平板外：收起平板（不播拒绝音）
     if (!p) { onBlank?.(); return; }
     const r = hitTest(p);
+    // 点到可交互区域是确认音，点到平板空白是拒绝音
+    sound.play(r ? 'ui/click' : 'ui/deny');
     if (r) r.fn(e);
     // 立即重绘，点击区域马上更新（不等下一帧，连续快速点击也不会点到旧区域）
     draw();
@@ -696,11 +702,14 @@ export function createTablet(camera) {
     else if (code === 'KeyW' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + m - 1) % m; state.typeT = 0; }
     else if (code === 'KeyS' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + 1) % m; state.typeT = 0; }
     else return false;
+    sound.play('ui/hover');
     state.dirty = true;
     return true;
   }
 
   function toggle(on = !state.open) {
+    if (on === state.open) return;
+    sound.cloth();
     state.open = on;
     if (on) { state.boot = 0; state.typeT = 0; state.dirty = true; }
     else {

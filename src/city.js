@@ -1,12 +1,12 @@
 import * as THREE from 'three/webgpu';
 import { rng, farWindowTexture } from './textures.js';
-import { HALF_W } from './bridge.js';
+import { HALF_W, DECK_Y } from './bridge.js';
 import { createBuildingKit } from './buildings.js';
 import { createSignKit } from './signs.js';
 import { MEGA } from './sky.js';
 import { adGlowAt } from './ads.js';
 import { gameTime } from './investigation/clock.js';
-import { modelFootprints, placeModelSigns, loadModelBuildings, NEAR_Z } from './modelBuildings.js';
+import { modelFootprints, placeModelSigns, loadModelBuildings, NEAR_Z, MODEL_FOOTPRINTS } from './modelBuildings.js';
 import { addLightGroup } from './debugLights.js';
 
 const NEAR_STYLES = [['resi', 0.38], ['kitsch', 0.27], ['office', 0.25], ['corp', 0.1]];
@@ -30,6 +30,20 @@ export function buildCity(scene) {
   const kit = createBuildingKit();
   const signs = createSignKit(scene, r);
   const screenLights = [];
+  // 雨打在楼上的声源点：每栋楼朝桥立面外 1 m、桥面高度；立面超过 24 m 放两个
+  const rainSpots = [];
+  const addRainSpots = (x, z, width) => {
+    const n = width > 24 ? 2 : 1;
+    for (let i = 0; i < n; i++) rainSpots.push({ x, y: DECK_Y, z: z + (n > 1 ? (i - 0.5) * width / 2 : 0) });
+  };
+  const rainOnFacade = (b) => {
+    const f = b.faces.find((face) => face.toBridge && face.sec === 0);
+    if (f) addRainSpots(f.c.x + f.n.x, f.c.z, f.width);
+  };
+  for (const [x0, x1, z0, z1] of MODEL_FOOTPRINTS) {
+    const side = Math.sign(x0 + x1);
+    addRainSpots(side > 0 ? x0 - 1 : x1 + 1, (z0 + z1) / 2, z1 - z0);
+  }
 
   // 近景段（Blender 布局覆盖的沿桥范围）只用模型楼；其余地段程序楼避开模型楼占地
   const taken = modelFootprints();
@@ -45,6 +59,7 @@ export function buildCity(scene) {
       if (!blocked(side * (x0 + w / 2), z + d / 2, w, d)) {
         const b = kit.building({ x: side * (x0 + w / 2), z: z + d / 2, w, d, h: 32 + r() * 70, style: weighted(NEAR_STYLES), side, r });
         decorate(b, side, true);
+        rainOnFacade(b);
       }
       z += d + 3 + r() * 9;
     }
@@ -55,6 +70,7 @@ export function buildCity(scene) {
       if (!blocked(side * (x0 + w / 2), z + d / 2, w, d)) {
         const b = kit.building({ x: side * (x0 + w / 2), z: z + d / 2, w, d, h: 60 + r() * 110, style: weighted(MID_STYLES), side, r });
         decorate(b, side, false);
+        rainOnFacade(b);
       }
       z += d + 4 + r() * 14;
     }
@@ -79,9 +95,11 @@ export function buildCity(scene) {
   });
 
   // 灯色跟着大屏当前的广告换
-  return function update() {
+  function update() {
     for (const light of screenPoints) if (light.userData.slot) adGlowAt(light.userData.slot, gameTime.value, light.color);
-  };
+  }
+  update.rainSpots = rainSpots;
+  return update;
 
   function decorate(b, side, near) {
     for (const face of b.faces) {

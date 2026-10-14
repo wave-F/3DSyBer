@@ -37,6 +37,10 @@ code { font-family: 'SFMono-Regular', Consolas, monospace; color: #73dccc; font-
 .tag { display: inline-block; border: 1px solid #304b58; padding: 4px 8px; border-radius: 4px; color: #8da8b7; font: 11px monospace; }
 .events { display: grid; gap: 14px; }
 .play { min-width: 100px; }
+.mixer-row { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; }
+.mixer-row + .mixer-row { margin-top: 18px; }
+.mixer .volume { margin-left: 0; }
+button.on { background: #73dccc33; border-color: #73dccc; color: #d5fff8; }
 .project { margin-top: 32px; background: #10192088; border-color: #1e303b; }
 dl { display: grid; grid-template-columns: 155px 1fr; gap: 14px; margin: 24px 0 0; }
 dt { font-size: 10px; color: #617e8f; padding-top: 3px; }

@@ -34,6 +34,8 @@ export class FmodRuntime {
   disposed = false;
   descriptions = new Map();
   loops = new Map();
+  snapshots = new Map();
+  vcas = new Map();
   // 保留有效句柄直到 STOPPED 再 release，避免操作已释放的一次性实例。
   oneShots = new Set();
 
@@ -75,7 +77,9 @@ export class FmodRuntime {
         if (this.core.getDriverInfo(0, null, null, rate, null, null) === f.OK && rate.val) {
           this.check(this.core.setSoftwareFormat(rate.val, f.SPEAKERMODE_DEFAULT, 0), 'sample rate');
         }
-        this.check(this.system.initialize(128, f.STUDIO_INIT_NORMAL, f.INIT_NORMAL, null), 'initialize');
+        // 右手坐标系，与 three.js 一致：位置、朝向直接传世界坐标（米）
+        this.check(this.system.initialize(128, f.STUDIO_INIT_NORMAL, f.INIT_NORMAL | f.INIT_3D_RIGHTHANDED, null), 'initialize');
+        this.attributes = f._3D_ATTRIBUTES();
         for (const { file, bytes } of this.banks) {
           const bank = {};
           this.check(this.system.loadBankMemory(bytes, bytes.byteLength, f.STUDIO_LOAD_MEMORY, f.STUDIO_LOAD_BANK_NORMAL, bank), `load ${file}`);
@@ -122,11 +126,12 @@ export class FmodRuntime {
     return out.val;
   }
 
-  play({ path, volume = 1, pitch = 1, parameters = {} }) {
+  play({ path, volume, pitch = 1, parameters = {} }) {
     const inst = this.instance(path);
     if (!inst) return;
     try {
-      this.check(inst.setVolume(volume), `volume ${path}`);
+      // 不传 volume 就完全沿用 Bank；仅供试听工具显式设置实例增益。
+      if (volume !== undefined) this.check(inst.setVolume(volume), `volume ${path}`);
       this.check(inst.setPitch(pitch), `pitch ${path}`);
       for (const [name, value] of Object.entries(parameters)) {
         this.check(inst.setParameterByName(name, value, false), `parameter ${name}`);
@@ -136,19 +141,75 @@ export class FmodRuntime {
     } catch (error) { inst.release(); throw error; }
   }
 
-  setLoopLevel(path, level) {
+  // 循环事件：触发一次后由 FMOD 的 Loop Region 一直循环。position 给 3D 事件定位
+  startLoop(path, position) {
     if (!this.ready) return;
     let inst = this.loops.get(path);
-    if (!inst) {
-      if (level <= 0) return;
-      inst = this.instance(path);
-      if (!inst) return;
-      try {
-        this.check(inst.setParameterByName('level', level, false), `level ${path}`);
-        this.check(inst.start(), `loop ${path}`);
-        this.loops.set(path, inst);
-      } catch (error) { inst.release(); throw error; }
-    } else this.check(inst.setParameterByName('level', level, false), `level ${path}`);
+    if (inst) return inst;
+    inst = this.instance(path);
+    try {
+      if (position) this.check(inst.set3DAttributes(this.fill(position)), `3D ${path}`);
+      this.check(inst.start(), `loop ${path}`);
+    } catch (error) { inst.release(); throw error; }
+    this.loops.set(path, inst);
+    return inst;
+  }
+
+  stopLoop(path, immediate = false) {
+    const inst = this.loops.get(path);
+    if (!inst) return;
+    inst.stop(immediate ? this.module.STUDIO_STOP_IMMEDIATE : this.module.STUDIO_STOP_ALLOWFADEOUT);
+    inst.release();
+    this.loops.delete(path);
+  }
+
+  // 3D 属性：position / forward / up 为 {x, y, z}，速度恒为 0（环境声源静止，不做多普勒）
+  fill(position, forward = { x: 0, y: 0, z: -1 }, up = { x: 0, y: 1, z: 0 }) {
+    const a = this.attributes;
+    for (const [key, v] of [['position', position], ['forward', forward], ['up', up]]) {
+      a[key].x = v.x; a[key].y = v.y; a[key].z = v.z;
+    }
+    a.velocity.x = a.velocity.y = a.velocity.z = 0;
+    return a;
+  }
+
+  setListener(position, forward, up) {
+    if (this.ready) this.check(this.system.setListenerAttributes(0, this.fill(position, forward, up), null), 'listener');
+  }
+
+  // Snapshot：start 时 AHDSR 淡入强度，stop(ALLOWFADEOUT) 时淡出
+  setSnapshot(path, on) {
+    if (!this.ready) return;
+    const inst = this.snapshots.get(path);
+    if (on && !inst) {
+      const next = this.instance(path);
+      try { this.check(next.start(), `snapshot ${path}`); } catch (error) { next.release(); throw error; }
+      this.snapshots.set(path, next);
+    } else if (!on && inst) {
+      inst.stop(this.module.STUDIO_STOP_ALLOWFADEOUT);
+      inst.release();
+      this.snapshots.delete(path);
+    }
+  }
+
+  vca(path) {
+    if (!this.vcas.has(path)) {
+      const out = {};
+      this.check(this.system.getVCA(path, out), `vca ${path}`);
+      this.vcas.set(path, out.val);
+    }
+    return this.vcas.get(path);
+  }
+
+  setVcaVolume(path, volume) {
+    if (this.ready) this.check(this.vca(path).setVolume(Math.max(0, Math.min(1, volume))), `vca ${path}`);
+  }
+
+  getVcaVolume(path) {
+    if (!this.ready) return 1;
+    const out = {};
+    this.check(this.vca(path).getVolume(out, {}), `vca ${path}`);
+    return out.val;
   }
 
   setMuted(muted) {
@@ -192,6 +253,12 @@ export class FmodRuntime {
       inst.release();
     }
     this.loops.clear();
+    for (const inst of this.snapshots.values()) {
+      inst.stop(this.module.STUDIO_STOP_IMMEDIATE);
+      inst.release();
+    }
+    this.snapshots.clear();
+    this.vcas.clear();
     this.descriptions.clear();
     this.system?.release();
     this.system = this.core = this.master = undefined;

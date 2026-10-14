@@ -7,7 +7,12 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test:audio": "node --experimental-vm-modules --test tests/foley.test.js",
     "audio:create-test": "node scripts/generate-test-tone.mjs && node scripts/fmod.mjs create-test",
+    "audio:fetch": "node scripts/freesound.mjs fetch",
+    "audio:design": "node scripts/sound-design.mjs",
+    "audio:events": "node scripts/fmod.mjs events",
+    "audio:mix": "node scripts/fmod.mjs mix",
     "audio:build": "node scripts/fmod.mjs build"
   },
   "dependencies": {

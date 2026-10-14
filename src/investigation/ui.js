@@ -1,4 +1,5 @@
 // 调查界面：全部为 HTML 叠加层（细线、编号、等宽数字，接近底特律的界面风格）
+import { sound } from '../audio/sound.js';
 
 const CSS = `
 .inv { position: fixed; pointer-events: none; font-family: "PingFang SC", "Helvetica Neue", sans-serif; color: #dff2ff; user-select: none; }
@@ -420,6 +421,7 @@ export function createUI() {
         <div class="res" style="animation-delay:${dl}s">${c.result}</div>
         <div class="prob inv-mono" style="animation-delay:${dl + 0.2}s"><span>概率</span><div class="pb"><i></i></div><span>${Math.round(c.prob * 100)}%</span></div></div>
         ${pic}`;
+      if (!panel.classList.contains('on')) sound.play('ui/panel_open');
       panel.classList.add('on');
       const m = markPos.get(c.id);
       if (m) placePanel(m.x, m.y, m.front);
@@ -435,6 +437,7 @@ export function createUI() {
       toast.querySelector('.t1').textContent = t1;
       toast.querySelector('.t2').textContent = t2;
       toast.classList.toggle('big', big);
+      sound.play(big ? 'ui/confirm' : 'ui/toast');
       toast.classList.add('on');
       if (ms > 0) toastTimer = setTimeout(() => {
         if (toastHold) this.toast(toastHold[0], toastHold[1], 0);
@@ -502,7 +505,8 @@ export function createUI() {
     // 字幕：逐条显示，返回 Promise。who 为空是内心独白；radio 为无线电通话
     say(lines, { radio = false } = {}) {
       const token = ++sayToken;
-      return lines.reduce((p, l) => p.then(() => new Promise((res) => {
+      if (radio) sound.play('ui/radio_on');
+      const done = lines.reduce((p, l) => p.then(() => new Promise((res) => {
         if (token !== sayToken) return res();
         const lift = cine.classList.contains('on') ? ' lift' : '';
         sub.className = `inv on${l.who ? (radio && l.who !== '陈墨' ? ' radio' : '') : ' inner'}${lift}`;
@@ -510,6 +514,8 @@ export function createUI() {
         const ms = l.ms ?? 1400 + l.text.length * 140;
         setTimeout(() => { if (token === sayToken) sub.classList.remove('on'); setTimeout(res, 280); }, ms);
       })), Promise.resolve());
+      if (radio) done.then(() => { if (token === sayToken) sound.play('ui/radio_off'); });
+      return done;
     },
     setCinema(on) { cine.classList.toggle('on', on); sub.classList.toggle('lift', on); },
     hush() { sayToken++; sub.classList.remove('on'); },

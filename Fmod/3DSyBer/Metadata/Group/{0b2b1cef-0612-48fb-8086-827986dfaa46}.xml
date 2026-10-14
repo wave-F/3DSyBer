@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="MixerGroup" id="{0b2b1cef-0612-48fb-8086-827986dfaa46}">
+		<property name="volume">
+			<value>-1</value>
+		</property>
+		<property name="name">
+			<value>SCIFI</value>
+		</property>
+		<relationship name="masters">
+			<destination>{7348b032-b34a-43f1-9f9f-4483c4b40694}</destination>
+		</relationship>
+		<relationship name="effectChain">
+			<destination>{e3c25280-2008-431f-be16-3a88e18ede9b}</destination>
+		</relationship>
+		<relationship name="panner">
+			<destination>{b47130d9-e430-4672-89f4-4a0e50bbd970}</destination>
+		</relationship>
+		<relationship name="output">
+			<destination>{6e4d70f4-26d4-4aa5-8e01-992f385f8907}</destination>
+		</relationship>
+	</object>
+	<object class="MixerBusEffectChain" id="{e3c25280-2008-431f-be16-3a88e18ede9b}">
+		<relationship name="effects">
+			<destination>{897ce9bd-2c2c-4698-8993-2da7ac6efa9b}</destination>
+		</relationship>
+	</object>
+	<object class="MixerBusPanner" id="{b47130d9-e430-4672-89f4-4a0e50bbd970}" />
+	<object class="MixerBusFader" id="{897ce9bd-2c2c-4698-8993-2da7ac6efa9b}" />
+</objects>

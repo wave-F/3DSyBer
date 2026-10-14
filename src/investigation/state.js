@@ -12,6 +12,7 @@ import { buildCardSlot, buildRootKey } from './cardSlot.js';
 import { metalCreak, metalPop } from './sfx.js';
 import { DOOR_AJAR } from '../crash.js';
 import { createFinale } from './finale.js';
+import { sound } from '../audio/sound.js';
 
 const HOLD_TIME = 1.4;      // Includes raising the instrument and one readable scan pass.
 const AIM_RANGE = 6;        // 准星可分析距离
@@ -51,7 +52,7 @@ const TIP_TIME = 15;             // 操作说明最长显示时间
 //   → 原始字段、P0 授予、时间轴叠合 → 陈墨质问仪器 → 按住 R 黑梦 4（边界生成 / 黄车切入 / A 车去向）→ 复核报告 04（系统主动制造事故）
 //   → 报告页按 TAB：平板不收起，直接播对象索引（处置目标：注销）→ 再按 TAB 收起 → 独白 → 结局动画
 // 结局（src/investigation/finale.js）：跑车撞飞陈墨 → 地上的终端自动写报告并归档 → 黑屏
-export function createInvestigation(scene, camera, crash, controls) {
+export function createInvestigation(scene, camera, crash, controls, gait) {
   const props = buildTwistProps(scene, crash);
   const fx = createAnalysisFx(scene, camera);
   const ui = createUI();
@@ -59,7 +60,7 @@ export function createInvestigation(scene, camera, crash, controls) {
   const recon = createRecon(scene, crash);
   const tablet = createTablet(camera);
   tablet.onBlank = closeTabletFromBlank;
-  const vm = createViewmodel(tablet.uiScene, camera);
+  const vm = createViewmodel(tablet.uiScene, camera, gait);
   const slot = buildCardSlot(crash);
   const rootKey = buildRootKey(crash);
   // 右侧车门：开局外翻 7°，第 3 轮撬到 55°
@@ -132,6 +133,7 @@ export function createInvestigation(scene, camera, crash, controls) {
   let tipT = 0;                       // 黑梦操作说明剩余显示时间
   const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
   const _look = new THREE.Vector3();
+  let wasHolding = false, analysisDone = false;   // 分析音效：是否正在按住 / 本次是否已完成
 
   const R = () => ROUNDS[round];
   const unlocked = () => clues.filter((c) => c.unlocked);
@@ -154,6 +156,9 @@ export function createInvestigation(scene, camera, crash, controls) {
   // 打开平板：释放鼠标用来点击界面，视角固定；收起：重新锁定鼠标
   // relock = false 时（Esc 收起）不重新锁定，回到暂停层
   function setTablet(on, relock = true) {
+    if (on !== tablet.open) {
+      sound.play(on ? 'ui/panel_open' : 'ui/panel_close');
+    }
     tablet.toggle(on);
     if (on) {
       holdT = 0; finishedAnalysis = null; fx.setFocus(false); ui.setAnalysis(null);
@@ -256,6 +261,7 @@ export function createInvestigation(scene, camera, crash, controls) {
       document.body.appendChild(b);
       b.addEventListener('click', (e) => {
         e.stopPropagation();
+        sound.play('ui/click');
         fn();
         controls.lock();
         b.blur();
@@ -271,6 +277,9 @@ export function createInvestigation(scene, camera, crash, controls) {
   }
 
   function setMode(m) {
+    if (m === 'recon' && mode !== 'recon') sound.play('scifi/dream_enter');
+    if (m !== 'recon' && mode === 'recon') sound.play('scifi/dream_exit');
+    sound.setDream(m === 'recon');
     mode = m;
     holdT = 0; holdKey = false; finishedAnalysis = null;
     fx.setFocus(false);
@@ -1160,6 +1169,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     if (scanCd > 0) return;
     // 手持设备举起对准前方，发射瞬间从设备位置放出扫描波
     if (!vm.scan((origin) => { clues.forEach((c) => { c.hit = false; }); fx.pulse(origin); })) return;
+    sound.play('scifi/scan_pulse');   // 前 0.5 秒充能，与举枪同长，脉冲落在发射瞬间
     scanCd = SCAN_COOLDOWN;
   }
 
@@ -1177,6 +1187,16 @@ export function createInvestigation(scene, camera, crash, controls) {
     finishClue(c);
   }
 
+  // 分析持续音：按住期间音高随进度上升；中途松开 / 移开准星时播放断电声
+  function syncAnalyzeSound() {
+    if (holdT > 0) { sound.analyze(holdT / HOLD_TIME); wasHolding = true; analysisDone = false; }
+    else if (wasHolding) {
+      wasHolding = false;
+      sound.analyze(null);
+      if (!analysisDone) sound.play('scifi/analyze_cancel');
+    }
+  }
+
   // 按住 E 分析：返回本帧的分析状态
   function holdAnalyze(target, dt, onDone) {
     if (target && !target.done && holdKey && locked() && !finishedAnalysis) {
@@ -1186,6 +1206,8 @@ export function createInvestigation(scene, camera, crash, controls) {
         target.done = true;
         holdT = 0;
         finishedAnalysis = { clue: target, remaining: 0.45 };
+        analysisDone = true;
+        sound.play('scifi/analyze_complete');
         onDone(target);
       }
     } else holdT = 0;
@@ -1369,12 +1391,14 @@ export function createInvestigation(scene, camera, crash, controls) {
     update(realDt) {
       tablet.update(realDt);
       ui.setTabletOpen(tablet.amount > 0.05);
+      sound.setTablet(tablet.open);
       if (mode === 'ending') endingT += realDt;
       slot.update(realDt);
       rootKey.update(realDt);
       if (intro) {
         vm.analyze(null, 0);
         fx.analyze(null);
+        syncAnalyzeSound();
         vm.update(realDt, false);
         fx.update(realDt, vm.emitterWorld(emitter));
         return;
@@ -1383,6 +1407,7 @@ export function createInvestigation(scene, camera, crash, controls) {
         death.update(realDt, locked() || deathForce || !death.playing);
         vm.analyze(null, 0);
         fx.analyze(null);
+        syncAnalyzeSound();
         vm.update(realDt, false);
         fx.update(realDt, null);
         return;
@@ -1393,6 +1418,7 @@ export function createInvestigation(scene, camera, crash, controls) {
         else updateInsert(realDt);
         vm.analyze(null, 0);
         fx.analyze(null);
+        syncAnalyzeSound();
         vm.update(realDt, false);
         fx.update(realDt, null);
         return;
@@ -1411,6 +1437,7 @@ export function createInvestigation(scene, camera, crash, controls) {
       }
       if (mode === 'explore') updateDreamHold(realDt);
       updateRite(realDt);
+      syncAnalyzeSound();
       vm.update(realDt, mode === 'explore' && !tablet.open && tablet.amount < 0.02);
       fx.update(realDt, vm.emitterWorld(emitter));
     },

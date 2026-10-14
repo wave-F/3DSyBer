@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { mrt, float } from 'three/tsl';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { sound } from '../audio/sound.js';
 
 // 第一人称一体模型：扫描枪、手套和前臂
 // 手和设备放在叠加场景（与平板同一个），单独渲染，不会插进场景物体
@@ -36,7 +37,7 @@ const CARD_T = { lower: 0.3, raise: 0.45, push: 0.42, pull: 0.38, drop: 0.35 };
 const dbg = { on: false, pos: new THREE.Vector3(0, 0, -0.4), rot: new THREE.Euler(), card: CARD_POSE };
 if (import.meta.env.DEV) window.__vm = dbg;
 
-export function createViewmodel(overlayScene, camera) {
+export function createViewmodel(overlayScene, camera, gait = { phase: 0, amplitude: 0 }) {
   const rig = new THREE.Group();       // 跟随相机
   const holder = new THREE.Group();    // 握把位置，所有动作都作用在这里
   rig.add(holder);
@@ -135,12 +136,12 @@ export function createViewmodel(overlayScene, camera) {
     aim: 0,                  // 指向线索的权重，松开后沿同一条曲线收回
     aimDir: new THREE.Vector3(0, 0, -1),
     target: null, progress: 0,
-    bob: 0, lastPos: new THREE.Vector3(), speed: 0,
     sway: { y: 0, p: 0, vy: 0, vp: 0 }, lastYaw: 0, lastPitch: 0,
     onFire: null,
+    shown: false, aiming: false,
   };
   const qA = new THREE.Quaternion(), qB = new THREE.Quaternion(), qC = new THREE.Quaternion();
-  const vA = new THREE.Vector3(), vB = new THREE.Vector3();
+  const vB = new THREE.Vector3();
   const eA = new THREE.Euler();
 
   // 开始扫描动作：0.5 秒举起，发射，保持，再用同样的 0.5 秒放下
@@ -148,6 +149,7 @@ export function createViewmodel(overlayScene, camera) {
     if (st.scanT >= 0) return false;
     st.scanT = 0;
     st.onFire = onFire;
+    if (st.shown) sound.cloth();
     return true;
   }
 
@@ -165,8 +167,13 @@ export function createViewmodel(overlayScene, camera) {
   }
 
   function update(dt, visible) {
-    // 收起/显示（插卡期间扫描枪一直收在画面外）
+    // 插卡期间扫描枪收在画面外。衣物声只在拿出、收起、举枪、放下时响一次。
     visible = visible && !card.phase;
+    const aiming = !!st.target;
+    if (dt > 0 && (visible !== st.shown || (visible && aiming !== st.aiming))) sound.cloth();
+    st.shown = visible;
+    st.aiming = aiming;
+    // 收起/显示
     st.hide = THREE.MathUtils.clamp(st.hide + (visible ? -dt * 3 : dt * 5), 0, 1);
     holder.visible = st.hide < 1;
     rig.visible = holder.visible || !!card.phase;
@@ -174,13 +181,8 @@ export function createViewmodel(overlayScene, camera) {
     rig.position.copy(camera.position);
     rig.quaternion.copy(camera.quaternion);
 
-    // 移动速度 → 走路晃动
-    const moved = vA.copy(camera.position).sub(st.lastPos).setY(0).length();
-    st.lastPos.copy(camera.position);
-    const sp = dt > 0 ? Math.min(moved / dt, 10) : 0;
-    st.speed += (sp - st.speed) * Math.min(1, dt * 8);
-    st.bob += dt * (1.6 + st.speed * 1.55);
-    const amp = Math.min(1, st.speed / 4) * (st.speed > 6 ? 1.7 : 1);
+    // 与 player.js 的落脚触发读取同一份步相，走 / 跑切换和减速不会错拍。
+    const { phase: bob, amplitude: amp } = gait;
 
     // 视角转动的滞后（弹簧）
     eA.setFromQuaternion(camera.quaternion, 'YXZ');
@@ -199,9 +201,11 @@ export function createViewmodel(overlayScene, camera) {
     const LOWER = 0.5;
     let scanW = 0;
     if (st.scanT >= 0) {
+      const before = st.scanT;
       st.scanT += dt;
       const t = st.scanT;
       const downT = RAISE + HOLD;
+      if (before < downT && t >= downT && visible && !aiming && st.aim <= 0.001) sound.cloth();
       scanW = t < RAISE
         ? THREE.MathUtils.smootherstep(t / RAISE, 0, 1)
         : t < downT
@@ -237,10 +241,10 @@ export function createViewmodel(overlayScene, camera) {
 
     // 走路晃动（8 字形）+ 呼吸 + 视角滞后
     const breathe = Math.sin(performance.now() / 1000 * 1.5) * 0.002;
-    vB.x += Math.cos(st.bob) * 0.012 * amp + sw.y * 0.2;
-    vB.y += -Math.abs(Math.sin(st.bob)) * 0.014 * amp + breathe + sw.p * 0.2;
+    vB.x += Math.cos(bob) * 0.012 * amp + sw.y * 0.2;
+    vB.y += -Math.abs(Math.sin(bob)) * 0.014 * amp + breathe + sw.p * 0.2;
     holder.position.copy(vB);
-    qB.setFromEuler(eA.set(sw.p * 0.7 + Math.sin(st.bob * 2) * 0.01 * amp, sw.y * 0.7, Math.cos(st.bob) * 0.02 * amp));
+    qB.setFromEuler(eA.set(sw.p * 0.7 + Math.sin(bob * 2) * 0.01 * amp, sw.y * 0.7, Math.cos(bob) * 0.02 * amp));
     holder.quaternion.copy(qA).multiply(qB);
     if (dbg.on) { holder.position.copy(dbg.pos); holder.quaternion.setFromEuler(dbg.rot); }
 

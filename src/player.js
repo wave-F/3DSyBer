@@ -3,11 +3,14 @@ import { DECK_Y, HALF_W } from './bridge.js';
 import { carCollider } from './crash.js';
 import { policeCollider } from './policeCar.js';
 import { CORDON, CORDON_MARGIN } from './cordon.js';
+import { sound } from './audio/sound.js';
 
 const EYE = 1.7;
 const RADIUS = 0.35;
 const WALK = 4;
 const RUN = 8;
+const TURN_ANGLE = 0.35;    // 原地累计转动约 20° 才触发，避免细小视角抖动反复响
+const TURN_INTERVAL = 0.35;
 
 export function createPlayer(camera, domElement, overlay) {
   const controls = new PointerLockControls(camera, domElement);
@@ -28,9 +31,53 @@ export function createPlayer(camera, domElement, overlay) {
   addEventListener('keydown', (e) => { keys[e.code] = true; });
   addEventListener('keyup', (e) => { keys[e.code] = false; });
 
-  function update(dt) {
-    if (!controls.isLocked) return;
-    const speed = (keys.ShiftLeft || keys.ShiftRight ? RUN : WALK) * dt;
+  // 设备晃动和脚步共用这一份步相，不再分别按时间 / 步长计数。
+  const gait = { phase: 0, speed: 0, amplitude: 0 };
+  let moving = 0, turnCooldown = 0;
+  const last = camera.position.clone();
+  const turnRotation = camera.quaternion.clone();
+  function resetFoley() {
+    moving = turnCooldown = 0;
+    gait.speed = gait.amplitude = 0;
+    last.copy(camera.position);
+    turnRotation.copy(camera.quaternion);
+  }
+  controls.addEventListener('unlock', () => {
+    for (const code of Object.keys(keys)) keys[code] = false;
+    resetFoley();
+  });
+  controls.addEventListener('lock', resetFoley);
+
+  // 沿用设备的 8 字晃动速度；每次竖直下沉到最低点（π/2 + nπ）落一步。
+  // 实际位移只用于判断是否真的在走、平滑晃动速度；停步和原地转身补衣物声。
+  function footsteps(dt) {
+    const d = Math.hypot(camera.position.x - last.x, camera.position.z - last.z);
+    last.copy(camera.position);
+    // 开场镜头会把相机一下子放到下车点。超过一帧能走的距离就只对齐，不当成脚步。
+    if (d > 1.2) { resetFoley(); return; }
+    gait.speed += (Math.min(d / dt, 10) - gait.speed) * Math.min(1, dt * 8);
+    const before = Math.floor((gait.phase + Math.PI / 2) / Math.PI);
+    gait.phase += dt * (1.6 + gait.speed * 1.55);
+    gait.amplitude = Math.min(1, gait.speed / 4) * (gait.speed > 6 ? 1.7 : 1);
+    turnCooldown = Math.max(0, turnCooldown - dt);
+    if (d > 0.002) {
+      moving = 0.15;
+      if (Math.floor((gait.phase + Math.PI / 2) / Math.PI) > before) sound.step();
+      turnRotation.copy(camera.quaternion);   // 移动中的转身已有逐步衣物声，不额外连续叠加
+    } else {
+      if (moving > 0 && (moving -= dt) <= 0) sound.cloth();
+      // 看净转角而非逐帧角度总和，来回的小抖动不会最终累积成一次转身。
+      if (camera.quaternion.angleTo(turnRotation) >= TURN_ANGLE && turnCooldown === 0) {
+        sound.cloth();
+        turnRotation.copy(camera.quaternion);
+        turnCooldown = TURN_INTERVAL;
+      }
+    }
+  }
+
+  function update(dt, moveScale = 1) {
+    if (!controls.isLocked || !controls.enabled || dt <= 0 || moveScale <= 0) { resetFoley(); return; }
+    const speed = (keys.ShiftLeft || keys.ShiftRight ? RUN : WALK) * dt * moveScale;
     const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
     const s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     const len = Math.hypot(f, s) || 1;
@@ -45,8 +92,10 @@ export function createPlayer(camera, domElement, overlay) {
     p.z = Math.min(CORDON.z1 - CORDON_MARGIN, Math.max(CORDON.z0 + CORDON_MARGIN, p.z));
     p.y = DECK_Y + EYE;
     for (const c of COLLIDERS) pushOutOfBox(p, c);
+    footsteps(dt);
   }
   update.controls = controls;
+  update.gait = gait;
   return update;
 }
 

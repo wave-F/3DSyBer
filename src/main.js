@@ -16,12 +16,12 @@ import { chromaticAberration } from 'three/addons/tsl/display/ChromaticAberratio
 import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
-import { buildBridge } from './bridge.js';
+import { buildBridge, DECK_Y, HALF_W } from './bridge.js';
 import { buildCity } from './city.js';
 import { buildCrash } from './crash.js';
 import { buildPoliceCar } from './policeCar.js';
 import { buildRain } from './rain.js';
-import { buildCordon } from './cordon.js';
+import { buildCordon, CORDON } from './cordon.js';
 import { createPlayer } from './player.js';
 import { createIntro } from './intro.js';
 import { buildSky, FOG_HEX } from './sky.js';
@@ -29,6 +29,9 @@ import { clock, tick } from './investigation/clock.js';
 import { createInvestigation } from './investigation/state.js';
 import { addLightGroup } from './debugLights.js';
 import { HURT } from './investigation/finale.js';
+import { sound } from './audio/sound.js';
+
+sound.preload();
 
 const renderer = new THREE.WebGPURenderer();
 // Forward+ 分簇光照：每个像素只计算真正照到它的点光源（灯一盏不少，开销按覆盖范围算）
@@ -79,9 +82,11 @@ const police = buildPoliceCar(scene);
 const updateSky = buildSky(scene);
 const updateRain = buildRain(scene, camera);
 const updateCordon = buildCordon(scene);
+sound.setRainSpots(updateCity.rainSpots, { x: [-HALF_W, HALF_W], z: [CORDON.z0, CORDON.z1], y: DECK_Y + 1.7 });
 const updatePlayer = createPlayer(camera, document.body, document.getElementById('overlay'));
-const inv = createInvestigation(scene, camera, crash, updatePlayer.controls);
-loading.onStart(() => updatePlayer.controls.lock());   // 加载界面点击开始：锁定鼠标，开场镜头随之播放
+const inv = createInvestigation(scene, camera, crash, updatePlayer.controls, updatePlayer.gait);
+// 加载界面点击开始：这一下是用户手势，同时启动 FMOD 并锁定鼠标
+loading.onStart(() => { sound.start(); updatePlayer.controls.lock(); });
 const intro = createIntro({ camera, police, controls: updatePlayer.controls, inv });
 if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; window.__renderer = renderer; window.__scene = scene; window.__police = police; window.__intro = intro; } // 开发时截图调机位用
 
@@ -193,7 +198,7 @@ renderer.setAnimationLoop(() => {
   const step = paused ? 0 : dt;
   tick(step);
   if (intro.playing) intro.update(step);
-  else updatePlayer(step * inv.moveScale);
+  else updatePlayer(step, inv.moveScale);
   crash.update(clock.dt, clock.elapsed);
   police.update(clock.dt, clock.elapsed);
   updateRain(clock.dt);
@@ -201,6 +206,7 @@ renderer.setAnimationLoop(() => {
   updateSky(clock.dt, clock.elapsed);
   updateCity();
   inv.update(step);
+  sound.update(dt, camera);
   tabletAmt.value = Math.min(1, inv.tablet.amount * 1.4);
   pipeline.render();
 });
