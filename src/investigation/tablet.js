@@ -164,6 +164,7 @@ export function createTablet(camera) {
     open: false, k: 0,            // k：举起进度 0~1
     boot: 0,                      // 开机进度 0~1
     tab: 0, sel: 0,
+    foldOpen: false,              // 线索页「之前的线索」是否展开（每次举起平板时收起）
     dirty: true, typeT: 0,
     // reports：[{ key, tag, source, lines, verdict, note, confirm }]；confirm：{ p, state: 'idle' | 'suspended' }
     data: { clues: [], reports: [], confirm: null, status: tx('调查中', 'INVESTIGATING') },
@@ -179,6 +180,25 @@ export function createTablet(camera) {
   const qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
 
   function setData(d) { state.data = d; state.dirty = true; }
+  // 线索页的行：本轮线索在前；之前轮次（old）收进一个折叠项，展开后列在折叠项下面
+  function rows() {
+    const all = state.data.clues;
+    // 之前的线索按轮次排，同一轮里现场 / 车载数据在前、黑梦分析在后
+    const rank = (c) => (c.showRound ?? c.round) * 2 + (c.probe ? 1 : 0);
+    const old = all.filter((c) => c.old).sort((a, b) => rank(a) - rank(b));
+    if (!old.length) return all;
+    const fold = { fold: true, id: '__fold', count: old.length };
+    return [...all.filter((c) => !c.old), fold, ...(state.foldOpen ? old : [])];
+  }
+  // 证据编号：在整份线索里的序号，不受折叠影响
+  const evNo = (c) => String(state.data.clues.indexOf(c) + 1).padStart(2, '0');
+  function toggleFold() {
+    const fold = rows().findIndex((c) => c.fold);
+    state.foldOpen = !state.foldOpen;
+    state.sel = fold;   // 光标留在折叠项上
+    state.typeT = 0;
+    state.dirty = true;
+  }
   function image(id) {
     if (!imgs.has(id)) {
       const im = new Image();
@@ -270,7 +290,7 @@ export function createTablet(camera) {
     g.fillStyle = C.faint;
     g.fillRect(70, 262, CW - 140, 2);
 
-    if (state.tab === 0) drawClues(clues);
+    if (state.tab === 0) drawClues(rows());
     else drawReport();
   }
 
@@ -285,6 +305,11 @@ export function createTablet(camera) {
     g.fillRect(70, 190, CW - 140, 2);
     text(f.source, 70, 254, 22, C.dim, 400, 'left', true);
     text(f.tag, 70, 316, 46, C.white, 500);
+    // 右上角两行时间：事故时间、报告签收（签收更早，红色）
+    (f.stamps ?? []).forEach((s, i) => {
+      if (f.typed <= 0) return;
+      text(`${s.label}  ${s.t}`, CW - 70, 254 + i * 50, 26, s.tone === 'red' ? C.red : C.dim, 400, 'right', true);
+    });
 
     // 逐字打出，末尾一个闪烁的光标
     let left = f.typed, ly = 410, caret = null;
@@ -422,6 +447,7 @@ export function createTablet(camera) {
 
   function drawClues(clues) {
     const top = 300, rowH = Math.min(66, Math.floor((CH - 330) / Math.max(1, clues.length)));
+    if (state.sel >= clues.length) state.sel = Math.max(0, clues.length - 1);
     clues.forEach((c, i) => {
       const y = top + i * rowH;
       const on = i === state.sel;
@@ -434,9 +460,17 @@ export function createTablet(camera) {
         g.fillStyle = 'rgba(127,214,255,0.07)';
         g.fillRect(70, y, 470, rowH - 8);
       }
-      region(70, y, 470, rowH - 8, () => { if (state.sel !== i) { state.sel = i; state.typeT = 0; } });
       const by = y + (rowH - 8) / 2 + 11;
-      const icon = c.probe ? tx('梦', 'D') : c.data ? (c.locked ? tx('锁', 'L') : tx('数', '#')) : String(i + 1).padStart(2, '0');
+      if (c.fold) {
+        region(70, y, 470, rowH - 8, toggleFold);
+        g.fillStyle = C.faint;
+        g.fillRect(70, y - 5, 470, 1);
+        text(state.foldOpen ? '▾' : '▸', 96, by - 1, 24, C.dim);
+        text(tx(`之前的线索（${c.count}）`, `Earlier clues (${c.count})`), 150, by, rowH < 60 ? 25 : 28, on ? C.white : C.dim, on ? 500 : 400);
+        return;
+      }
+      region(70, y, 470, rowH - 8, () => { if (state.sel !== i) { state.sel = i; state.typeT = 0; } });
+      const icon = c.probe ? tx('梦', 'D') : c.data ? (c.locked ? tx('锁', 'L') : tx('数', '#')) : evNo(c);
       const iconColor = c.probe ? C.gold : c.data ? (c.locked ? C.red : '#40ff90') : c.done ? C.dim : C.faint;
       text(icon, 96, by - 1, 24, iconColor, 400, 'left', !c.probe && !c.data);
       text(c.done ? c.name : tx('？？？', '???'), 150, by, rowH < 60 ? 27 : 30, c.done ? (on ? C.white : '#bfe4f7') : C.faint, on ? 500 : 400);
@@ -449,12 +483,18 @@ export function createTablet(camera) {
     g.fillStyle = C.faint;
     g.fillRect(x - 24, 300, 2, CH - 360);
     if (!c) return;
+    if (c.fold) {
+      text(tx('之前的线索', 'Earlier clues'), x, 392, 46, C.white, 500);
+      text(tx(`前几轮的 ${c.count} 条线索，结论已写进报告。`, `${c.count} clues from earlier rounds. Their findings are in the reports.`), x, 460, 26, C.dim);
+      text(tx(state.foldOpen ? '点击或按 E 收起' : '点击或按 E 展开', state.foldOpen ? 'Click or press E to collapse' : 'Click or press E to expand'), x, 516, 26, C.cyan);
+      return;
+    }
     if (!c.done) {
       text(tx('未发现', 'UNKNOWN'), x, 360, 40, C.dim, 500);
       text(tx('该线索尚未分析。靠近可疑位置按住 E，或按 Q 扫描周围。', 'Not analyzed. Hold E on the mark, or press Q to scan.'), x, 420, 26, C.dim);
       return;
     }
-    const head = c.probe ? tx('黑梦分析', 'BLACK DREAM') : c.data ? (c.locked ? tx('车载数据 · 权限不足', 'VEHICLE DATA · DENIED') : c.src ?? tx('车载数据 · 执行器缓存', 'VEHICLE DATA · ACTUATOR CACHE')) : tx(`证据 #${String(state.sel + 1).padStart(2, '0')}`, `EVIDENCE #${String(state.sel + 1).padStart(2, '0')}`);
+    const head = c.probe ? tx('黑梦分析', 'BLACK DREAM') : c.data ? (c.locked ? tx('车载数据 · 权限不足', 'VEHICLE DATA · DENIED') : c.src ?? tx('车载数据 · 执行器缓存', 'VEHICLE DATA · ACTUATOR CACHE')) : tx(`证据 #${evNo(c)}`, `EVIDENCE #${evNo(c)}`);
     text(head, x, 336, 22, c.probe ? C.gold : c.locked ? C.red : c.data ? '#40ff90' : C.cyan, 400, 'left', true);
     text(c.name, x, 392, 46, C.white, 500);
     // 打字机效果：切换线索后逐行出现
@@ -499,7 +539,7 @@ export function createTablet(camera) {
       for (let yy = iy; yy < iy + is; yy += 4) g.fillRect(ix, yy, is, 1);
     }
     corners(ix - 10, iy - 10, is + 20, is + 20, 26, C.cyan, 3);
-    text(`${tx('影像记录', 'STILL')} · EV-${String(state.sel + 1).padStart(2, '0')}`, ix, iy + is + 44, 20, C.dim, 400, 'left', true);
+    text(`${tx('影像记录', 'STILL')} · EV-${evNo(c)}`, ix, iy + is + 44, 20, C.dim, 400, 'left', true);
   }
 
   // 线索详情下方的操作按钮（例如插入根钥）：点击或按 E
@@ -732,14 +772,16 @@ export function createTablet(camera) {
   // 返回 true 表示按键已被平板处理
   function nav(code) {
     if (!state.open) return false;
-    const n = state.data.clues.length;
+    const list = rows();
+    const n = list.length;
     if (code === 'KeyA') setTab((state.tab + 1) % 2 === 0 ? 1 : 0);
     else if (code === 'KeyD') setTab((state.tab + 1) % 2);
     else if (code === 'KeyW' && state.tab === 0) { state.sel = (state.sel + n - 1) % n; state.typeT = 0; }
     else if (code === 'KeyS' && state.tab === 0) { state.sel = (state.sel + 1) % n; state.typeT = 0; }
     else if (code === 'KeyW' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + m - 1) % m; state.typeT = 0; }
     else if (code === 'KeyS' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + 1) % m; state.typeT = 0; }
-    else if (code === 'KeyE' && state.tab === 0 && state.data.clues[state.sel]?.action) { sound.play('ui/click'); state.data.clues[state.sel].action.fn(); return true; }
+    else if (code === 'KeyE' && state.tab === 0 && list[state.sel]?.fold) { sound.play('ui/click'); toggleFold(); return true; }
+    else if (code === 'KeyE' && state.tab === 0 && list[state.sel]?.action) { sound.play('ui/click'); list[state.sel].action.fn(); return true; }
     else return false;
     sound.play('ui/hover');
     state.dirty = true;
@@ -750,7 +792,7 @@ export function createTablet(camera) {
     if (on === state.open) return;
     sound.cloth();
     state.open = on;
-    if (on) { state.boot = 0; state.typeT = 0; state.dirty = true; }
+    if (on) { state.boot = 0; state.typeT = 0; state.foldOpen = false; state.dirty = true; }
     else {
       state.hover = null;
       state.hack = null;
@@ -851,8 +893,10 @@ export function createTablet(camera) {
     showReport,
     hack,
     showClue(id) {
-      const i = state.data.clues.findIndex((c) => c.id === id);
-      if (i < 0) return;
+      const c = state.data.clues.find((x) => x.id === id);
+      if (!c) return;
+      state.foldOpen = !!c.old;   // 跳到之前的线索时展开，跳到本轮线索时收起
+      const i = rows().findIndex((x) => x.id === id);
       state.tab = 0; state.sel = i; state.typeT = 0; state.dirty = true;
     },
     get hacking() { return !!state.hack && !state.hack.held; },

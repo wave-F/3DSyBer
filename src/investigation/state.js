@@ -46,11 +46,11 @@ const TIP_TIME = 15;             // 操作说明最长显示时间
 //   按住 E 归档 → 假结局 → 按 E 回到报告 02
 //   TAB 暂不归档 → 陈墨质问仪器（按住 TAB 跳过）→ 报告改写为「复核挂起」→ 收起平板 → 派单员施压 → 第 3 轮
 // 第 3 轮：撬开右侧车门（门尾已被撞得外翻）→ 驾驶舱转向柱下方检修接口 → 按 E 插卡（镜头下蹲、扫描枪换成取证卡）→ 平板接入画面 → 车载数据线索
-//   → TAB 收起平板 → 倒放拔卡、换回扫描枪 → 按住 R 黑梦 3（A 车接管 / 零号保障边界）→ 复核报告 03（特权保护）
+//   → TAB 收起平板 → 倒放拔卡、换回扫描枪 → 按住 R 黑梦 3（A 车接管 / 零号保障通道）→ 复核报告 03（特权保护）
 //   按住 E 移交审查 → 假结局 → 按 E 回到报告 03
 //   TAB 暂不移交 → 追问 P0 何时写入（按住 TAB 跳过）→ 报告改写为「移交暂缓」→ 收起后独白（接口日志：根钥登录过）→ 第 4 轮
 // 第 4 轮：驾驶舱里拾取程叙的根钥（驾驶座与中控通道之间）→ 平板自动举起、根钥接入
-//   → 原始字段、P0 授予、时间轴叠合 → 陈墨质问仪器 → 按住 R 黑梦 4（边界生成 / 黄车切入 / A 车去向）→ 复核报告 04（系统主动制造事故）
+//   → 原始字段、P0 授予、时间轴叠合 → 陈墨质问仪器 → 按住 R 黑梦 4（通道生成 / 黄车切入 / A 车去向）→ 复核报告 04（系统主动制造事故）
 //   → 报告页按 TAB：平板不收起，直接播对象索引（处置目标：注销）→ 再按 TAB 收起 → 独白 → 结局动画
 // 结局（src/investigation/finale.js）：跑车撞飞陈墨 → 地上的终端自动写报告并归档 → 黑屏
 export function createInvestigation(scene, camera, crash, controls, gait) {
@@ -176,10 +176,14 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     // 第 4 轮根钥已拾取未用：锁住的车辆 B 原始记录下方出现「插入根钥」按钮
     const rootAction = rootPending() ? { label: tx('插入根钥 · 读取原始字段', 'Insert root key · read raw fields'), fn: startRoot } : null;
     tablet.setData({
-      // 第 3 轮起只列出上一轮和本轮，避免列表过长
+      // 只直接列出本轮的线索；之前轮次标 old，平板里收进「之前的线索」折叠项
+      // 原始记录被根钥解开后算第 4 轮（showRound）
       clues: [...unlocked(), ...probes.filter((p) => p.done)]
-        .filter((c) => round < 3 || c.round >= round - 1)
-        .map((c) => (rootAction && c.id === 'dRaw' ? { ...c, action: rootAction } : c)),
+        .map((c) => {
+          const old = (c.showRound ?? c.round) < round;
+          const action = rootAction && c.id === 'dRaw' ? rootAction : undefined;
+          return old || action ? { ...c, old, action } : c;
+        }),
       reports: reports.map((k) => ({ key: k, ...REPORTS[k], revisedOn: revised.has(k) })),
       confirm,
       status: statusText(),
@@ -772,7 +776,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     probes.forEach((p) => { if (p.round === 4) p.done = false; });
     // 车辆 B 原始记录恢复成锁住的摘要
     const raw = clues.find((c) => c.id === 'dRaw'), def = CLUES_ZH.find((c) => c.id === 'dRaw');
-    Object.assign(raw, { locked: true, lines: def.lines, main: def.main, result: def.result, prob: def.prob });
+    Object.assign(raw, { locked: true, name: def.name, lines: def.lines, main: def.main, result: def.result, prob: def.prob, src: undefined, showRound: undefined });
     if (reports.includes('r4')) reports.splice(reports.indexOf('r4'), 1);
   }
   // 拾取根钥后自动举起平板，停在锁住的车辆 B 原始记录上，等玩家点「插入根钥」
@@ -793,7 +797,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   }
   function onRootDone() {
     const raw = clues.find((c) => c.id === 'dRaw');
-    Object.assign(raw, { locked: false, ...CLUES_ZH.find((c) => c.id === 'dRaw').raw });
+    Object.assign(raw, { locked: false, showRound: 4, ...CLUES_ZH.find((c) => c.id === 'dRaw').raw });
     clues.forEach((c) => { if (c.round === 4) { c.unlocked = true; c.done = true; } });
     root.done = true;
     syncTablet();
