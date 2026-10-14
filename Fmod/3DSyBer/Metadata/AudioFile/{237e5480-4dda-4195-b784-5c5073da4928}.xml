@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{237e5480-4dda-4195-b784-5c5073da4928}">
+		<property name="assetPath">
+			<value>voice/en/internal-v1/dream3_01.wav</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>48</value>
+		</property>
+		<property name="channelCount">
+			<value>1</value>
+		</property>
+		<property name="length">
+			<value>2.6400000000000001</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{02ffe996-e91b-42e2-ab22-7298379b7a09}</destination>
+		</relationship>
+	</object>
+</objects>

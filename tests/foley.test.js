@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createContext, SourceTextModule, SyntheticModule } from 'node:vm';
 import * as THREE from 'three/webgpu';
 import * as tsl from 'three/tsl';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import * as events from '../src/audio/events.js';
+import * as voiceEvents from '../src/audio/voiceEvents.js';
 
 // 运行真实游戏模块，仅替换浏览器 / 音频输出依赖，不需要 WebGPU 或声卡。
 async function load(path, imports, globals = {}) {
@@ -17,7 +19,7 @@ async function load(path, imports, globals = {}) {
     initializeImportMeta(meta) { meta.env = { DEV: false }; },
   });
   await module.link((name) => {
-    const values = imports[name];
+    const values = imports[name] ?? (name === './voiceEvents.js' ? voiceEvents : undefined);
     assert.ok(values, `Missing test dependency: ${name}`);
     return new SyntheticModule(Object.keys(values), function () {
       for (const [key, value] of Object.entries(values)) this.setExport(key, value);
@@ -107,6 +109,37 @@ test('默认单次播放不写实例音量，试听工具可显式调整', async
   assert.deepEqual(gains, [0.5]);
 });
 
+test('真实对话实例等 STOPPED 后释放，暂停和取消不会重复 release', async () => {
+  const { FmodRuntime } = await load('src/audio/fmodRuntime.js', { './events.js': events });
+  const runtime = new FmodRuntime();
+  runtime.ready = true;
+  runtime.module = { OK: 0, STUDIO_PLAYBACK_STOPPED: 0, STUDIO_STOP_IMMEDIATE: 1 };
+  runtime.system = { update: () => 0 };
+  let state = 1, releases = 0;
+  const pauses = [];
+  runtime.instance = () => ({
+    setPaused(value) { pauses.push(value); return 0; }, start: () => 0, stop: () => 0,
+    getPlaybackState(out) { out.val = state; return 0; }, release() { releases++; },
+    setVolume() { assert.fail('Voice must not override Studio gain'); },
+  });
+  const voice = runtime.playVoice('event:/voice/en/opening_01');
+  runtime.setVoicesPaused(true);
+  runtime.setVoicesPaused(false);
+  runtime.update();
+  assert.equal(releases, 0);
+  state = 0;
+  runtime.update();
+  assert.equal(await voice.done, true);
+  voice.stop();
+  assert.equal(releases, 1);
+  assert.deepEqual(pauses, [false, true, false]);
+  state = 1;
+  const cancelled = runtime.playVoice('event:/voice/en/opening_02');
+  cancelled.stop(); cancelled.stop();
+  assert.equal(await cancelled.done, false);
+  assert.equal(releases, 2);
+});
+
 test('scifi 替换素材后沿用原事件路径 / 分析起停，不覆盖 Studio 音量', async () => {
   const paths = [
     'event:/scifi/scan_pulse', 'event:/scifi/analyze_loop',
@@ -155,7 +188,7 @@ test('事件 / 混音重建必须显式授权，默认不会启动 Studio', () =
   const env = { ...process.env };
   delete env.FMOD_ALLOW_REAUTHOR;
   for (const mode of ['events', 'mix']) {
-    const result = spawnSync(process.execPath, [new URL('../scripts/fmod.mjs', import.meta.url).pathname, mode], { env, encoding: 'utf8' });
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL('../scripts/fmod.mjs', import.meta.url)), mode], { env, encoding: 'utf8' });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /FMOD_ALLOW_REAUTHOR=1/);
     assert.match(result.stderr, /npm run audio:build/);
@@ -202,7 +235,7 @@ test('试听页启用 / 播放不覆盖 Studio 音量，仅手动推子会修改
   assert.deepEqual(writes, [['vca:/Ambience', 0.42]]);
 });
 
-async function player() {
+async function player(audio) {
   const input = {}, calls = [];
   class Controls extends THREE.EventDispatcher {
     isLocked = true;
@@ -219,7 +252,7 @@ async function player() {
     './crash.js': { carCollider: { x: 100, z: 0, yaw: 0, minX: -1, maxX: 1, minZ: -1, maxZ: 1 } },
     './policeCar.js': { policeCollider: { x: 100, z: 0, yaw: 0, minX: -1, maxX: 1, minZ: -1, maxZ: 1 } },
     './cordon.js': { CORDON: { z0: -1000, z1: 1000 }, CORDON_MARGIN: 1 },
-    './audio/sound.js': { sound: { step: () => calls.push('step'), cloth: () => calls.push('cloth') } },
+    './audio/sound.js': { sound: audio ?? { step: () => calls.push('step'), cloth: () => calls.push('cloth') } },
   }, { addEventListener: (name, fn) => { input[name] = fn; }, document: { addEventListener() {} } });
   const camera = new THREE.PerspectiveCamera();
   const update = createPlayer(camera, {}, { addEventListener() {}, classList: { add() {}, remove() {} } });
@@ -231,7 +264,7 @@ async function player() {
 }
 
 test('脚步跟随设备晃动频率，跑步更快，斜走不额外加速', async () => {
-  for (const [running, diagonal, expected] of [[false, false, 25], [true, false, 44], [false, true, 25]]) {
+  for (const [running, diagonal, expected] of [[false, false, 25], [true, false, 35], [false, true, 25], [true, true, 35]]) {
     const p = await player();
     p.key('KeyW');
     if (running) p.key('ShiftLeft');
@@ -244,6 +277,22 @@ test('脚步跟随设备晃动频率，跑步更快，斜走不额外加速', as
     }
     assert.equal(p.calls.filter((c) => c === 'step').length, expected);
     assert.ok(p.calls.every((c) => c === 'step'));
+  }
+});
+
+test('左右 Shift 跑步步频均降低 20%，不降低移动速度', async () => {
+  for (const shift of ['ShiftLeft', 'ShiftRight']) {
+    const p = await player();
+    p.key('KeyW');
+    p.key(shift);
+    p.frames(180); // 进入稳态，排除起步速度平滑的影响
+    const phase = p.update.gait.phase;
+    const z = p.camera.position.z;
+    p.frames(600);
+    const originalRunFrequency = (1.6 + 8 * 1.55) / Math.PI;
+    const actualRunFrequency = (p.update.gait.phase - phase) / Math.PI / 10;
+    assert.ok(Math.abs(actualRunFrequency / originalRunFrequency - 0.8) < 1e-10);
+    assert.ok(Math.abs(p.camera.position.z - z + 80) < 1e-10);
   }
 });
 
@@ -264,7 +313,8 @@ test('不同帧率 / 走跑切换 / 黑梦减速时，每次设备下沉只落�
     for (let i = 0; i < fps; i++) { p.update(1 / fps); vm.update(1 / fps, true); }
     p.key('KeyW');
     for (let i = 0; i < fps * 8; i++) {
-      p.key('ShiftLeft', i >= fps * 2 && i < fps * 4);
+      const running = i >= fps * 2 && i < fps * 4;
+      p.key('ShiftLeft', running);
       const scale = i >= fps * 5 ? 0.5 : 1;
       const before = gait.phase;
       const previousCalls = p.calls.length;
@@ -273,7 +323,7 @@ test('不同帧率 / 走跑切换 / 黑梦减速时，每次设备下沉只落�
       p.update(1 / fps, scale);
       vm.update(1 / fps, true);
       const expectedSpeed = previousSpeed + (Math.abs(p.camera.position.z - previousZ) * fps - previousSpeed) * Math.min(1, 8 / fps);
-      assert.ok(Math.abs(gait.phase - before - (1.6 + expectedSpeed * 1.55) / fps) < 1e-10);
+      assert.ok(Math.abs(gait.phase - before - (1.6 + expectedSpeed * 1.55) / fps * (running ? 0.8 : 1)) < 1e-10);
       const landed = Math.floor((gait.phase + Math.PI / 2) / Math.PI) > Math.floor((before + Math.PI / 2) / Math.PI);
       assert.deepEqual(p.calls.slice(previousCalls), landed ? ['step'] : [], `${fps} fps, frame ${i}`);
       assert.ok(Math.abs(holder.position.x - (0.21 + Math.cos(gait.phase) * 0.012 * gait.amplitude)) < 1e-10);
@@ -346,15 +396,52 @@ test('走跑切换不重复落脚，暂停 / 禁止移动 / 零 dt 不追补脚�
   assert.equal(p.calls.length, 0);
 });
 
-test('明显原地转身有衣物声，细小抖动 / 待机无声且连续转身有限频', async () => {
+test('原地转身 / 抬头低头 / 细小抖动 / 待机均不触发声音', async () => {
   const p = await player();
   p.frames(60);
   assert.equal(p.calls.length, 0);
   for (let i = 0; i < 1200; i++) { p.camera.rotation.y += i % 2 ? 0.001 : -0.001; p.update(1 / 60); }
   assert.equal(p.calls.length, 0);
-  for (let i = 0; i < 60; i++) { p.camera.rotation.y += 0.1; p.update(1 / 60); }
-  assert.ok(p.calls.length >= 1 && p.calls.length <= 3);
-  assert.ok(p.calls.every((c) => c === 'cloth'));
+  for (let i = 0; i < 600; i++) {
+    p.camera.rotation.y += 0.1;
+    p.camera.rotation.x = Math.sin(i * 0.1) * 0.6;
+    p.update(1 / 60);
+  }
+  assert.deepEqual(p.calls, []);
+});
+
+test('停步仅补一次 ClothFoley，随后转镜头（含 Shift / 相机微调）不再触发声音', async () => {
+  const played = [];
+  class FmodRuntime {
+    ready = true;
+    play({ path }) { played.push(path); }
+  }
+  const { sound } = await load('src/audio/sound.js', {
+    './fmodRuntime.js': { FmodRuntime }, './events.js': events,
+  }, { document: { addEventListener() {} } });
+  for (const shift of [null, 'ShiftLeft', 'ShiftRight']) {
+    const p = await player(sound);
+    p.key('KeyW');
+    if (shift) p.key(shift);
+    p.frames(60);
+    assert.ok(played.includes('event:/foley/FootStep'));
+    p.key('KeyW', false);
+    played.length = 0;
+    for (let i = 0; i < 120; i++) {
+      p.camera.rotation.y += 0.04;
+      p.camera.rotation.x = Math.sin(i * 0.1) * 0.2;
+      p.camera.position.x += 0.003; // 模拟碰撞 / 相机修正，不是方向键移动
+      p.update(1 / 60);
+    }
+    assert.deepEqual(played, ['event:/foley/ClothFoley']); // 保留停步衣物声，转向没有额外触发
+    played.length = 0;
+    for (let i = 0; i < 120; i++) {
+      p.camera.rotation.y -= 0.1;
+      p.update(1 / 60);
+    }
+    assert.deepEqual(played, []);
+    played.length = 0;
+  }
 });
 
 test('扫描仪拿放 / 扫描举落 / 分析举落仅在动作切换时触发', async () => {
@@ -391,6 +478,7 @@ test('平板拿出 / 收起各触发一次，重复设置状态不会重播', as
     'three/addons/geometries/RoundedBoxGeometry.js': { RoundedBoxGeometry },
     './clock.js': { uiTime: tsl.uniform(0) },
     '../audio/sound.js': { sound: { cloth: () => calls.push('cloth') } },
+    '../i18n.js': { tx: (zh) => zh },
   }, {
     document: { createElement: () => ({ getContext: () => ({ fillText() {} }) }), body: { style: {} } },
     addEventListener() {},

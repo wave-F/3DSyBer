@@ -26,6 +26,7 @@ npm run build
 | 雾、光、后期、雨 | [systems/render.md](systems/render.md) |
 | 文件一句职责 | [reference/file-map.md](reference/file-map.md) |
 | 声音、FMOD | [audio-fmod.md](audio-fmod.md) |
+| 英文角色配音稿、试听制作 | [voice-en.md](voice-en.md) |
 | 剧情哪句已定、哪句是占位 | [design/case.md](design/case.md) |
 | 新功能该动哪层 | [dev/architecture.md](dev/architecture.md) |
 

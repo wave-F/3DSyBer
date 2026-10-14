@@ -1,6 +1,12 @@
 // 调查界面：全部为 HTML 叠加层（细线、编号、等宽数字，接近底特律的界面风格）
 import { sound } from '../audio/sound.js';
+import { createDialoguePlayer } from '../audio/dialoguePlayer.js';
+import { VOICE_LINES } from '../audio/voiceEvents.js';
+import { createVoiceMap } from '../audio/voiceMap.js';
 import { isPlayer, onLang, tx } from '../i18n.js';
+import { LINES } from './clues.js';
+
+const voiceIdOf = createVoiceMap(LINES, VOICE_LINES);
 
 const CSS = `
 .inv { position: fixed; pointer-events: none; font-family: "PingFang SC", "Helvetica Neue", sans-serif; color: #dff2ff; user-select: none; }
@@ -249,7 +255,17 @@ export function createUI() {
   const fin = el('inv-fin', '', '<div class="t1"></div><div class="t2"></div>');
   const ending = el('inv-ending');
   let panelTimer = 0, toastTimer = 0, toastHold = null;
-  let sayToken = 0;
+  const dialogue = createDialoguePlayer({
+    show(l, radio) {
+      const lift = cine.classList.contains('on') ? ' lift' : '';
+      sub.className = `inv on${l.who ? (radio && !isPlayer(l.who) ? ' radio' : '') : ' inner'}${lift}`;
+      sub.innerHTML = l.who ? `<span class="who">${l.who}</span>${l.text}` : l.text;
+    },
+    hide: () => sub.classList.remove('on'),
+    playVoice: (l) => sound.voice(voiceIdOf(l)),
+    radioOn: () => sound.play('ui/radio_on'),
+    radioOff: () => sound.play('ui/radio_off'),
+  });
 
   const hints = () => ({
     explore: tx('<b>WASD</b>移动　<b>Shift</b>跑　<b>Q</b>扫描线索　<b>E</b>按住分析　<b>TAB</b>平板', '<b>WASD</b> move　<b>Shift</b> run　<b>Q</b> scan　<b>E</b> hold to analyze　<b>TAB</b> tablet'),
@@ -561,23 +577,12 @@ export function createUI() {
         e.style.width = `${Math.max(2, right - left)}px`;
       });
     },
-    // 字幕：逐条显示，返回 Promise。who 为空是内心独白；radio 为无线电通话
-    say(lines, { radio = false } = {}) {
-      const token = ++sayToken;
-      if (radio) sound.play('ui/radio_on');
-      const done = lines.reduce((p, l) => p.then(() => new Promise((res) => {
-        if (token !== sayToken) return res();
-        const lift = cine.classList.contains('on') ? ' lift' : '';
-        sub.className = `inv on${l.who ? (radio && !isPlayer(l.who) ? ' radio' : '') : ' inner'}${lift}`;
-        sub.innerHTML = l.who ? `<span class="who">${l.who}</span>${l.text}` : l.text;
-        const ms = l.ms ?? 1400 + l.text.length * 140;
-        setTimeout(() => { if (token === sayToken) sub.classList.remove('on'); setTimeout(res, 280); }, ms);
-      })), Promise.resolve());
-      if (radio) done.then(() => { if (token === sayToken) sound.play('ui/radio_off'); });
-      return done;
-    },
+    // 字幕逐条显示，返回 Promise<boolean>：播完为 true，被打断为 false。who 为空是内心独白；radio 为无线电通话
+    // 有配音时等 FMOD 真正播完，没有配音时按阅读时长
+    say(lines, options) { return dialogue.say(lines, options); },
+    updateDialogue(dt) { if (!document.hidden) dialogue.update(dt); },
     setCinema(on) { cine.classList.toggle('on', on); sub.classList.toggle('lift', on); },
-    hush() { sayToken++; sub.classList.remove('on'); },
+    hush() { dialogue.cancel(); },
     // 黑场：a 为不透明度，ms 为过渡时长
     black(a, ms = 0) { black.style.transition = `opacity ${ms}ms`; black.style.opacity = a; },
     // 终章字幕「序章 · 完」：结局动画黑屏后淡入

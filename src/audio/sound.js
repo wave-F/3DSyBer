@@ -1,5 +1,6 @@
 import { FmodRuntime } from './fmodRuntime.js';
 import { FOLEY, SNAPSHOTS } from './events.js';
+import { VOICE_LINES } from './voiceEvents.js';
 
 // 游戏音频入口。所有调用在 FMOD 未就绪时都是空操作，音频出错不影响游戏流程。
 // 音量只以 Studio 的 Bank 为准；游戏不设事件增益或 VCA 音量，只切换 Studio 的 Snapshot。
@@ -23,6 +24,7 @@ let rainSpots = [];
 
 const fmod = new FmodRuntime();
 const rainInstances = [];
+let audioStarted = null, dialoguePaused = false;
 const position = { x: 0, y: 0, z: 0 }, forward = { x: 0, y: 0, z: -1 }, up = { x: 0, y: 1, z: 0 };
 
 function guard(fn) {
@@ -61,7 +63,7 @@ export const sound = {
 
   // 必须在用户手势（点击开始）里调用
   start() {
-    fmod.initialize().then(() => guard(() => {
+    audioStarted = fmod.initialize().then(() => guard(() => {
       fmod.setMuted(document.hidden);
       for (const path of BEDS) fmod.startLoop(path);
       for (const [path, position] of Object.entries(EMITTERS)) fmod.startLoop(path, position);
@@ -71,6 +73,24 @@ export const sound = {
 
   play(name, { pitch = 1 } = {}) {
     guard(() => fmod.play({ path: `event:/${name}`, pitch }));
+  },
+
+  voice(id) {
+    const clip = VOICE_LINES[id];
+    if (!clip) return null; // 叙述性静默和未接入通话没有音频。
+    let cancelled = false, handle = null;
+    const done = Promise.resolve(audioStarted).then(() => {
+      if (cancelled || !fmod.ready) return false;
+      handle = fmod.playVoice(clip.path, dialoguePaused);
+      return handle?.done ?? false;
+    }).catch((error) => { console.warn('[voice]', error.message); return false; });
+    return { done, stop() { cancelled = true; handle?.stop(); } };
+  },
+
+  setDialoguePaused(paused) {
+    if (dialoguePaused === paused) return;
+    dialoguePaused = paused;
+    guard(() => fmod.setVoicesPaused(paused));
   },
 
   // 一步一个单次事件；跑步加快的是触发频率，素材音高 / 随机变化仍由 Studio 控制。

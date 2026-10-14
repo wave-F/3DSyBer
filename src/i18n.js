@@ -10,6 +10,9 @@ export function getLang() { return lang; }
 export function isEn() { return lang === 'en'; }
 export function isPlayer(who) { return who === '陈墨' || who === 'Chen Mo'; }
 
+// 从 bi() 代理上取回中文原对象（不是代理时读到 undefined），用于按对象身份做映射，如配音
+export const RAW = Symbol('raw');
+
 export function tx(zh, en) { return lang === 'en' ? en : zh; }
 
 export function onLang(fn) { listeners.add(fn); return () => listeners.delete(fn); }
@@ -44,6 +47,7 @@ export function bi(zh, en) {
   return new Proxy(zh, {
     get(target, prop) {
       if (prop === 'then') return undefined;
+      if (prop === RAW) return target;
       const value = target[prop];
       const en = bagOf(target);
       if (typeof value === 'function') {

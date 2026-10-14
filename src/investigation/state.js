@@ -691,6 +691,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     syncTablet();
     holdSkip = false; skipP = 0;
     ui.setSkip(true);
+    // 被跳过时 skipQuestion 先改写，这里的 finishQuestion 因状态已变而跳过
     ui.say(LINES[REPORTS[key].confirm.question]).then(() => finishQuestion(key));
   }
   function skipQuestion() {
@@ -1426,6 +1427,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     },
     get moveScale() { return intro || enter.on ? 0 : mode === 'report' || mode === 'ending' || mode === 'insert' || mode === 'death' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
     update(realDt) {
+      ui.updateDialogue(realDt);
       tablet.update(realDt);
       ui.setTabletOpen(tablet.amount > 0.05);
       sound.setTablet(tablet.open);

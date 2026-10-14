@@ -1,0 +1,28 @@
+{
+  "take": "internal-v1",
+  "usage": "noncommercial-internal",
+  "technicalChecks": {
+    "generatedLines": 65,
+    "fmodEventsWithPositiveDuration": 65,
+    "browser": "Chrome with real FMOD WASM and compiled VoiceEN.bank",
+    "playbackCompletion": "passed",
+    "cancellation": "passed",
+    "pauseAndResume": "passed",
+    "existingFmodMetadata": "unchanged compared with pre-import backup",
+    "apiKeyInWebBuild": false
+  },
+  "contentChecks": {
+    "method": "ElevenLabs Scribe v2 transcription, not synthesis alignment",
+    "checkedLines": 65,
+    "lexicallyMatchedAfterNormalizationAndRepair": 62,
+    "repaired": [
+      { "id": "opening_02", "problem": "Unintended repetition of I'm here", "action": "Retained sigh and first complete utterance, removed repeated tail, 30 ms fade, loudness remastered; original recordings preserved.", "durationSeconds": 1.6, "postRepairTranscription": "matched" }
+    ],
+    "properNameTranscriptionAmbiguities": [
+      { "id": "after3_04", "name": "Cheng Xu", "recognition": "Chengshu's", "note": "ASR spelling variation; pronunciation still needs human listening." },
+      { "id": "keyFound_01", "name": "Cheng Xu", "recognition": "Cheng Shu", "note": "ASR spelling variation; pronunciation still needs human listening." },
+      { "id": "dream4b_01", "name": "Lu Shicheng", "recognition": "Lu Xuchong", "note": "ASR spelling variation; pronunciation still needs human listening." }
+    ],
+    "manualActingReview": "pending; automatic checks do not certify tone, character suitability or pronunciation"
+  }
+}

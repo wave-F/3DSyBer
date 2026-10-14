@@ -1,9 +1,11 @@
+import { VOICE_LINES } from './voiceEvents.js';
+
 // Bank 来自本仓库 Fmod/3DSyBer 工程。游戏和试听页共用；EVENTS 只给试听页列清单。
-export const BANKS = ['Master.strings.bank', 'Master.bank', 'Preview.bank', 'Main.bank'];
+export const BANKS = ['Master.strings.bank', 'Master.bank', 'Preview.bank', 'Main.bank', 'VoiceEN.bank'];
 
 // Mixer 对象：Fmod/setup-mix.js 创建
 export const SNAPSHOTS = { dream: 'snapshot:/Dream', tablet: 'snapshot:/Tablet' };
-export const VCAS = { ambience: 'vca:/Ambience', sfx: 'vca:/SFX', ui: 'vca:/UI' };
+export const VCAS = { ambience: 'vca:/Ambience', sfx: 'vca:/SFX', ui: 'vca:/UI', dialogue: 'vca:/Dialogue' };
 export const FOLEY = { step: 'foley/FootStep', cloth: 'foley/ClothFoley' };
 
 const e = (path, label, description, bank = 'Main.bank') => ({ path, label, description, bank, pitch: 1 });
@@ -18,7 +20,7 @@ export const EVENTS = [
   e('event:/amb/Amb_5_rain', '雨打楼体 A（循环 · 3D）', '每栋楼朝桥立面一个点声源，与 B 交替 · AMB/RainHits · 6–45 m'),
   e('event:/amb/Amb_6_rain', '雨打楼体 B（循环 · 3D）', '每栋楼朝桥立面一个点声源，与 A 交替 · AMB/RainHits · 6–45 m'),
   e(`event:/${FOLEY.step}`, '脚步', '走 / 跑共用 · 跟随手持设备每次行走下沉触发，每一步叠加衣物声'),
-  e(`event:/${FOLEY.cloth}`, '衣物动作', '每一步、停步、转身、扫描仪拿放 / 举落、平板拿放 · 单次播放'),
+  e(`event:/${FOLEY.cloth}`, '衣物动作', '每一步、停步、扫描仪拿放 / 举落、平板拿放 · 转身不触发 · 单次播放'),
   e('event:/ui/panel_open', 'UI 面板出现', '平板开机 / 线索卡弹出'),
   e('event:/ui/panel_close', 'UI 面板关闭', '平板收起'),
   e('event:/ui/click', 'UI 点击', '点到可交互区域'),
@@ -36,4 +38,5 @@ export const EVENTS = [
   e('event:/scifi/dream_enter', '进入黑梦', '24dream_enter · 进入黑梦时单次触发'),
   e('event:/scifi/dream_exit', '离开黑梦', '25dream_exit · 离开黑梦时单次触发'),
   e('event:/test/ping', '测试提示音', '原创双音电子 Ping · 0.65 秒', 'Preview.bank'),
+  ...Object.entries(VOICE_LINES).map(([id, clip]) => e(clip.path, `${clip.speaker} · ${id}`, clip.text, 'VoiceEN.bank')),
 ];

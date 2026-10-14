@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{87b72497-9cf3-4f1e-9c6b-a097bf4dcdda}">
+		<property name="assetPath">
+			<value>voice/en/internal-v1/opening_01.wav</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>48</value>
+		</property>
+		<property name="channelCount">
+			<value>1</value>
+		</property>
+		<property name="length">
+			<value>2.6400000000000001</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{02ffe996-e91b-42e2-ab22-7298379b7a09}</destination>
+		</relationship>
+	</object>
+</objects>
