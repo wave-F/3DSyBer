@@ -20,7 +20,7 @@ export function buildCardSlot(crash) {
   const slitMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
   const ledMat = markKeep(new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x30c8ff, emissiveIntensity: 0.6 }));
   // 卡槽面板：竖向（取证卡竖着插），面朝本地 +Z
-  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.008), plateMat);
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.16, 0.01), plateMat);
   const slit = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.09, 0.002), slitMat);
   slit.position.z = 0.0045;
   const led = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.075, 0.002), ledMat);
@@ -56,7 +56,7 @@ export function buildCardSlot(crash) {
     update(dt) {
       t += dt;
       // 待机：青色微光呼吸；读取中：快速闪烁；完成：常亮绿色
-      if (state === 'idle') { ledMat.emissive.setHex(0x30c8ff); ledMat.emissiveIntensity = 0.5 + Math.sin(t * 2.2) * 0.35; }
+      if (state === 'idle') { ledMat.emissive.setHex(0x30c8ff); ledMat.emissiveIntensity = 1.6 + Math.sin(t * 2.2) * 0.8; }
       else if (state === 'reading') { ledMat.emissive.setHex(0x40ff90); ledMat.emissiveIntensity = Math.sin(t * 28) > 0 ? 3 : 0.3; }
       else { ledMat.emissive.setHex(0x40ff90); ledMat.emissiveIntensity = 1.6; }
     },
@@ -71,8 +71,8 @@ export function buildRootKey(crash) {
   let t = 0;
   const bodyMat = markKeep(new THREE.MeshStandardMaterial({ color: 0x23262b, roughness: 0.35, metalness: 0.8 }));
   const stripeMat = markKeep(new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffc040, emissiveIntensity: 1 }));
-  const card = new THREE.Mesh(new THREE.BoxGeometry(0.086, 0.004, 0.054), bodyMat);
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.001, 0.006), stripeMat);
+  const card = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.006, 0.072), bodyMat);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.002, 0.01), stripeMat);
   stripe.position.set(0, 0.0025, -0.016);
   group.add(card, stripe);
   group.visible = false;
@@ -100,7 +100,7 @@ export function buildRootKey(crash) {
     setVisible(on) { group.visible = on && ready; },
     update(dt) {
       t += dt;
-      stripeMat.emissiveIntensity = 0.8 + Math.sin(t * 3) * 0.5;
+      stripeMat.emissiveIntensity = 2.2 + Math.sin(t * 3) * 0.8;
     },
   };
 }

@@ -1115,12 +1115,12 @@ export function createInvestigation(scene, camera, crash, controls) {
     aimed = nextAim;
     // 第 3 轮：先撬门，再瞄准转向柱下方的接口按 E 插卡（读过之后不再出现）
     const doorOn = round === 3 && !pry.done && !!door.node;
-    doorAimed = doorOn && !aimed && aimAt([doorTarget()], 3) != null;
+    doorAimed = doorOn && !aimed && aimAt([doorTarget()], AIM_RANGE) != null;
     const portOn = round === 3 && pry.done && !ins.done && slot.ready;
-    portAimed = portOn && !aimed && aimAt([portTarget()], 3) != null;
+    portAimed = portOn && !aimed && aimAt([portTarget()], AIM_RANGE) != null;
     // 第 4 轮：驾驶舱里的根钥
     const keyOn = round === 4 && !root.picked && rootKey.ready;
-    keyAimed = keyOn && !aimed && aimAt([keyTarget()], 3) != null;
+    keyAimed = keyOn && !aimed && aimAt([keyTarget()], AIM_RANGE) != null;
     tickFinished(dt);
     holdAnalyze(aimed, dt, finishClue);
     const analysisClue = showAnalysis(aimed);
@@ -1144,18 +1144,18 @@ export function createInvestigation(scene, camera, crash, controls) {
     const pt = portTarget();
     const ps = project(pt.p);
     const pd = pt.p.distanceTo(camera.position);
-    list.push({ id: 'port', x: ps.x, y: ps.y, front: ps.front, show: portOn && ps.front && pd < 8, done: false, aim: portAimed, label: portAimed ? '检修接口' : `${pd.toFixed(1)} m` });
+    list.push({ id: 'port', x: ps.x, y: ps.y, front: ps.front, show: portOn && ps.front && pd < 18, done: false, aim: portAimed, label: portAimed ? '检修接口' : `检修接口 ${pd.toFixed(0)} m` });
     const dt_ = doorTarget(), ds = project(dt_.p), dd = dt_.p.distanceTo(camera.position);
-    list.push({ id: 'door', x: ds.x, y: ds.y, front: ds.front, show: doorOn && ds.front && dd < 10, done: false, aim: doorAimed, label: doorAimed ? '右侧车门' : `${dd.toFixed(1)} m` });
+    list.push({ id: 'door', x: ds.x, y: ds.y, front: ds.front, show: doorOn && ds.front && dd < 22, done: false, aim: doorAimed, label: doorAimed ? '右侧车门' : `右侧车门 ${dd.toFixed(0)} m` });
     const kt = keyTarget(), ks = project(kt.p), kd = kt.p.distanceTo(camera.position);
-    list.push({ id: 'rootkey', x: ks.x, y: ks.y, front: ks.front, show: keyOn && ks.front && kd < 6, done: false, aim: keyAimed, label: keyAimed ? '根钥' : `${kd.toFixed(1)} m` });
+    list.push({ id: 'rootkey', x: ks.x, y: ks.y, front: ks.front, show: keyOn && ks.front && kd < 18, done: false, aim: keyAimed, label: keyAimed ? '根钥' : `根钥 ${kd.toFixed(0)} m` });
     ui.updateMarkers(list);
   }
-  const _port = { p: new THREE.Vector3(), radius: 0.25 };
+  const _port = { p: new THREE.Vector3(), radius: 0.55 };
   function portTarget() { _port.p.copy(slot.world); return _port; }
-  const _door = { p: new THREE.Vector3(), radius: 0.45 };
+  const _door = { p: new THREE.Vector3(), radius: 0.8 };
   function doorTarget() { _door.p.copy(doorHandle()); return _door; }
-  const _key = { p: new THREE.Vector3(), radius: 0.22 };
+  const _key = { p: new THREE.Vector3(), radius: 0.5 };
   function keyTarget() { _key.p.copy(rootKey.world); return _key; }
 
   // ---------- 黑梦 ----------
