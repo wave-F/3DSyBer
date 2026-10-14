@@ -27,6 +27,15 @@ const CONFIRM_TIME = 1.8;   // 按住确认走满所需时间
 const SKIP_TIME = 1.0;      // 质询对话按住 TAB 跳过所需时间
 // 黑梦分析点完成后的独白（LINES 的键）
 const DREAM_LINES = { p1turn: 'dream1', p2gap: 'dream2', p3halo: 'dream3', p4halo: 'dream4', p4cut: 'dream4b' };
+// 其余线索分析完的独白（LINES 的键）：现场线索、黑梦分析点按住 E 完成时播；
+// 车载数据（data）没有分析动作，第一次在平板上看完详情时播。dRaw 解锁前后各一句
+const CLUE_LINES = {
+  front: 'clueFront', rail: 'clueRail', debris: 'clueDebris',
+  scrape: 'clueScrape', skidB: 'clueSkidB', trim: 'clueTrim',
+  p2car: 'clueP2car', p3override: 'clueP3override', p4end: 'clueP4end',
+  dMode: 'clueDMode', dReason: 'clueDReason', dRaw: 'clueDRaw', dRawOpen: 'clueDRawOpen', rTime: 'clueRTime',
+};
+const READY_LINES = { 1: 'ready1', 2: 'ready2' };   // 第 1、2 轮现场线索标完、还没进黑梦
 const DREAM_EXIT_DELAY = 5450;   // 结果面板在完成 0.45 秒后弹出，停留 5 秒。等它关掉再自动打开终端
 // 进入黑梦：按住 R 读满 → 回放立即开始播放，同时镜头缓慢转向 A 车起点（转向期间不能操作）
 // 只有第一次进入有标题 + 扫描波，之后只转镜头
@@ -99,11 +108,18 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   // { key, p, state: 'idle' | 'talking' | 'suspended' | 'archived', text, onDecline }
   let confirm = null;
   let holdConfirm = false;
+  let rootHold = false;        // 按住 E 插入根钥
+  let rootP = 0;               // 插入根钥的读条 0~1
   let holdSkip = false, skipP = 0;   // 质询对话：按住 TAB 跳过
   let reportT = 0;
   const revised = new Set();   // 已被质疑改写的报告
   let storyTask = false;       // 报告 02 挂起、派单施压之后：左侧任务改由 showTask 按剧情阶段给出
+  // 左侧任务的先后顺序：新任务排在上一个后面才算「完成 → 新目标」，同一个任务只原地刷新（计数、换语言）
+  const TASK_ORDER = ['clues1', 'dream1', 'clues2', 'dream2', 'why', 'pry', 'card', 'dream3', 'zero', 'findKey', 'readKey', 'dream4', 'car'];
+  let lastTask = null;         // 上一次给出的现场任务 key；跳关时清空，不播完成
   let after3Said = false;      // 收起报告 03 后的独白只播一次
+  const readySaid = new Set();   // 第 1、2 轮搜证满了以后的独白只播一次
+  const dataSaid = new Set();    // 已播过独白的车载数据（CLUE_LINES 的键）
   let endingKey = null;        // 当前假结局对应的报告
   // 第 4 轮根钥：picked 为已从驾驶舱拾取，done 为原始字段已展开，told 为收起平板后已提示黑梦就绪
   const root = { picked: false, done: false, told: false };
@@ -174,7 +190,11 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   // 把当前调查进度同步给平板
   function syncTablet() {
     // 第 4 轮根钥已拾取未用：锁住的车辆 B 原始记录下方出现「插入根钥」按钮
-    const rootAction = rootPending() ? { label: tx('插入根钥 · 读取原始字段', 'Insert root key · read raw fields'), fn: startRoot } : null;
+    const rootAction = rootPending() ? {
+      label: tx('按住 E 插入根钥', 'Hold E to insert the root key'),
+      holding: tx('正在接入…', 'Linking…'),
+      p: rootP,
+    } : null;
     tablet.setData({
       // 只直接列出本轮的线索；之前轮次标 old，平板里收进「之前的线索」折叠项
       // 原始记录被根钥解开后算第 4 轮（showRound）
@@ -207,6 +227,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   }
   // 第 1 轮做完，停在第 2 轮开头
   function skipToRound2() {
+    lastTask = null;
     clues.forEach((c) => {
       if (c.round === 1) { c.unlocked = true; c.done = true; }
       if (c.round === 2) { c.unlocked = false; c.done = false; }
@@ -227,6 +248,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   }
   // 前两轮做完、报告 02 挂起，停在第 3 轮开头
   function skipToRound3() {
+    lastTask = null;
     clues.forEach((c) => { if (c.round <= 2) { c.unlocked = true; c.done = true; } });
     probes.forEach((p) => { if (p.round <= 2) p.done = true; });
     roundDone[1] = roundDone[2] = true;
@@ -307,16 +329,13 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     if (rite.on) { rite.on = false; ui.setRite(0); }
     hideTip();
     ui.setGuide(null);
-    if (m === 'explore') {
-      if (storyTask) showTask();
-      else ui.setCounter(stageClues().filter((c) => c.done).length, stageClues().length);
-    }
+    if (m === 'explore') showTask();
     if (m === 'recon') {
       ui.clearToast();
       rt = 0; playing = true;
       recon.setRound(round);
       ui.buildTimeline(timeMarks(), frac);
-      ui.setCounter(keyProbes().filter((c) => c.done).length, keyProbes().length, 'probe');
+      showProbeTask();
     }
   }
 
@@ -515,6 +534,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       return;
     }
     if (tablet.open) {
+      if (e.code === 'KeyE' && rootPending()) rootHold = true;
       if (!tablet.nav(e.code) && e.code === 'Escape') setTablet(false, false);
       return;
     }
@@ -537,7 +557,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     }
   });
   addEventListener('keyup', (e) => {
-    if (e.code === 'KeyE') { holdKey = false; holdConfirm = false; }
+    if (e.code === 'KeyE') { holdKey = false; holdConfirm = false; rootHold = false; }
     if (e.code === 'KeyR') holdR = false;
     if (e.code === 'Tab') holdSkip = false;
   });
@@ -721,18 +741,39 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       });
     }, 700);
   }
-  // 第 3 轮起的 HUD 任务：按剧情阶段给出。「按 R」只在这里（和第 1、2 轮的线索计数）出现
+  // 左侧现场任务：第 1、2 轮是线索计数（满了切成「按住 R 构建黑梦」），报告 02 挂起后按剧情阶段给出
+  function exploreTask() {
+    const dream = (key) => ({ key, html: tx('按住 <b>R</b> 构建<small>黑梦</small>', 'Hold <b>R</b> to build<small>the dream</small>'), ready: true });
+    const goal = (key, zh, en) => ({ key, html: tx(zh, en) });
+    if (!storyTask) {
+      const list = stageClues();
+      const done = list.filter((c) => c.done).length, total = list.length;
+      if (total > 0 && done >= total) return dream(`dream${round}`);
+      return { key: `clues${round}`, html: `${done} / ${total}<small>${tx('线索', 'CLUES')}</small>`, bar: total ? done / total : 0, search: total > 0 };
+    }
+    if (round < 3) return goal('why', '查清<b>接触前</b>为什么转向', 'Find why it turned <b>before contact</b>');
+    if (round === 3 && !pry.done) return goal('pry', '撬开<b>右侧车门</b><small>门尾已经翘起</small>', 'Pry the <b>right door</b><small>the tail is sprung</small>');
+    if (round === 3 && !ins.done) return goal('card', '在转向柱下方<b>检修接口</b>插卡', 'Card the <b>service port</b> under the column');
+    if (round === 3 && !roundDone[3]) return dream('dream3');
+    if (round === 3) return goal('zero', '核实<b>零号保障</b>的来源', 'Check where <b>Zero Priority</b> came from');
+    if (!root.picked) return goal('findKey', '在驾驶舱里找<b>程叙的根钥</b>', 'Find <b>Cheng Xu’s root key</b> in the cabin');
+    if (!root.done) return goal('readKey', '用<b>根钥</b>读取黄色车辆原始记录<small>TAB 打开平板</small>', 'Read the yellow car with the <b>root key</b><small>TAB opens the tablet</small>');
+    if (!roundDone[4]) return dream('dream4');
+    return goal('car', '回到<b>警车</b>', 'Return to the <b>police car</b>');
+  }
+  // 刷新左侧任务：排在上一个任务后面就播「完成 → 新目标」，否则原地刷新
   function showTask() {
-    const dream = () => ui.setObjective(tx('按住 <b>R</b> 构建<small>黑梦</small>', 'Hold <b>R</b> to build<small>the dream</small>'), true);
-    if (round < 3) ui.setObjective(tx('查清<b>接触前</b>为什么转向', 'Find why it turned <b>before contact</b>'));
-    else if (round === 3 && !pry.done) ui.setObjective(tx('撬开<b>右侧车门</b><small>门尾已经翘起</small>', 'Pry the <b>right door</b><small>the tail is sprung</small>'));
-    else if (round === 3 && !ins.done) ui.setObjective(tx('在转向柱下方<b>检修接口</b>插卡', 'Card the <b>service port</b> under the column'));
-    else if (round === 3 && !roundDone[3]) dream();
-    else if (round === 3) ui.setObjective(tx('核实<b>零号保障</b>的来源', 'Check where <b>Zero Priority</b> came from'));
-    else if (!root.picked) ui.setObjective(tx('在驾驶舱里找<b>程叙的根钥</b>', 'Find <b>Cheng Xu’s root key</b> in the cabin'));
-    else if (!root.done) ui.setObjective(tx('用<b>根钥</b>读取黄色车辆原始记录<small>TAB 打开平板</small>', 'Read the yellow car with the <b>root key</b><small>TAB opens the tablet</small>'));
-    else if (!roundDone[4]) dream();
-    else ui.setObjective(tx('回到<b>警车</b>', 'Return to the <b>police car</b>'));
+    const t = exploreTask();
+    const advance = lastTask !== null && TASK_ORDER.indexOf(t.key) > TASK_ORDER.indexOf(lastTask);
+    lastTask = t.key;
+    ui.setTask(t, { advance });
+  }
+  // 黑梦里的左侧计数：异常分析满了只播完成，回到现场时直接出新目标
+  function showProbeTask() {
+    const list = keyProbes();
+    const done = list.filter((c) => c.done).length, total = list.length;
+    ui.setTask({ key: `probe${round}`, html: `${done} / ${total}<small>${tx('异常已分析', 'ANOMALIES')}</small>`, bar: total ? done / total : 0 });
+    if (total > 0 && done >= total) ui.completeTask();
   }
 
   // ---------- 第 3 轮：插卡读取车载数据 ----------
@@ -788,7 +829,20 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     setTablet(true);
     tablet.showClue('dRaw');
   }
-  // 点「插入根钥」：切到报告模式（接入期间不能收起），播放接入画面
+  // 按住读条走满：切到报告模式（接入期间不能收起），播放接入画面
+  function updateRootHold(dt) {
+    const active = rootPending() && tablet.open && !tablet.hacking && mode === 'explore' && tablet.actionVisible;
+    if (!active) {
+      rootHold = false;
+      if (rootP !== 0) { rootP = 0; syncTablet(); }
+      return;
+    }
+    const holding = rootHold || tablet.actionHeld;
+    const before = rootP;
+    rootP = holding ? Math.min(1, rootP + dt / CONFIRM_TIME) : Math.max(0, rootP - dt * 2);
+    if (rootP !== before) syncTablet();
+    if (rootP >= 1) startRoot();
+  }
   function startRoot() {
     if (!rootPending() || tablet.hacking) return;
     setMode('report');
@@ -1194,8 +1248,27 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
 
   // 现场线索分析完：线索计数满了以后 HUD 自己切成「按住 R 构建黑梦」
   function finishClue(c) {
-    ui.setCounter(stageClues().filter((x) => x.done).length, stageClues().length);
+    showTask();
     if (c.id === 'scrape') onScrapeDone();
+    // 这条线索的独白；本轮现场线索都标完时接上「去构建黑梦」，连成一段播
+    const lines = CLUE_LINES[c.id] ? [...LINES[CLUE_LINES[c.id]]] : [];
+    const ready = READY_LINES[round];
+    if (ready && !readySaid.has(round) && reconReady()) {
+      readySaid.add(round);
+      lines.push(...LINES[ready]);
+    }
+    if (lines.length) ui.say(lines);
+  }
+
+  // 车载数据没有按住 E 的分析：平板上第一次看完某条详情（结论已打出）时播独白。
+  // 正在播别的台词（读卡、根钥、质询）时先不播，等说完、玩家还停在这条上再播
+  function tickDataLine() {
+    const c = tablet.viewing;
+    if (!c?.data || !c.done || ui.talking || mode === 'death') return;
+    const key = c.id === 'dRaw' && !c.locked ? 'dRawOpen' : c.id;
+    if (!CLUE_LINES[key] || dataSaid.has(key)) return;
+    dataSaid.add(key);
+    ui.say(LINES[CLUE_LINES[key]]);
   }
   // 开发测试：按 F 直接完成一条，收尾和按住 E 分析完相同
   function completeOneClue() {
@@ -1362,9 +1435,9 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     aimedProbe = nextAim;
     tickFinished(dt);
     holdAnalyze(aimedProbe, dt, (c) => {
-      const line = DREAM_LINES[c.id];
+      const line = DREAM_LINES[c.id] ?? CLUE_LINES[c.id];
       const said = line ? ui.say(LINES[line]) : Promise.resolve();
-      if (c.key) ui.setCounter(keyProbes().filter((x) => x.done).length, keyProbes().length, 'probe');
+      if (c.key) showProbeTask();
       if (roundComplete()) scheduleDreamExit(said);
     });
     if (holdT > 0) playing = false;
@@ -1386,13 +1459,11 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     document.querySelectorAll('button').forEach((b) => { if (b._label) b.textContent = b._label(); });
     if (mode === 'explore' || mode === 'recon') {
       ui.relabel(mode === 'recon' ? tx('黑梦回放 · 找出异常', 'BLACK DREAM · FIND THE BREAK') : tx('现场调查', 'SCENE'));
-      ui.stampReset();
       if (mode === 'explore') {
-        if (storyTask) showTask();
-        else ui.setCounter(stageClues().filter((c) => c.done).length, stageClues().length);
+        showTask();
       } else {
         ui.buildTimeline(timeMarks(), frac);
-        ui.setCounter(keyProbes().filter((c) => c.done).length, keyProbes().length, 'probe');
+        showProbeTask();
       }
     }
     syncTablet();
@@ -1429,7 +1500,9 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     update(realDt) {
       ui.updateDialogue(realDt);
       tablet.update(realDt);
+      if (!intro) { updateRootHold(realDt); tickDataLine(); }
       ui.setTabletOpen(tablet.amount > 0.05);
+      ui.updateHud(realDt);
       sound.setTablet(tablet.open);
       if (mode === 'ending') endingT += realDt;
       slot.update(realDt);

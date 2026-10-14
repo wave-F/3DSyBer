@@ -39,6 +39,9 @@ export const ENGLISH = {
     line('到了。', "I'm here.", 'Short, tired acknowledgement. No enthusiasm.', 'weary, matter-of-fact'),
     line('一场单车事故。核完赶紧交单，北岸还有两件。', "Single-vehicle crash. Verify it and close it out. You've got two more on the north bank.", 'Move straight to the next job; light deadline pressure, not anger.', 'brisk, businesslike'),
   ],
+  ready1: [
+    line('构建一下黑梦，看看发生什么。', 'Build a black dream. See what happened.', 'A quiet decision to himself after the last scene clue. Not a tutorial.', 'quiet, curious'),
+  ],
   dream1: [
     line('初判写的是他自己打偏了方向。', 'The initial report says he steered off course.', 'Recall the accepted explanation without believing it yet.', 'quiet, reflective'),
     line('可轮子在撞上护栏之前就转了。', 'But the wheels turned before he hit the barrier.', 'The contradiction is becoming clear. Stress before, not barrier.', 'thoughtful, skeptical'),

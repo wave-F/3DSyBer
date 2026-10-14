@@ -23,7 +23,26 @@ const CSS = `
 #inv-hud .scan { display: none; margin-top: 12px; font-size: 13px; letter-spacing: .06em; color: rgba(223,242,255,.78); }
 #inv-hud.search .scan { display: block; }
 #inv-hud .scan b { display: inline-block; min-width: 18px; margin-right: 6px; padding: 0 5px; border: 1px solid rgba(223,242,255,.55); text-align: center; font-weight: 500; color: #ffcf4a; }
-#inv-hud.done .count { color: #b6f3c6; }
+#inv-hud .mode .tag { display: none; }
+#inv-hud.tagged .mode .lb { display: none; }
+#inv-hud.tagged .mode .tag { display: inline; }
+#inv-hud .count .txt { position: relative; display: inline-block; }
+#inv-hud .count .body { display: inline-block; }
+/* 完成：横线从左划过，文字转绿，进度条走满，菱形实心弹一下 */
+#inv-hud .count .txt::after { content: ''; position: absolute; left: -4px; right: -4px; top: 54%; height: 2px; background: #b6f3c6; box-shadow: 0 0 8px rgba(182,243,198,.7); transform: scaleX(0); transform-origin: left; }
+#inv-hud.complete .mode, #inv-hud.complete .count, #inv-hud.complete .count b { color: #b6f3c6; }
+#inv-hud.complete .count { transition: color .3s, opacity .32s ease, transform .32s ease; }
+#inv-hud.complete .count .txt::after { transform: scaleX(1); transition: transform .36s cubic-bezier(.6,0,.2,1) .1s; }
+#inv-hud.complete .bar i { width: 100% !important; background: #b6f3c6; }
+#inv-hud.complete .mode::before { background: currentColor; animation: inv-dia .5s ease-out; }
+@keyframes inv-dia { from { transform: rotate(45deg) scale(2.2); opacity: .3; } to { transform: rotate(45deg) scale(1); opacity: 1; } }
+/* 新目标：扫描线从左往右扫出文字（--k 为 0~1 的进度，由 updateHud 按游戏时间写入），标签闪两下 */
+#inv-hud.enter .count .body { clip-path: inset(-8px calc((1 - var(--k, 1)) * 100%) -8px 0); }
+#inv-hud.enter .count .txt::before { content: ''; position: absolute; top: -5px; bottom: -5px; left: calc(var(--k, 1) * 100%); width: 2px; background: #e8f6ff; box-shadow: 0 0 10px #6cc8ff, 0 0 2px #fff; opacity: calc(min(1, (1 - var(--k, 1)) * 6)); }
+#inv-hud.enter .bar i { animation: inv-bar-in .55s ease both; }
+#inv-hud.enter .mode .tag { animation: inv-tag .25s steps(2, jump-none) 2; }
+@keyframes inv-bar-in { from { transform: scaleX(0); transform-origin: left; } to { transform: scaleX(1); transform-origin: left; } }
+@keyframes inv-tag { from { opacity: .15; } to { opacity: 1; } }
 #inv-hud.ready .mode, #inv-hud.ready .count { color: #ffcf4a; }
 #inv-hud.ready .mode::before { border-color: #ffcf4a; }
 #inv-hud.ready .bar i { background: #ffcf4a; }
@@ -201,7 +220,7 @@ export function createUI() {
   style.textContent = CSS;
   document.head.appendChild(style);
 
-  const hud = el('inv-hud', '', `<div class="mode"><span>分析模式</span></div><div class="count inv-mono">0 / 0<small>线索</small></div><div class="bar"><i></i></div><div class="scan"></div>`);
+  const hud = el('inv-hud', '', `<div class="mode"><span class="lb">分析模式</span><span class="tag"></span></div><div class="count inv-mono"><span class="txt"><span class="body"></span></span></div><div class="bar"><i></i></div><div class="scan"></div>`);
   const hint = el('inv-hint');
   const skip = el('inv-skip', '', '<i class="fill"></i><span class="txt"></span>');
   const skipFill = skip.querySelector('.fill');
@@ -311,11 +330,110 @@ export function createUI() {
     panel.style.visibility = onScreen ? '' : 'hidden';
   }
 
+  // ---------- 左侧任务的切换表现 ----------
+  // 阶段按游戏时间推进（暂停时停住）：done 完成 0.85s → out 退出 0.3s → in 新目标扫出 0.6s，标签再停 1.4s
+  // 任务栏看不见时（平板举起、过场）先挂起，看得见了只播「新目标」，玩家没看到的完成不补播
+  const hudBody = hud.querySelector('.count .body');
+  const hudBar = hud.querySelector('.bar i');
+  const hudTag = hud.querySelector('.mode .tag');
+  const TASK_DONE = 0.85, TASK_OUT = 0.3, TASK_SCAN = 0.5, TASK_IN = 0.6, TASK_TAG = 1.4;
+  const task = { cur: null, next: null, phase: null, t: 0, tagT: 0 };
+  const hudVisible = () => hud.classList.contains('on') && hud.style.visibility !== 'hidden';
+  function paintTask(t) {
+    hudBody.innerHTML = t.html;
+    hudBar.style.width = `${(t.ready ? 1 : t.bar ?? 0) * 100}%`;
+    hud.classList.toggle('ready', !!t.ready);
+    hud.classList.toggle('search', !!t.search);
+  }
+  function tagOn(text) { hudTag.textContent = text; hud.classList.add('tagged'); task.tagT = 0; }
+  function stopTaskAnim() {
+    hud.classList.remove('complete', 'out', 'enter', 'in', 'tagged');
+    task.phase = null; task.next = null; task.tagT = 0;
+  }
+  function startEnter() {
+    const t = task.next;
+    task.next = null;
+    task.cur = { ...t, completed: false };
+    hud.classList.remove('complete', 'out', 'in', 'enter');
+    paintTask(t);
+    void hud.offsetWidth;   // 重新触发 CSS 动画
+    hud.style.setProperty('--k', 0);
+    hud.classList.add('enter');
+    tagOn(tx('新目标', 'NEW OBJECTIVE'));
+    task.phase = 'in'; task.t = 0;
+  }
+  function startComplete(phase) {
+    hud.classList.remove('enter', 'in', 'search');
+    hud.classList.add('complete');
+    tagOn(tx('已完成', 'COMPLETED'));
+    task.cur.completed = true;
+    task.phase = phase; task.t = 0;
+  }
+  function beginAdvance() {
+    if (!hudVisible()) { if (task.cur) task.cur.completed = true; task.phase = 'wait'; return; }
+    if (!task.cur) startEnter();
+    else if (!task.cur.completed) startComplete('done');
+    else { hud.classList.add('out'); task.phase = 'out'; task.t = 0; }
+  }
+  function setTask(t, advance) {
+    const shown = task.next?.key ?? task.cur?.key;
+    if (advance && t.key !== shown) {
+      task.next = t;
+      // 动画进行中只换目标，当前这段播完再接；slide / doneOnly 可以直接接上
+      if (!task.phase || task.phase === 'doneOnly' || task.phase === 'slide') { hud.classList.remove('in'); beginAdvance(); }
+      return;
+    }
+    if (t.key === task.next?.key) { task.next = t; return; }
+    if (t.key === task.cur?.key) {
+      task.cur = { ...t, completed: task.cur.completed };
+      if (task.phase !== 'out') paintTask(t);
+      if (task.cur.completed) hud.classList.remove('search');
+      return;
+    }
+    // 换了上下文（进出黑梦、跳关）：直接替换，只带一个轻微滑入
+    stopTaskAnim();
+    task.cur = { ...t, completed: false };
+    paintTask(t);
+    hud.classList.add('in');
+    task.phase = 'slide'; task.t = 0;
+  }
+  function completeTask() {
+    if (!task.cur || task.cur.completed || (task.phase && task.phase !== 'slide')) return;
+    hud.classList.remove('in');
+    if (hudVisible()) startComplete('doneOnly');
+    else { task.cur.completed = true; task.phase = null; }
+  }
+  function updateHud(dt) {
+    if (task.tagT > 0) {
+      task.tagT -= dt;
+      if (task.tagT <= 0 && !task.phase) hud.classList.remove('tagged');
+    }
+    if (!task.phase) return;
+    task.t += dt;
+    switch (task.phase) {
+      case 'wait': if (hudVisible()) startEnter(); break;
+      case 'slide': if (task.t >= 0.46) { hud.classList.remove('in'); task.phase = null; } break;
+      case 'doneOnly': if (task.t >= TASK_DONE) task.phase = null; break;
+      case 'done': if (task.t >= TASK_DONE) { hud.classList.add('out'); task.phase = 'out'; task.t = 0; } break;
+      case 'out': if (task.t >= TASK_OUT) startEnter(); break;
+      case 'in': {
+        const k = Math.min(1, task.t / TASK_SCAN);
+        hud.style.setProperty('--k', 1 - (1 - k) ** 3);   // 先快后慢
+        if (task.t < TASK_IN) break;
+        hud.classList.remove('enter');
+        task.phase = null;
+        task.tagT = TASK_TAG;
+        if (task.next) beginAdvance();
+        break;
+      }
+    }
+  }
+
   return {
     setMode(mode, label) {
       this._mode = mode;
       hud.classList.toggle('on', mode === 'explore' || mode === 'recon');
-      hud.querySelector('.mode span').textContent = label;
+      hud.querySelector('.mode .lb').textContent = label;
       thisMode = mode;
       hint.innerHTML = hints()[mode] ?? '';
       hint.classList.toggle('recon', mode === 'recon');
@@ -325,8 +443,7 @@ export function createUI() {
       sub.style.bottom = mode === 'recon' ? '250px' : '';   // 黑梦里避开时间轴
       tl.classList.toggle('on', mode === 'recon');
     },
-    relabel(label) { hud.querySelector('.mode span').textContent = label; },
-    stampReset() { this._countStamp = ''; },
+    relabel(label) { hud.querySelector('.mode .lb').textContent = label; },
     // 平板举起时隐藏屏幕上的常驻界面
     setTabletOpen(on) {
       for (const e of [hud, hint, markers]) e.style.visibility = on ? 'hidden' : '';
@@ -363,59 +480,12 @@ export function createUI() {
       skip.classList.toggle('holding', on && p > 0);
       skipFill.style.transform = `scaleX(${on ? Math.min(1, p) : 0})`;
     },
-    // 线索计数位置改为显示任务目标（html），进度条清空；ready 为黄色高亮（黑梦已就绪）
-    setObjective(html, ready = false) {
-      const stamp = `objective:${html}`;
-      if (stamp === this._countStamp) return;
-      clearTimeout(this._taskTimer);
-      clearTimeout(this._taskTimer2);
-      this._countStamp = stamp;
-      this._taskReady = false;
-      hud.classList.remove('done', 'out', 'ready', 'search');
-      hud.classList.toggle('ready', ready);
-      hud.querySelector('.count').innerHTML = html;
-      hud.querySelector('.bar i').style.width = ready ? '100%' : '0%';
-      hud.classList.add('in');
-      setTimeout(() => hud.classList.remove('in'), 460);
-    },
-    setCounter(done, total, kind = 'field') {
-      const label = kind === 'probe' ? tx('异常已分析', 'ANOMALIES') : tx('线索', 'CLUES');
-      const hold = tx('按住 <b>R</b> 构建<small>黑梦</small>', 'Hold <b>R</b> to build<small>the dream</small>');
-      const count = hud.querySelector('.count');
-      const bar = hud.querySelector('.bar i');
-      const taskDone = this._mode === 'explore' && kind !== 'probe' && total > 0 && done >= total;
-      const stamp = `${this._mode}:${label}:${done}/${total}:${taskDone}:${tx('zh', 'en')}`;
-      if (stamp === this._countStamp) return;
-      this._countStamp = stamp;
-      clearTimeout(this._taskTimer);
-      clearTimeout(this._taskTimer2);
-      const show = (html, width, ready) => {
-        count.innerHTML = html;
-        bar.style.width = width;
-        hud.classList.toggle('ready', ready);
-      };
-      // 线索刚满：先停在 3/3，再切成「按住 R 构建黑梦」
-      if (taskDone && !this._taskReady) {
-        this._taskReady = true;
-        hud.classList.remove('in', 'out', 'ready', 'search');
-        hud.classList.add('done');
-        show(`${done} / ${total}<small>${tx('完成', 'DONE')}</small>`, '100%', false);
-        this._taskTimer = setTimeout(() => {
-          hud.classList.add('out');
-          this._taskTimer2 = setTimeout(() => {
-            hud.classList.remove('done', 'out');
-            show(hold, '100%', true);
-            hud.classList.add('in');
-            setTimeout(() => hud.classList.remove('in'), 460);
-          }, 340);
-        }, 640);
-        return;
-      }
-      this._taskReady = taskDone;
-      hud.classList.remove('done', 'out', 'in');
-      hud.classList.toggle('search', !taskDone && kind !== 'probe' && total > 0);
-      show(taskDone ? hold : `${done} / ${total}<small>${label}</small>`, `${total ? (done / total) * 100 : 0}%`, taskDone);
-    },
+    // 左侧任务：t = { key, html, bar(0~1), ready(黄色·黑梦就绪), search(显示「按 Q 扫描」) }
+    // advance：剧情推进到新任务，播「完成 → 退出 → 新目标」；否则同 key 原地刷新（计数、换语言），换 key 直接替换
+    setTask(t, { advance = false } = {}) { setTask(t, advance); },
+    // 只播完成、不切新任务（黑梦里异常分析满）；之后的 advance 直接从「新目标」开始
+    completeTask() { completeTask(); },
+    updateHud(dt) { updateHud(dt); },
     // list: [{ id, x, y, show, done, aim, label }]
     updateMarkers(list) {
       for (const m of list) {
@@ -473,7 +543,7 @@ export function createUI() {
       analysisPercent.textContent = `${percent}%`;
       analysisStatus.innerHTML = phase === 'complete' ? tx('分析完成', 'ANALYSIS DONE') : phase === 'working'
         ? progress < 0.3 ? tx('探头接通', 'PROBE LIVE') : progress < 0.85 ? tx('读取表面特征', 'READING SURFACE') : tx('证据比对', 'MATCHING')
-        : phase === 'tap' ? tx('<b>E</b>单按', '<b>E</b> TAP')
+        : phase === 'tap' ? '<b>E</b>'
         : tx('<b>E</b>按住分析', '<b>E</b> HOLD');
       analysisCaption.textContent = phase === 'ready' ? '' : (target.name || '');
       analysisFill.style.transform = `scaleX(${progress})`;
@@ -583,6 +653,7 @@ export function createUI() {
     updateDialogue(dt) { if (!document.hidden) dialogue.update(dt); },
     setCinema(on) { cine.classList.toggle('on', on); sub.classList.toggle('lift', on); },
     hush() { dialogue.cancel(); },
+    get talking() { return dialogue.playing; },
     // 黑场：a 为不透明度，ms 为过渡时长
     black(a, ms = 0) { black.style.transition = `opacity ${ms}ms`; black.style.opacity = a; },
     // 终章字幕「序章 · 完」：结局动画黑屏后淡入

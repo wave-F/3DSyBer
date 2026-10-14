@@ -17,6 +17,22 @@
 - `--include-reserve` 可把备用通话一起制作，共 69 条口语；不会恢复游戏触发。
 - 中文原句与英文稿绑定，源文变化时会停止并要求复核，不把旧声音静默套到新剧情。
 
+## 待补配音（台词已改、配音未跟上）
+
+游戏运行不受影响：`voiceMap.js` 只在 `VOICE_LINES[id].source` 与当前中文原句完全一致时才播声音，其余只显示字幕，不会错配。下面三类在下次补录时一并处理（2026-10 统计，补录前用下方命令重新核对）。
+
+- **没有配音**：线索独白 `clueFront` `clueRail` `clueDebris` `clueScrape` `clueSkidB` `clueTrim` `clueP2car` `clueP3override` `clueP4end` `clueDMode` `clueDReason` `clueDRaw` `clueDRawOpen` `clueRTime`（各 1 句），`ready1_01`、`ready2_01`；`rootRead_05`「终端没有再解释。」是叙述性静默，按惯例不录。
+- **中文改过、旧录音不再播放**：`dream1_01-02`、`call2_03`、`cardRead_01`、`dream3_01`、`question3_04`、`after3_01-02`、`keyFound_01-02`、`rootRead_01/02/04`、`dream4_01`、`target_01-03`、`transferred_04-05`。
+- **孤立录音（台词已删或句数减少）**：`dream1_03`、`call2_04-07`、`cardRead_02`、`after3_03-05`、`keyFound_03`、`after4_01`。补录后从 FMOD 和 `voiceEvents.js` 清掉。
+
+`src/audio/dialogue.en.js` 的 `ENGLISH` 目前落后于 `LINES`：只补了 `ready1`，缺上面新增的线索独白组和 `ready2`，且多出 `call`（备用通话，`reserve`）和 `after4`（台词已删）。`dialogueLines()` 要求两边分组的**名称和顺序**完全一致、句数一致、`source` 与中文原句一致，否则报错，阻止用旧稿生成——所以现在 `npm run voice:plan` / `generate` 会直接停住，`npm run test:voice` 里依赖它的 2 项也会失败。这是预期的保护，不是运行时问题。补录前先按 `LINES_ZH` 的顺序同步 `ENGLISH`（英文文本可参考 `src/investigation/en.js` 的 `lines`，再补表演指导），决定 `call` 是否保留为备用（保留则需让分组比较跳过 reserve 组），删掉 `after4`。
+
+核对命令（只读，不联网）：
+
+```sh
+node -e "Promise.all([import('./src/investigation/clues.js'),import('./src/audio/voiceEvents.js'),import('./src/i18n.js')]).then(([{LINES},{VOICE_LINES},{RAW}])=>{const n=[],s=[],u=new Set();for(const[g,l]of Object.entries(LINES[RAW])){if(!Array.isArray(l))continue;l.forEach((x,i)=>{const id=g+'_'+String(i+1).padStart(2,'0'),c=VOICE_LINES[id];if(!c)n.push(id);else{u.add(id);if(c.source!==x.text)s.push(id)}})}console.log('无配音',n.join(' '));console.log('已过期',s.join(' '));console.log('孤立',Object.keys(VOICE_LINES).filter(k=>!u.has(k)).join(' '))})"
+```
+
 ## 角色与术语
 
 中性美式英语。陈墨：成熟、稍沙哑、疲惫克制，怀疑逐渐变成压住恐惧的质问；内心与外部对白共用同一音色，内心更轻、更近。派单员：干练成熟女声，催工单而非威胁玩家。仪器：独立的中性服务声线，始终平静，不提前暴露反派意味。三者都录干声；无线电与设备质感留给 Studio。
