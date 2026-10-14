@@ -164,7 +164,7 @@ export function createTablet(camera) {
     tab: 0, sel: 0,
     dirty: true, typeT: 0,
     // reports：[{ key, tag, source, lines, verdict, note, confirm }]；confirm：{ p, state: 'idle' | 'suspended' }
-    data: { clues: [], events: [], reports: [], confirm: null, status: '调查中' },
+    data: { clues: [], reports: [], confirm: null, status: '调查中' },
     // 鼠标交互：hover 为画布坐标；regions 为本帧可点击区域（绘制时重建）
     hover: null, regions: [],
     repSel: 0,                    // 报告页选中的报告
@@ -474,7 +474,6 @@ export function createTablet(camera) {
       g.fillStyle = 'rgba(255,207,106,0.35)';
       g.fillRect(x, ry - 34, 400, 2);
       text(c.result, x, ry + 12, 32, c.locked ? C.red : C.gold, 500);
-      if (c.action) drawAction(c.action, x, ry + 60);
       if (c.timeline) drawTimeline(c.timeline, x, ry + 112, Math.min(1, (state.typeT * 6 - c.lines.length - 1) / 3));
       if (c.prob == null) return;
       text('概率', x, ry + 66, 22, C.dim);
@@ -497,18 +496,6 @@ export function createTablet(camera) {
     }
     corners(ix - 10, iy - 10, is + 20, is + 20, 26, C.cyan, 3);
     text(`影像记录 · EV-${String(state.sel + 1).padStart(2, '0')}`, ix, iy + is + 44, 20, C.dim, 400, 'left', true);
-  }
-
-  // 线索详情下方的操作按钮（例如插入根钥）：点击或按 E
-  function drawAction(a, x, y) {
-    const w = 560, h = 76;
-    const hot = inside(x, y, w, h);
-    const pulse = 0.12 + 0.08 * Math.sin(performance.now() / 260);
-    g.fillStyle = hot ? 'rgba(255,207,106,0.28)' : `rgba(255,207,106,${pulse})`;
-    g.fillRect(x, y, w, h);
-    corners(x, y, w, h, 16, C.gold, 3);
-    text(a.label, x + w / 2, y + h / 2 + 11, 30, hot ? C.white : C.gold, 500, 'center');
-    region(x, y, w, h, () => a.fn());
   }
 
   // 时间轴：按真实间隔排开各时刻，p 为绘制进度（0~1）
@@ -648,6 +635,7 @@ export function createTablet(camera) {
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const canPoint = () => !state.world && state.open && state.k > 0.9 && state.boot >= 1 && !document.pointerLockElement;
+  let onBlank = null;
   // 屏幕坐标 → 平板画布坐标（未指向平板时返回 null）
   function pick(e) {
     ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
@@ -665,8 +653,10 @@ export function createTablet(camera) {
   });
   addEventListener('click', (e) => {
     if (!canPoint()) return;
+    if (e.target.closest('button')) return;
     const p = pick(e);
-    const r = p && hitTest(p);
+    if (!p) { onBlank?.(); return; }
+    const r = hitTest(p);
     if (r) r.fn(e);
     // 立即重绘，点击区域马上更新（不等下一帧，连续快速点击也不会点到旧区域）
     draw();
@@ -705,7 +695,6 @@ export function createTablet(camera) {
     else if (code === 'KeyS' && state.tab === 0) { state.sel = (state.sel + 1) % n; state.typeT = 0; }
     else if (code === 'KeyW' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + m - 1) % m; state.typeT = 0; }
     else if (code === 'KeyS' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + 1) % m; state.typeT = 0; }
-    else if (code === 'KeyE' && state.tab === 0 && state.data.clues[state.sel]?.action) state.data.clues[state.sel].action.fn();
     else return false;
     state.dirty = true;
     return true;
@@ -821,6 +810,7 @@ export function createTablet(camera) {
     get hacking() { return !!state.hack && !state.hack.held; },
     glitch(sec = 0.5) { state.glitch = sec; state.dirty = true; },
     get open() { return state.open; },
+    set onBlank(fn) { onBlank = fn; },
     get amount() { return state.world ? 0 : state.k; },   // 用于背景压暗与虚化（掉在地上时不压暗）
     // 结局：平板固定在世界坐标（屏幕先不亮，toggle(true) 点亮）；release 恢复跟随相机
     placeAt(pos, quat) {

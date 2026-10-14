@@ -18,14 +18,14 @@ index.html → src/main.js
 |------|------|
 | [scene.md](scene.md) | 桥、封锁、玩家、事故车 |
 | [city.md](city.md) | 程序楼 + 四栋 GLB。整段 Blender 街区还没导 |
-| [investigation.md](investigation.md) | 两轮复核：取证、黑梦、报告、转折过场 |
+| [investigation.md](investigation.md) | 四轮复核：取证、黑梦、报告、结局 |
 | [render.md](render.md) | WebGPU 夜景 |
-| [../design/case.md](../design/case.md) | 剧情报告接到第 2 份，后两轮未做 |
+| [../design/case.md](../design/case.md) | 四份复核报告、对象索引与结局 |
 
 ```text
 点击开始 → 派单字幕 → 探索
   走近或 Q 扫到线索 → 按住 E 分析（已完成再按 E 只回看）
-  本轮关键线索完成 → R 黑梦（空格暂停，滚轮拖时间，窗口内 E 记录，按住 E 分析全息）
+  本轮关键线索完成 → 按住 R 黑梦（镜头转向 A 车起点后开始播放）（空格暂停，滚轮拖时间，窗口内 E 记录，按住 E 分析全息）
   节点记满 → 平板举起看复核报告
   第 1 轮：按住 E 确认归档 → 双闪打断 → 特写过场 → 第 2 轮
   Tab 只在探索中打开平板

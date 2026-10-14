@@ -33,12 +33,12 @@
 
 | 路径 | 职责 |
 |------|------|
-| `src/investigation/state.js` | 轮次与模式机、输入、标记、确认打断、转折过场编排 |
-| `src/investigation/clues.js` | 线索、黑梦全息分析、两轮回放、报告、台词 |
-| `src/investigation/ui.js` | HUD、线索卡、时间轴、字幕、方向标记、黑边 |
+| `src/investigation/state.js` | 轮次与模式机、输入、标记、确认打断、撬门 / 插卡 / 拿根钥镜头 |
+| `src/investigation/clues.js` | 线索、黑梦全息分析、四轮回放、报告、台词 |
+| `src/investigation/ui.js` | HUD、线索卡、时间轴、字幕、跳过提示、黑边 |
 | `src/investigation/recon.js` | 黑梦回放、全息车与人，按轮次切换出场物体 |
-| `src/investigation/cutscene.js` | 过场镜头：接管相机硬切，结束还原 |
-| `src/investigation/tablet.js` | 平板 UI：线索、事件、报告与确认归档 |
+| `src/investigation/tablet.js` | 平板 UI：线索、报告与确认归档、接入画面 |
+| `src/investigation/finale.js` | 结局：陈墨被撞、终端自动写报告并归档、黑屏 |
 | `src/investigation/viewmodel.js` | 第一人称手与袖 |
 | `src/investigation/analysisFx.js` | 按住分析的扫描表现 |
 | `src/investigation/props.js` | 第 2 轮道具（第二道胎痕、车门残漆贴花） |

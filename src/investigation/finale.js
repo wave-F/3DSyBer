@@ -245,7 +245,7 @@ export function createFinale({ scene, camera, tablet, ui }) {
     if (!padOn) return;
     const p = clamp01((t - T.confirm) / (T.archived - T.confirm));
     tablet.setData({
-      clues: [], events: [], reports: [], status: '',
+      clues: [], reports: [], status: '',
       confirm: t < T.confirm ? null : { p: Math.max(0.001, p), state: p >= 1 ? 'archived' : 'idle', text: DEATH_REPORT.labels.done, onDecline: null },
       final: { ...DEATH_REPORT, typed: t < T.type0 ? 0 : typedAt(t), showVerdict: t >= T.verdict },
     });
