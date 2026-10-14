@@ -155,7 +155,7 @@ export const EN = {
     ],
     dreamGuide: (time) => [thought('That’s wrong.'), thought(`Rewind to ${time} and look again.`)],
     clueFront: [thought('Dead-on. At that speed he never even got to the brake.')],
-    clueRail: [thought('Thirty-eight degrees, eighty-six an hour. He didn’t graze it. He drove straight at it.')],
+    clueRail: [thought('He didn’t graze it. He drove straight at the barrier.')],
     clueDebris: [thought('Every piece is his. By the look of it, his was the only car on the bridge.')],
     ready1: [thought('Build a black dream. See what happened.')],
     clueScrape: [thought('Yellow, commercial paint. Someone brushed down its right side.')],

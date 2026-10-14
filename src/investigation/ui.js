@@ -197,7 +197,7 @@ const CSS = `
 #inv-ending h1 { margin: 0 0 22px; font-size: 30px; font-weight: 400; letter-spacing: .18em; color: #d8e2ea; }
 #inv-ending h1 span { color: #ffcf4a; margin-right: .35em; }
 #inv-ending .ln { font-size: 19px; letter-spacing: .12em; color: #d8e2ea; opacity: 0; animation: inv-in .8s forwards; }
-#inv-ending .back { margin-top: 48px; font-size: 13px; letter-spacing: .3em; color: #ffcf4a; opacity: 0; animation: inv-in .8s forwards; }
+#inv-ending .back { margin-top: 96px; font-size: 18px; letter-spacing: .22em; color: #ffcf4a; opacity: 0; animation: inv-in .8s forwards; }
 `;
 
 // 证据图（Gemini 生成），启动时预加载，避免面板弹出时图片还没到
@@ -573,6 +573,7 @@ export function createUI() {
       panelTimer = setTimeout(() => { panel.classList.remove('on'); panel.style.visibility = ''; clueId = null; }, 5000);
     },
     hidePanel() { clearTimeout(panelTimer); panel.classList.remove('on'); panel.style.visibility = ''; clueId = null; },
+    get panelOn() { return panel.classList.contains('on'); },
     // ms 为 0 时不自动消失，直到下一条提示或 clearToast
     toast(t1, t2, ms = 3200) {
       clearTimeout(toastTimer);

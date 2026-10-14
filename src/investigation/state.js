@@ -36,6 +36,7 @@ const CLUE_LINES = {
   dMode: 'clueDMode', dReason: 'clueDReason', dRaw: 'clueDRaw', dRawOpen: 'clueDRawOpen', rTime: 'clueRTime',
 };
 const READY_LINES = { 1: 'ready1', 2: 'ready2' };   // 第 1、2 轮现场线索标完、还没进黑梦
+const LINE_DELAY = 1.3;          // 分析完成到独白开口（秒）：结果面板 0.45 秒弹出，结论行再约 0.8 秒淡入
 const DREAM_EXIT_DELAY = 5450;   // 结果面板在完成 0.45 秒后弹出，停留 5 秒。等它关掉再自动打开终端
 // 进入黑梦：按住 R 读满 → 回放立即开始播放，同时镜头缓慢转向 A 车起点（转向期间不能操作）
 // 只有第一次进入有标题 + 扫描波，之后只转镜头
@@ -1257,14 +1258,31 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       readySaid.add(round);
       lines.push(...LINES[ready]);
     }
-    if (lines.length) ui.say(lines);
+    if (lines.length) sayAfterPanel(lines);
+  }
+
+  // 分析完成后的独白：等结果面板弹出、结论那一行出来再开口（面板 0.45 秒后弹出，结论再晚约 0.8 秒）。
+  // 返回说完时 resolve 的 Promise；等待期间离开当前模式（提前出黑梦等）就不说了
+  let pendingSay = null;   // { lines, t, mode, resolve }
+  function sayAfterPanel(lines) {
+    pendingSay?.resolve(false);
+    return new Promise((resolve) => { pendingSay = { lines, t: LINE_DELAY, mode, resolve }; });
+  }
+  function tickPendingSay(dt) {
+    if (!pendingSay) return;
+    const p = pendingSay;
+    if (mode !== p.mode) { pendingSay = null; p.resolve(false); return; }
+    p.t -= dt;
+    if (p.t > 0) return;
+    pendingSay = null;
+    ui.say(p.lines).then(p.resolve);
   }
 
   // 车载数据没有按住 E 的分析：平板上第一次看完某条详情（结论已打出）时播独白。
   // 正在播别的台词（读卡、根钥、质询）时先不播，等说完、玩家还停在这条上再播
   function tickDataLine() {
     const c = tablet.viewing;
-    if (!c?.data || !c.done || ui.talking || mode === 'death') return;
+    if (!c?.data || !c.done || ui.talking || pendingSay || mode === 'death') return;
     const key = c.id === 'dRaw' && !c.locked ? 'dRawOpen' : c.id;
     if (!CLUE_LINES[key] || dataSaid.has(key)) return;
     dataSaid.add(key);
@@ -1389,7 +1407,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       : keyAimed ? { ...project(keyTarget().p), name: tx('根钥', 'Root key') }
       : null;
     if (!analysisClue && tap) ui.setAnalysis(tap, 0, 'tap');
-    if (analysisClue || tap) ui.setPrompt(null);
+    if (analysisClue || tap || ui.panelOn) ui.setPrompt(null);
     else if (aimed && aimed.done) ui.setPrompt(tx(`按 E 查看：${aimed.name}`, `Press E to review: ${aimed.name}`));
     else ui.setPrompt(null);
 
@@ -1436,7 +1454,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     tickFinished(dt);
     holdAnalyze(aimedProbe, dt, (c) => {
       const line = DREAM_LINES[c.id] ?? CLUE_LINES[c.id];
-      const said = line ? ui.say(LINES[line]) : Promise.resolve();
+      const said = line ? sayAfterPanel(LINES[line]) : Promise.resolve();
       if (c.key) showProbeTask();
       if (roundComplete()) scheduleDreamExit(said);
     });
@@ -1449,7 +1467,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     const markNear = tp.findIndex((c) => Math.abs(rt - c.t) <= PROBE_WINDOW);
     const countText = tx(`已分析 ${tp.filter((c) => c.done).length}/${tp.length}`, `READ ${tp.filter((c) => c.done).length}/${tp.length}`);
     ui.updateTimeline(rt, clockText(rt), tp.map((c) => c.done), markNear, countText);
-    if (analysisClue) ui.setPrompt(null);
+    if (analysisClue || ui.panelOn) ui.setPrompt(null);
     else if (aimedProbe && aimedProbe.done) ui.setPrompt(tx(`按 E 查看：${aimedProbe.name}`, `Press E to review: ${aimedProbe.name}`));
     else ui.setPrompt(null);
     ui.updateMarkers(markerList(false, true, analysisClue));
@@ -1500,7 +1518,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     update(realDt) {
       ui.updateDialogue(realDt);
       tablet.update(realDt);
-      if (!intro) { updateRootHold(realDt); tickDataLine(); }
+      if (!intro) { updateRootHold(realDt); tickDataLine(); tickPendingSay(realDt); }
       ui.setTabletOpen(tablet.amount > 0.05);
       ui.updateHud(realDt);
       sound.setTablet(tablet.open);
