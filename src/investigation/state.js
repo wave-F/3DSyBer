@@ -36,8 +36,8 @@ const CONFIRM_TIME = 1.8;   // 按住确认走满所需时间
 // 第 4 轮：驾驶舱里找到程叙的根钥（驾驶座与中控通道之间）→ 平板里对锁住的「车辆 B 原始记录」插入根钥
 //   → 接入画面 → 原始字段、P0 授予、时间轴叠合
 //   → 陈墨质问仪器 → 按 R 黑梦 4（边界生成 / 黄车切入 / A 车去向）→ 复核报告 04（系统主动制造事故）
-//   → 收起后对象索引（处置目标：注销）→ 独白（结局待接入）
-// 结局（src/investigation/finale.js，目前只有测试按钮触发）：跑车撞飞陈墨 → 地上的终端自动写报告并归档 → 黑屏
+//   → 收起后对象索引（处置目标：注销）→ 独白 → 结局动画
+// 结局（src/investigation/finale.js）：跑车撞飞陈墨 → 地上的终端自动写报告并归档 → 黑屏
 export function createInvestigation(scene, camera, crash, controls) {
   const props = buildTwistProps(scene, crash);
   const fx = createAnalysisFx(scene, camera);
@@ -511,7 +511,10 @@ export function createInvestigation(scene, camera, crash, controls) {
     } else if (finale === 'index') {
       finale = 'done';
       showTask();
-      setTimeout(() => ui.say(LINES.target), 600);
+      setTimeout(() => ui.say(LINES.target).then(() => {
+        if (finale !== 'done' || mode !== 'explore') return;
+        startDeath();
+      }), 600);
     }
   }
 
@@ -565,7 +568,7 @@ export function createInvestigation(scene, camera, crash, controls) {
     else if (!root.picked) ui.setObjective('在驾驶舱里找<b>程叙的根钥</b>');
     else if (!root.done) ui.setObjective('用<b>根钥</b>读取车辆 B 原始记录<small>TAB 打开平板</small>');
     else if (!roundDone[4]) ui.setObjective('黑梦已就绪 · 按 <b>R</b> 启动回放');
-    else ui.setObjective('枢核在杀能核对它的人<small>结局待接入</small>');
+    else ui.setObjective('枢核在杀能核对它的人');
     ui.setHint(round >= 3 && reconReady() && !roundDone[round]);
   }
 
