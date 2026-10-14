@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <title>零号事故 · ZERO PRIORITY</title>
-    <link rel="preload" as="image" href="/assets/keyart.jpg" />
+    <link rel="preload" as="image" href="%BASE_URL%assets/keyart.jpg" />
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
       canvas { display: block; }
@@ -17,6 +17,7 @@
       #overlay .sub { margin: 0 0 18px; font-size: 15px; letter-spacing: .3em; color: #ffcf6a; }
       #overlay p { margin: 0; opacity: 0.8; }
       #overlay.hidden { display: none; }
+      #lang-btn { position: fixed; top: 28px; right: 28px; z-index: 40; padding: 8px 16px; font: 14px/1 "SF Mono", Menlo, monospace; letter-spacing: .14em; color: #dff2ff; background: rgba(4,12,20,.45); border: 1px solid rgba(223,242,255,.45); cursor: pointer; }
 
       /* ---------- 加载界面：主视觉 + 标题 + 耳机提示 + 进度条，加载完成后点击任意位置开始 ---------- */
       #loading {
@@ -125,17 +126,32 @@
       /* 点击后：黑场盖住，再连同黑场一起淡出，露出游戏 */
       .ld-black { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .6s ease-in; }
       #loading.closing .ld-black { opacity: 1; }
-      #loading.fading { opacity: 0; transition: opacity 1.1s ease-out; }
+      #loading.fading { opacity: 0; transition: opacity 3.6s ease-in-out; }
+      .ld-lang {
+        position: absolute; top: 28px; right: 32px; z-index: 3; cursor: pointer;
+        padding: 8px 14px; border: 1px solid rgba(255,255,255,.5); background: rgba(0,0,0,.35);
+        color: #f4f9ff; font: 500 13px "SF Mono", Menlo, monospace; letter-spacing: .18em;
+      }
+      .ld-title .en-title { display: none; margin: 0; font-size: clamp(40px, 5.2vw, 92px); font-weight: 600; letter-spacing: .12em; line-height: 1.05; color: #f4f9ff; text-shadow: 0 0 28px rgba(160,210,255,.25); animation: ld-title 2.2s cubic-bezier(.2,.7,.2,1) .4s both, ld-glitch 9s steps(1) 3s infinite; }
+      #loading[data-lang="en"] .ld-title h1,
+      #loading[data-lang="en"] .ld-phones .zh,
+      #loading[data-lang="en"] .ld-start .zh,
+      #loading[data-lang="en"] .ld-title .en { display: none; }
+      #loading[data-lang="en"] .ld-title .en-title { display: block; }
+      #loading[data-lang="zh"] .ld-phones .en2,
+      #loading[data-lang="zh"] .ld-start .en { display: none; }
     </style>
   </head>
   <body>
-    <div id="loading">
+    <div id="loading" data-lang="zh">
+      <button type="button" class="ld-lang">EN</button>
       <div class="ld-art"></div>
       <div class="ld-rain"></div>
       <div class="ld-shade"></div>
       <div class="ld-scan"></div>
       <div class="ld-title">
         <h1>零号事故</h1>
+        <div class="en-title">ZERO PRIORITY</div>
         <div class="rule"></div>
         <div class="en">ZERO PRIORITY</div>
       </div>
@@ -164,9 +180,10 @@
     <div id="overlay" class="hidden">
       <h1>已暂停</h1>
       <div class="sub">点击继续</div>
-      <p>WASD 移动 · Shift 奔跑 · 鼠标环顾 · Esc 暂停</p>
-      <p>靠近可疑处按住 E 分析 · 找不到线索时按 Q 扫描</p>
+      <p class="ov-move">WASD 移动 · Shift 奔跑 · 鼠标环顾 · Esc 暂停</p>
+      <p class="ov-look">靠近可疑处按住 E 分析 · 找不到线索时按 Q 扫描</p>
     </div>
+    <button type="button" id="lang-btn">EN</button>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

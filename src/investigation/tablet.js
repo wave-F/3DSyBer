@@ -3,6 +3,7 @@ import { sound } from '../audio/sound.js';
 import { mrt, float, uv, vec2, vec3, color, smoothstep, sin, fract, texture, uniform } from 'three/tsl';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { uiTime } from './clock.js';
+import { tx } from '../i18n.js';
 
 const NO_MASK = mrt({ mask: float(0) }); // 玻璃和界面是加法发光，不遮挡背后的世界
 
@@ -18,7 +19,7 @@ const SHOWN = { pos: new THREE.Vector3(0, -0.012, -0.375), rot: new THREE.Euler(
 const HIDDEN = { pos: new THREE.Vector3(0.22, -0.5, -0.32), rot: new THREE.Euler(-1.25, 0.25, 0.35) };
 const C = { cyan: '#7fd6ff', dim: 'rgba(127,214,255,0.45)', faint: 'rgba(127,214,255,0.12)', gold: '#ffcf6a', white: '#eaf6ff', red: '#ff4a3a' };
 const SANS = '"PingFang SC", "Helvetica Neue", sans-serif';
-const TABS = ['线索', '报告'];
+const tabName = (i) => (i === 0 ? tx('线索', 'CLUES') : tx('报告', 'REPORT'));
 
 const easeOutBack = (x) => 1 + 2.2 * (x - 1) ** 3 + 1.2 * (x - 1) ** 2;
 const easeIn = (x) => x * x * x;
@@ -165,7 +166,7 @@ export function createTablet(camera) {
     tab: 0, sel: 0,
     dirty: true, typeT: 0,
     // reports：[{ key, tag, source, lines, verdict, note, confirm }]；confirm：{ p, state: 'idle' | 'suspended' }
-    data: { clues: [], reports: [], confirm: null, status: '调查中' },
+    data: { clues: [], reports: [], confirm: null, status: tx('调查中', 'INVESTIGATING') },
     // 鼠标交互：hover 为画布坐标；regions 为本帧可点击区域（绘制时重建）
     hover: null, regions: [],
     repSel: 0,                    // 报告页选中的报告
@@ -182,7 +183,7 @@ export function createTablet(camera) {
     if (!imgs.has(id)) {
       const im = new Image();
       im.onload = () => { state.dirty = true; };
-      im.src = `/assets/gen/clue_${id}.jpg`;
+      im.src = `${import.meta.env.BASE_URL}assets/gen/clue_${id}.jpg`;
       imgs.set(id, im);
     }
     return imgs.get(id);
@@ -245,15 +246,16 @@ export function createTablet(camera) {
     if (state.hack) { drawHack(); return; }
 
     // 顶栏
-    text('CASE FILE · 复核工单', 70, 104, 26, C.dim, 400, 'left', true);
-    text('桥面护栏撞击事故 · 1 人死亡', 70, 150, 40, C.white, 500);
+    text(tx('CASE FILE · 复核工单', 'CASE FILE · REVIEW'), 70, 104, 26, C.dim, 400, 'left', true);
+    text(tx('桥面护栏撞击事故 · 1 人死亡', 'Bridge rail impact · 1 dead'), 70, 150, 40, C.white, 500);
     const ev = clues.filter((c) => !c.probe);
     const found = ev.filter((c) => c.done).length;
-    text(`线索 ${found} / ${ev.length}`, CW - 70, 104, 26, C.dim, 400, 'right', true);
+    text(tx(`线索 ${found} / ${ev.length}`, `CLUES ${found} / ${ev.length}`), CW - 70, 104, 26, C.dim, 400, 'right', true);
     text(state.data.status, CW - 70, 150, 36, C.cyan, 500, 'right');
 
     // 页签
-    TABS.forEach((t, i) => {
+    [0, 1].forEach((i) => {
+      const t = tabName(i);
       const x = 70 + i * 190;
       const on = i === state.tab;
       const hot = !on && inside(x, 186, 170, 54);
@@ -264,7 +266,7 @@ export function createTablet(camera) {
       text(t, x + 85, 224, 28, on || hot ? C.white : C.dim, on ? 500 : 400, 'center');
       region(x, 186, 170, 54, () => setTab(i));
     });
-    text('鼠标点击操作  ·  TAB 收起', CW - 70, 224, 22, C.dim, 400, 'right');
+    text(tx('鼠标点击操作  ·  TAB 收起', 'Click  ·  TAB to close'), CW - 70, 224, 22, C.dim, 400, 'right');
     g.fillStyle = C.faint;
     g.fillRect(70, 262, CW - 140, 2);
 
@@ -364,7 +366,7 @@ export function createTablet(camera) {
     // 右上角：接入状态
     const blink = Math.floor(t * 4) % 2 === 0;
     const done = t >= (cfg.scan ? cfg.scan[1] : cfg.done);
-    text(done ? '● 已接入' : blink ? '● 接入中' : '○ 接入中', CW - 70, 150, 32, done ? '#40ff90' : C.gold, 500, 'right');
+    text(done ? tx('● 已接入', '● LINKED') : blink ? tx('● 接入中', '● LINKING') : tx('○ 接入中', '○ LINKING'), CW - 70, 150, 32, done ? '#40ff90' : C.gold, 500, 'right');
     g.fillStyle = C.faint;
     g.fillRect(70, 190, CW - 140, 2);
 
@@ -379,7 +381,7 @@ export function createTablet(camera) {
       text(s.text.slice(0, n), 104, y, 28, color, s.tone ? 500 : 400);
       y += 56;
     }
-    if (state.hack.held) text('TAB 收起', CW - 70, CH - 70, 24, C.dim, 400, 'right');
+    if (state.hack.held) text(tx('TAB 收起', 'TAB close'), CW - 70, CH - 70, 24, C.dim, 400, 'right');
 
     // 右侧：十六进制滚屏（没有 scan 段的画面只有日志）
     if (!cfg.scan) return;
@@ -434,10 +436,10 @@ export function createTablet(camera) {
       }
       region(70, y, 470, rowH - 8, () => { if (state.sel !== i) { state.sel = i; state.typeT = 0; } });
       const by = y + (rowH - 8) / 2 + 11;
-      const icon = c.probe ? '梦' : c.data ? (c.locked ? '锁' : '数') : String(i + 1).padStart(2, '0');
+      const icon = c.probe ? tx('梦', 'D') : c.data ? (c.locked ? tx('锁', 'L') : tx('数', '#')) : String(i + 1).padStart(2, '0');
       const iconColor = c.probe ? C.gold : c.data ? (c.locked ? C.red : '#40ff90') : c.done ? C.dim : C.faint;
       text(icon, 96, by - 1, 24, iconColor, 400, 'left', !c.probe && !c.data);
-      text(c.done ? c.name : '？？？', 150, by, rowH < 60 ? 27 : 30, c.done ? (on ? C.white : '#bfe4f7') : C.faint, on ? 500 : 400);
+      text(c.done ? c.name : tx('？？？', '???'), 150, by, rowH < 60 ? 27 : 30, c.done ? (on ? C.white : '#bfe4f7') : C.faint, on ? 500 : 400);
       if (c.done && c.key) text('◆', 520, by - 2, 20, C.gold, 400, 'right');
     });
 
@@ -448,11 +450,11 @@ export function createTablet(camera) {
     g.fillRect(x - 24, 300, 2, CH - 360);
     if (!c) return;
     if (!c.done) {
-      text('未发现', x, 360, 40, C.dim, 500);
-      text('该线索尚未分析。靠近可疑位置按住 E，或按 Q 扫描周围。', x, 420, 26, C.dim);
+      text(tx('未发现', 'UNKNOWN'), x, 360, 40, C.dim, 500);
+      text(tx('该线索尚未分析。靠近可疑位置按住 E，或按 Q 扫描周围。', 'Not analyzed. Hold E on the mark, or press Q to scan.'), x, 420, 26, C.dim);
       return;
     }
-    const head = c.probe ? '黑梦分析' : c.data ? (c.locked ? '车载数据 · 权限不足' : c.src ?? '车载数据 · 执行器缓存') : `证据 #${String(state.sel + 1).padStart(2, '0')}`;
+    const head = c.probe ? tx('黑梦分析', 'BLACK DREAM') : c.data ? (c.locked ? tx('车载数据 · 权限不足', 'VEHICLE DATA · DENIED') : c.src ?? tx('车载数据 · 执行器缓存', 'VEHICLE DATA · ACTUATOR CACHE')) : tx(`证据 #${String(state.sel + 1).padStart(2, '0')}`, `EVIDENCE #${String(state.sel + 1).padStart(2, '0')}`);
     text(head, x, 336, 22, c.probe ? C.gold : c.locked ? C.red : c.data ? '#40ff90' : C.cyan, 400, 'left', true);
     text(c.name, x, 392, 46, C.white, 500);
     // 打字机效果：切换线索后逐行出现
@@ -478,7 +480,7 @@ export function createTablet(camera) {
       if (c.action) drawAction(c.action, x, ry + 60);
       if (c.timeline) drawTimeline(c.timeline, x, ry + 112, Math.min(1, (state.typeT * 6 - c.lines.length - 1) / 3));
       if (c.prob == null) return;
-      text('概率', x, ry + 66, 22, C.dim);
+      text(tx('概率', 'PROB'), x, ry + 66, 22, C.dim);
       g.fillStyle = 'rgba(255,207,106,0.2)';
       g.fillRect(x + 70, ry + 57, 260, 5);
       g.fillStyle = C.gold;
@@ -497,7 +499,7 @@ export function createTablet(camera) {
       for (let yy = iy; yy < iy + is; yy += 4) g.fillRect(ix, yy, is, 1);
     }
     corners(ix - 10, iy - 10, is + 20, is + 20, 26, C.cyan, 3);
-    text(`影像记录 · EV-${String(state.sel + 1).padStart(2, '0')}`, ix, iy + is + 44, 20, C.dim, 400, 'left', true);
+    text(`${tx('影像记录', 'STILL')} · EV-${String(state.sel + 1).padStart(2, '0')}`, ix, iy + is + 44, 20, C.dim, 400, 'left', true);
   }
 
   // 线索详情下方的操作按钮（例如插入根钥）：点击或按 E
@@ -731,8 +733,8 @@ export function createTablet(camera) {
   function nav(code) {
     if (!state.open) return false;
     const n = state.data.clues.length;
-    if (code === 'KeyA') setTab((state.tab + TABS.length - 1) % TABS.length);
-    else if (code === 'KeyD') setTab((state.tab + 1) % TABS.length);
+    if (code === 'KeyA') setTab((state.tab + 1) % 2 === 0 ? 1 : 0);
+    else if (code === 'KeyD') setTab((state.tab + 1) % 2);
     else if (code === 'KeyW' && state.tab === 0) { state.sel = (state.sel + n - 1) % n; state.typeT = 0; }
     else if (code === 'KeyS' && state.tab === 0) { state.sel = (state.sel + 1) % n; state.typeT = 0; }
     else if (code === 'KeyW' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + m - 1) % m; state.typeT = 0; }

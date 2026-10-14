@@ -67,7 +67,7 @@ addLightGroup('环境反射', (on) => {
 });
 
 // 夜景 HDRI 只用作反射环境（车漆、水面），不作背景
-new HDRLoader().load('/assets/shanghai_bund_1k.hdr', (hdr) => {
+new HDRLoader().load(`${import.meta.env.BASE_URL}assets/shanghai_bund_1k.hdr`, (hdr) => {
   hdr.mapping = THREE.EquirectangularReflectionMapping;
   scene.environment = hdr;
   inv.tablet.uiScene.environment = hdr;   // 手和设备的金属反射

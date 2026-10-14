@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { getLang, setLang, onLang, tx } from './i18n.js';
 
 // 加载界面（index.html 的 #loading）：真实加载进度 → 着色器预热 → 点击任意位置开始 → 黑场淡出
 // 进度前 85% 来自 three.js 默认加载管理器（所有 GLTF / 贴图 / HDR 都走它），后 15% 是渲染预热：
@@ -11,15 +12,30 @@ const IDLE_MS = 5000;        // 一直没有任何文件开始加载时，也视
 const WARM_FRAMES = 15;      // 预热：连续这么多帧都不卡
 const WARM_DT = 50;          // 不卡：帧间隔小于这个毫秒数
 const WARM_MAX_MS = 10000;   // 预热最长等待
-const BLACK_MS = 650;        // 点击后黑场盖满
-const FADE_MS = 1100;        // 黑场淡出（与 index.html 的 .fading 一致）
+const BLACK_MS = 700;        // 点击后黑场盖满
+const HOLD_MS = 450;         // 全黑再停一下，再开始露出开场
+const FADE_MS = 3600;        // 黑场淡出（与 index.html 的 .fading 一致）
 
 // 文件名 → 状态文字
 const LABELS = [
-  [/supercar/, '事故车辆'], [/police/, '警车'], [/bldg|building/, '城市建筑'], [/mannequin/, '人物'],
-  [/\.hdr/, '环境光照'], [/scanner|card-arm/, '调查设备'], [/draco/, '模型解码器'], [/\.(jpe?g|png|webp)/, '材质贴图'],
+  [/supercar/, '事故车辆', 'VEHICLE'], [/police/, '警车', 'POLICE CAR'], [/bldg|building/, '城市建筑', 'BUILDINGS'], [/mannequin/, '人物', 'FIGURE'],
+  [/\.hdr/, '环境光照', 'LIGHTING'], [/scanner|card-arm/, '调查设备', 'TOOLS'], [/draco/, '模型解码器', 'DECODER'], [/\.(jpe?g|png|webp)/, '材质贴图', 'TEXTURES'],
 ];
-const labelOf = (url) => LABELS.find(([re]) => re.test(url))?.[1] ?? '场景资源';
+const COPY = {
+  zh: { init: '正在载入程序', load: '正在加载', prep: '正在准备画面', ready: '准备就绪', fallback: '场景资源' },
+  en: { init: 'LOADING', load: 'LOADING', prep: 'PREPARING', ready: 'READY', fallback: 'ASSETS' },
+};
+const t = (k) => COPY[getLang()][k];
+const labelOf = (url) => {
+  const row = LABELS.find(([re]) => re.test(url));
+  return row ? row[getLang() === 'en' ? 2 : 1] : t('fallback');
+};
+const paintStatus = (kind, url) => {
+  if (kind === 'init') stEl.textContent = t('init');
+  else if (kind === 'load') stEl.textContent = `${t('load')} · ${labelOf(url)}`;
+  else if (kind === 'prep') stEl.textContent = t('prep');
+  else stEl.textContent = t('ready');
+};
 
 const root = document.getElementById('loading');
 const stEl = root.querySelector('.ld-bar .st');
@@ -32,12 +48,16 @@ let lastChange = t0;
 let assetsDone = false, warmStart = 0, good = 0, lastFrame = 0;
 let shown = 0, ready = false;
 let startFn = null;
+let phase = 'init';
+let lastUrl = '';
 
 const m = THREE.DefaultLoadingManager;
 m.onStart = m.onProgress = (url, l, t) => {
   loaded = l; total = t;
   lastChange = performance.now();
-  stEl.textContent = `正在加载 · ${labelOf(url)}`;
+  lastUrl = url;
+  phase = 'load';
+  paintStatus('load', url);
 };
 m.onError = (url) => console.warn('[loading] 加载失败', url);
 
@@ -47,7 +67,8 @@ function frame(now) {
     if (settled || (total === 0 && now - t0 > IDLE_MS)) {
       assetsDone = true;
       warmStart = now;
-      stEl.textContent = '正在准备画面';
+      phase = 'prep';
+      paintStatus('prep');
     }
   } else if (!ready) {
     // 预热：统计连续不卡的帧
@@ -68,7 +89,8 @@ function frame(now) {
     shown = 1;
     fillEl.style.width = '100%';
     pcEl.textContent = '100%';
-    stEl.textContent = '准备就绪';
+    phase = 'ready';
+    paintStatus('ready');
     // 先让 100% 停一下，再藏进度条，藏完才允许点击并显示开始提示
     setTimeout(() => root.classList.add('hide-bar'), 400);
     setTimeout(() => { ready = true; root.classList.add('ready'); }, 400 + 650);
@@ -79,14 +101,39 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // 点击开始：必须在点击事件里同步调用 startFn（锁定鼠标需要用户手势）
+function paintLangButtons() {
+  const en = getLang() === 'en';
+  root.dataset.lang = getLang();
+  root.querySelector('.ld-lang').textContent = en ? '中文' : 'EN';
+  const pause = document.getElementById('lang-btn');
+  if (pause) pause.textContent = en ? '中文' : 'EN';
+  const ov = document.getElementById('overlay');
+  if (!ov) return;
+  ov.querySelector('h1').textContent = tx('已暂停', 'PAUSED');
+  ov.querySelector('.sub').textContent = tx('点击继续', 'CLICK TO CONTINUE');
+  ov.querySelector('.ov-move').textContent = tx('WASD 移动 · Shift 奔跑 · 鼠标环顾 · Esc 暂停', 'WASD move · Shift run · Mouse look · Esc pause');
+  ov.querySelector('.ov-look').textContent = tx('靠近可疑处按住 E 分析 · 找不到线索时按 Q 扫描', 'Hold E on a mark to analyze · Press Q to scan');
+}
+paintLangButtons();
+paintStatus(phase, lastUrl);
+onLang(() => { paintLangButtons(); paintStatus(phase, lastUrl); });
+
+function toggleLang(e) {
+  e.stopPropagation();
+  e.preventDefault();
+  setLang(getLang() === 'zh' ? 'en' : 'zh');
+}
+root.querySelector('.ld-lang').addEventListener('click', toggleLang);
+document.getElementById('lang-btn').addEventListener('click', toggleLang);
+
 root.addEventListener('click', () => {
   if (!ready) return;
   ready = false;
   root.style.pointerEvents = 'none';
   root.classList.add('closing');
   startFn?.();
-  setTimeout(() => root.classList.add('fading'), BLACK_MS);
-  setTimeout(() => root.classList.add('gone'), BLACK_MS + FADE_MS);
+  setTimeout(() => root.classList.add('fading'), BLACK_MS + HOLD_MS);
+  setTimeout(() => root.classList.add('gone'), BLACK_MS + HOLD_MS + FADE_MS);
 });
 
 export const loading = {

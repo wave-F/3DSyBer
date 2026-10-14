@@ -73,8 +73,8 @@ export function createFinale({ scene, camera, tablet, ui }) {
   const beam = new THREE.PointLight(0xeef4ff, 0, 32, 2);
   scene.add(beam);
 
-  const draco = new DRACOLoader().setDecoderPath('/draco/');
-  new GLTFLoader().setDRACOLoader(draco).loadAsync('/assets/supercar.glb').then((gltf) => {
+  const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
+  new GLTFLoader().setDRACOLoader(draco).loadAsync(`${import.meta.env.BASE_URL}assets/supercar.glb`).then((gltf) => {
     const model = gltf.scene;   // 车头 +Z，地面 y=0
     const paint = new THREE.MeshPhysicalMaterial({ color: 0x0b0d12, roughness: 0.22, metalness: 0.5, clearcoat: 1, clearcoatRoughness: 0.08 });
     const lamp = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 1, 1).multiplyScalar(9) });

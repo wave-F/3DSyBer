@@ -6,6 +6,7 @@ import { createActor } from './actors.js';
 import { markKeep } from './mask.js';
 import { addTireTracks } from '../tireTracks.js';
 import { ROUNDS } from './clues.js';
+import { onLang, tx } from '../i18n.js';
 import { uniform, vec3, float, uv, texture, attribute, abs, fract, step, smoothstep } from 'three/tsl';
 
 const BLUE = 0x3fb8ff;
@@ -204,14 +205,20 @@ function buildP0(arc) {
   const c = document.createElement('canvas');
   c.width = 512; c.height = 192;
   const g = c.getContext('2d');
-  g.fillStyle = '#ffffff';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.font = '600 92px "SF Mono", Menlo, monospace';
-  g.fillText('P0', 256, 62);
-  g.font = '500 38px "PingFang SC", sans-serif';
-  g.fillText('零号保障 · 让行区', 256, 150);
   const map = new THREE.CanvasTexture(c);
+  const paintLane = () => {
+    g.clearRect(0, 0, c.width, c.height);
+    g.fillStyle = '#ffffff';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = '600 92px "SF Mono", Menlo, monospace';
+    g.fillText('P0', 256, 62);
+    g.font = '500 38px "PingFang SC", sans-serif';
+    g.fillText(tx('零号保障 · 让行区', 'ZERO PRIORITY · YIELD'), 256, 150, 490);
+    map.needsUpdate = true;
+  };
+  paintLane();
+  onLang(paintLane);
   map.colorSpace = THREE.SRGBColorSpace;
   map.anisotropy = 8;
   const textMat = markKeep(new THREE.MeshBasicNodeMaterial(add));

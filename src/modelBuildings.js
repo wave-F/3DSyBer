@@ -125,7 +125,7 @@ function bakedMaterial(src) {
 }
 
 export function loadModelBuildings(scene) {
-  const draco = new DRACOLoader().setDecoderPath('/draco/');
+  const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
   const loader = new GLTFLoader().setDRACOLoader(draco);
   const mats = new Map();
   const byType = new Map();
@@ -134,7 +134,7 @@ export function loadModelBuildings(scene) {
     if (!byType.has(b.type)) byType.set(b.type, []);
     byType.get(b.type).push(i);
   });
-  const jobs = [...byType].map(([type, list]) => loader.loadAsync(`/${TYPES[type].file}`).then((gltf) => {
+  const jobs = [...byType].map(([type, list]) => loader.loadAsync(`${import.meta.env.BASE_URL}${TYPES[type].file}`).then((gltf) => {
     const proto = gltf.scene;
     proto.traverse((o) => {
       if (!o.isMesh) return;
