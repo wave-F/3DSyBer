@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { mrt, float } from 'three/tsl';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { sound } from '../audio/sound.js';
 
 // 第一人称一体模型：扫描枪、手套和前臂
 // 手和设备放在叠加场景（与平板同一个），单独渲染，不会插进场景物体
@@ -54,6 +55,7 @@ export function createViewmodel(overlayScene, camera) {
     bob: 0, lastPos: new THREE.Vector3(), speed: 0,
     sway: { y: 0, p: 0, vy: 0, vp: 0 }, lastYaw: 0, lastPitch: 0,
     onFire: null,
+    shown: false, aiming: false,
   };
   const qA = new THREE.Quaternion(), qB = new THREE.Quaternion(), qC = new THREE.Quaternion();
   const vA = new THREE.Vector3(), vB = new THREE.Vector3();
@@ -64,6 +66,7 @@ export function createViewmodel(overlayScene, camera) {
     if (st.scanT >= 0) return false;
     st.scanT = 0;
     st.onFire = onFire;
+    if (st.shown) sound.cloth();
     return true;
   }
 
@@ -81,6 +84,11 @@ export function createViewmodel(overlayScene, camera) {
   }
 
   function update(dt, visible) {
+    // 只在动作切换时触发，不跟随每帧的呼吸 / 弹簧晃动重复播放。
+    const aiming = !!st.target;
+    if (dt > 0 && (visible !== st.shown || (visible && aiming !== st.aiming))) sound.cloth();
+    st.shown = visible;
+    st.aiming = aiming;
     // 收起/显示
     st.hide = THREE.MathUtils.clamp(st.hide + (visible ? -dt * 3 : dt * 5), 0, 1);
     rig.visible = st.hide < 1;
@@ -113,9 +121,11 @@ export function createViewmodel(overlayScene, camera) {
     const LOWER = 0.5;
     let scanW = 0;
     if (st.scanT >= 0) {
+      const before = st.scanT;
       st.scanT += dt;
       const t = st.scanT;
       const downT = RAISE + HOLD;
+      if (before < downT && t >= downT && visible && !aiming && st.aim <= 0.001) sound.cloth();
       scanW = t < RAISE
         ? THREE.MathUtils.smootherstep(t / RAISE, 0, 1)
         : t < downT

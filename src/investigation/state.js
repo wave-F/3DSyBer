@@ -62,7 +62,7 @@ export function createInvestigation(scene, camera, crash, controls) {
   let dbgAim = -1;
   let started = false;
   let cutFrozen = false;       // 调试：冻结过场，逐步查看镜头
-  let wasHolding = false, analysisDone = false, deviceShown = false;
+  let wasHolding = false, analysisDone = false;
 
   const R = () => ROUNDS[round];
   const unlocked = () => clues.filter((c) => c.unlocked);
@@ -90,8 +90,7 @@ export function createInvestigation(scene, camera, crash, controls) {
   // relock = false 时（Esc 收起）不重新锁定，回到暂停层
   function setTablet(on, relock = true) {
     if (on !== tablet.open) {
-      sound.play(on ? 'foley/tablet_raise' : 'foley/tablet_lower');
-      sound.play(on ? 'ui/panel_open' : 'ui/panel_close', { volume: 0.8 });
+      sound.play(on ? 'ui/panel_open' : 'ui/panel_close');
     }
     tablet.toggle(on);
     if (on) {
@@ -594,7 +593,6 @@ export function createInvestigation(scene, camera, crash, controls) {
         if (mode === 'report') updateReport(realDt);
       }
       const showDevice = mode === 'explore' && !tablet.open && tablet.amount < 0.02;
-      if (showDevice !== deviceShown) { deviceShown = showDevice; sound.play(showDevice ? 'foley/scanner_draw' : 'foley/scanner_holster', { volume: 0.8 }); }
       // 分析持续音：按住期间音高随进度上升；中途松开 / 移开准星时播放断电声
       if (holdT > 0) { sound.analyze(holdT / HOLD_TIME); wasHolding = true; analysisDone = false; }
       else if (wasHolding) {

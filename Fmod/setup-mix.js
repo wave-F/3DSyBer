@@ -58,6 +58,11 @@ function route(path, bus) {
 route('event:/amb/rain', bed);
 route('event:/amb/traffic', bed);
 
+// 手工 Foley：保留事件和素材，仅确保路由与 Bank 分配。
+var foley = need('bus:/FOLEY');
+route('event:/foley/FootStep', foley);
+route('event:/foley/ClothFoley', foley);
+
 // 3D 点声源：距离单位是米（与 three.js 场景一致），Inverse Tapered 衰减，到 max 静音
 function spatial(path, bus, o) {
     var e = route(path, bus);

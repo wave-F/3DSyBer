@@ -509,12 +509,14 @@ export function createTablet(camera) {
     else if (code === 'KeyW' && state.tab === 2) { const m = state.data.reports.length; state.repSel = (state.repSel + m - 1) % m; state.typeT = 0; }
     else if (code === 'KeyS' && state.tab === 2) { const m = state.data.reports.length; state.repSel = (state.repSel + 1) % m; state.typeT = 0; }
     else return false;
-    sound.play('ui/hover', { volume: 1.6 });
+    sound.play('ui/hover');
     state.dirty = true;
     return true;
   }
 
   function toggle(on = !state.open) {
+    if (on === state.open) return;
+    sound.cloth();
     state.open = on;
     if (on) { state.boot = 0; state.typeT = 0; state.dirty = true; }
     else {

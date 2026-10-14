@@ -4,8 +4,9 @@ export const BANKS = ['Master.strings.bank', 'Master.bank', 'Preview.bank', 'Mai
 // Mixer 对象：Fmod/setup-mix.js 创建
 export const SNAPSHOTS = { dream: 'snapshot:/Dream', tablet: 'snapshot:/Tablet' };
 export const VCAS = { ambience: 'vca:/Ambience', sfx: 'vca:/SFX', ui: 'vca:/UI' };
+export const FOLEY = { step: 'foley/FootStep', cloth: 'foley/ClothFoley' };
 
-const e = (path, label, description, bank = 'Main.bank') => ({ path, label, description, bank, volume: 1, pitch: 1 });
+const e = (path, label, description, bank = 'Main.bank') => ({ path, label, description, bank, pitch: 1 });
 
 export const EVENTS = [
   e('event:/amb/rain', '雨声（循环）', '2D 立体声铺底 · AMB/Bed · 黑梦里压低并闷掉'),
@@ -16,13 +17,8 @@ export const EVENTS = [
   e('event:/amb/Amb_4', '远处城市（循环 · 3D）', '远处楼群点声源 · AMB/City · 30–300 m'),
   e('event:/amb/Amb_5_rain', '雨打楼体 A（循环 · 3D）', '每栋楼朝桥立面一个点声源，与 B 交替 · AMB/RainHits · 6–45 m'),
   e('event:/amb/Amb_6_rain', '雨打楼体 B（循环 · 3D）', '每栋楼朝桥立面一个点声源，与 A 交替 · AMB/RainHits · 6–45 m'),
-  e('event:/foley/step_walk', '脚步 · 走', '11 条湿靴脚步 + 雨衣摩擦层 · 随机不重复 · 音高 / 音量随机'),
-  e('event:/foley/step_run', '脚步 · 跑', '12 条跑步脚步，衣物层更重'),
-  e('event:/foley/cloth_move', '衣物摆动', '停步 / 转身 · 5 条随机'),
-  e('event:/foley/scanner_draw', '掏出扫描仪', '外套摆动 → 皮套抽出'),
-  e('event:/foley/scanner_holster', '收起扫描仪', '皮套扣合 + 衣物落下'),
-  e('event:/foley/tablet_raise', '拿出平板', '口袋翻找 + 雨衣摩擦'),
-  e('event:/foley/tablet_lower', '收起平板', '雨衣摩擦 + 放回口袋'),
+  e(`event:/${FOLEY.step}`, '脚步', '走 / 跑共用 · 游戏按实际步频逐步触发，每一步叠加衣物声'),
+  e(`event:/${FOLEY.cloth}`, '衣物动作', '每一步、停步、转身、扫描仪拿放 / 举落、平板拿放 · 单次播放'),
   e('event:/ui/panel_open', 'UI 面板出现', '平板开机 / 线索卡弹出'),
   e('event:/ui/panel_close', 'UI 面板关闭', '平板收起'),
   e('event:/ui/click', 'UI 点击', '点到可交互区域'),

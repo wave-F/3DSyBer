@@ -10,6 +10,8 @@ const WALK = 4;
 const RUN = 8;
 const STRIDE_WALK = 1.9;   // 每步距离（米）
 const STRIDE_RUN = 3.0;
+const TURN_ANGLE = 0.35;    // 原地累计转动约 20° 才触发，避免细小视角抖动反复响
+const TURN_INTERVAL = 0.35;
 
 export function createPlayer(camera, domElement, overlay) {
   const controls = new PointerLockControls(camera, domElement);
@@ -30,23 +32,44 @@ export function createPlayer(camera, domElement, overlay) {
   addEventListener('keydown', (e) => { keys[e.code] = true; });
   addEventListener('keyup', (e) => { keys[e.code] = false; });
 
-  let stride = 0, moving = 0;
+  let stride = 0, moving = 0, turnCooldown = 0;
   const last = camera.position.clone();
-  // 脚步：按走过的距离触发；停下时补一声衣物摆动
+  const turnRotation = camera.quaternion.clone();
+  function resetFoley() {
+    stride = moving = turnCooldown = 0;
+    last.copy(camera.position);
+    turnRotation.copy(camera.quaternion);
+  }
+  controls.addEventListener('unlock', () => {
+    for (const code of Object.keys(keys)) keys[code] = false;
+    resetFoley();
+  });
+  controls.addEventListener('lock', resetFoley);
+
+  // 按实际位移累积步相（0..1），切换走 / 跑不重置；停步和原地转身补衣物声。
   function footsteps(dt, running) {
     const d = Math.hypot(camera.position.x - last.x, camera.position.z - last.z);
     last.copy(camera.position);
+    turnCooldown = Math.max(0, turnCooldown - dt);
     if (d > 0.002) {
-      if (moving <= 0) stride = (running ? STRIDE_RUN : STRIDE_WALK) * 0.6;   // 起步第一步来得快一些
+      if (moving <= 0) stride = 0.6;   // 起步第一步来得快一些
       moving = 0.15;
-      stride += d;
-      const len = running ? STRIDE_RUN : STRIDE_WALK;
-      if (stride >= len) { stride -= len; sound.play(running ? 'foley/step_run' : 'foley/step_walk'); }
-    } else if (moving > 0 && (moving -= dt) <= 0) sound.play('foley/cloth_move', { volume: 0.7 });
+      stride += d / (running ? STRIDE_RUN : STRIDE_WALK);
+      if (stride >= 1) { stride %= 1; sound.step(); }
+      turnRotation.copy(camera.quaternion);   // 移动中的转身已有逐步衣物声，不额外连续叠加
+    } else {
+      if (moving > 0 && (moving -= dt) <= 0) sound.cloth();
+      // 看净转角而非逐帧角度总和，来回的小抖动不会最终累积成一次转身。
+      if (camera.quaternion.angleTo(turnRotation) >= TURN_ANGLE && turnCooldown === 0) {
+        sound.cloth();
+        turnRotation.copy(camera.quaternion);
+        turnCooldown = TURN_INTERVAL;
+      }
+    }
   }
 
   function update(dt) {
-    if (!controls.isLocked) { last.copy(camera.position); return; }
+    if (!controls.isLocked || !controls.enabled || dt <= 0) { resetFoley(); return; }
     const speed = (keys.ShiftLeft || keys.ShiftRight ? RUN : WALK) * dt;
     const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
     const s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
@@ -62,8 +85,7 @@ export function createPlayer(camera, domElement, overlay) {
     p.z = Math.min(CORDON.z1 - CORDON_MARGIN, Math.max(CORDON.z0 + CORDON_MARGIN, p.z));
     p.y = DECK_Y + EYE;
     pushOutOfCar(p);
-    if (dt > 0) footsteps(dt, keys.ShiftLeft || keys.ShiftRight);
-    else last.copy(p);
+    footsteps(dt, keys.ShiftLeft || keys.ShiftRight);
   }
   update.controls = controls;
   return update;

@@ -126,11 +126,12 @@ export class FmodRuntime {
     return out.val;
   }
 
-  play({ path, volume = 1, pitch = 1, parameters = {} }) {
+  play({ path, volume, pitch = 1, parameters = {} }) {
     const inst = this.instance(path);
     if (!inst) return;
     try {
-      this.check(inst.setVolume(volume), `volume ${path}`);
+      // 不传 volume 就完全沿用 Bank；仅供试听工具显式设置实例增益。
+      if (volume !== undefined) this.check(inst.setVolume(volume), `volume ${path}`);
       this.check(inst.setPitch(pitch), `pitch ${path}`);
       for (const [name, value] of Object.entries(parameters)) {
         this.check(inst.setParameterByName(name, value, false), `parameter ${name}`);

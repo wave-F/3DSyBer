@@ -30,10 +30,19 @@ async function run(action) {
   busy = true;
   refresh();
   try {
+    const wasReady = fmod.ready;
     await fmod.initialize();
     if (disposed) return;
-    fmod.setVolume(Number(volume.value));
-    for (const [path, input] of vcaInputs) fmod.setVcaVolume(path, Number(input.value));
+    // 首次启用只读 Studio 的 VCA 值，不用默认 100% 推子覆盖已调好的混音。
+    if (!wasReady) {
+      for (const [path, { input, out }] of vcaInputs) {
+        const value = fmod.getVcaVolume(path);
+        input.value = value;
+        out.value = `${Math.round(value * 100)}%`;
+        input.disabled = false;
+      }
+      volume.disabled = false;
+    }
     fmod.setMuted(document.hidden);
     if (!document.hidden) action();
   } catch (error) { report(error); }
@@ -48,6 +57,7 @@ volume.addEventListener('input', () => {
   document.querySelector('#volume-value').value = `${Math.round(Number(volume.value) * 100)}%`;
   fmod.setVolume(Number(volume.value));
 });
+volume.disabled = true;
 
 // 混音：VCA 推子 + Snapshot 开关，FMOD 就绪后才生效
 const vcaInputs = new Map();
@@ -55,14 +65,14 @@ const vcaLabels = { ambience: '环境 Ambience', sfx: '音效 SFX', ui: '界面 
 for (const [key, path] of Object.entries(VCAS)) {
   const label = document.createElement('label');
   label.className = 'volume';
-  const input = Object.assign(document.createElement('input'), { type: 'range', min: 0, max: 1, step: 0.01, value: 1 });
+  const input = Object.assign(document.createElement('input'), { type: 'range', min: 0, max: 1, step: 0.01, value: 1, disabled: true });
   const out = document.createElement('output');
   out.value = '100%';
   input.addEventListener('input', () => {
     out.value = `${Math.round(Number(input.value) * 100)}%`;
     try { fmod.setVcaVolume(path, Number(input.value)); } catch (error) { report(error); }
   });
-  vcaInputs.set(path, input);
+  vcaInputs.set(path, { input, out });
   label.append(vcaLabels[key], input, out);
   document.querySelector('#vcas').append(label);
 }

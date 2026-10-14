@@ -1,6 +1,6 @@
 // FMOD Studio 官方脚本：根据 Assets/ 下编辑好的 WAV 生成游戏 Event、混音总线和 Main Bank。
-// 通过 npm run audio:events 执行。脚本管理的文件夹（foley / ui / scifi）会被整体重建，
-// 需要在 Studio 里手动精修的事件请放到其它文件夹。amb 是手工制作的，这里不碰；
+// 通过 npm run audio:events 执行。脚本管理的文件夹（ui / scifi）会被整体重建，
+// amb 和 foley（FootStep / ClothFoley）是手工制作的，这里不碰；
 // 它的 3D 定位、子总线、Snapshot、VCA 由 setup-mix.js 搭（重建后要再跑 npm run audio:mix）。
 var dir = studio.project.filePath.replace(/[^/]+$/, '') + 'Assets/';
 var ws = studio.project.workspace;
@@ -98,21 +98,6 @@ function loop(f, name, bus, file, fade) {
     return e;
 }
 
-function seq(prefix, n) {
-    var out = [];
-    for (var i = 1; i <= n; i++) out.push(prefix + (i < 10 ? '0' : '') + i);
-    return out;
-}
-
-var foley = folder('foley');
-oneShot(foley, 'step_walk', 'FOLEY', seq('foley/step_walk_', 11), { pitch: 1.2, volume: 2.5 });
-oneShot(foley, 'step_run', 'FOLEY', seq('foley/step_run_', 12), { pitch: 1.2, volume: 2.5 });
-oneShot(foley, 'cloth_move', 'FOLEY', seq('foley/cloth_move_', 5), { pitch: 1.5, volume: 3 });
-oneShot(foley, 'scanner_draw', 'FOLEY', ['foley/scanner_draw'], { pitch: 0.8 });
-oneShot(foley, 'scanner_holster', 'FOLEY', ['foley/scanner_holster'], { pitch: 0.8 });
-oneShot(foley, 'tablet_raise', 'FOLEY', ['foley/tablet_raise'], { pitch: 0.8 });
-oneShot(foley, 'tablet_lower', 'FOLEY', ['foley/tablet_lower'], { pitch: 0.8 });
-
 var ui = folder('ui');
 oneShot(ui, 'click', 'UI', ['ui/click'], { pitch: 0.5 });
 oneShot(ui, 'hover', 'UI', ['ui/hover'], { pitch: 0.8, max: 2 });
@@ -135,4 +120,4 @@ oneShot(scifi, 'dream_exit', 'SCIFI', ['scifi/dream_exit']);
 
 ws.builtBanksOutputDirectory = '';
 studio.project.save();
-console.log('Ready: foley / ui / scifi -> Main bank');
+console.log('Ready: ui / scifi -> Main bank; manual amb / foley preserved');

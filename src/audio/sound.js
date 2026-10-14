@@ -1,8 +1,8 @@
 import { FmodRuntime } from './fmodRuntime.js';
-import { SNAPSHOTS, VCAS } from './events.js';
+import { FOLEY, SNAPSHOTS } from './events.js';
 
 // 游戏音频入口。所有调用在 FMOD 未就绪时都是空操作，音频出错不影响游戏流程。
-// 音量与状态混音全部在 FMOD Mixer 里：总线 / Snapshot / VCA（Fmod/setup-mix.js）。
+// 音量只以 Studio 的 Bank 为准；游戏不设事件增益或 VCA 音量，只切换 Studio 的 Snapshot。
 
 // 2D 立体声铺底：跟着头走，不随视角转动
 const BEDS = ['event:/amb/rain', 'event:/amb/traffic'];
@@ -69,9 +69,17 @@ export const sound = {
     })).catch((e) => console.warn('[audio] init', e.message));
   },
 
-  play(name, { volume = 1, pitch = 1 } = {}) {
-    guard(() => fmod.play({ path: `event:/${name}`, volume, pitch }));
+  play(name, { pitch = 1 } = {}) {
+    guard(() => fmod.play({ path: `event:/${name}`, pitch }));
   },
+
+  // 一步一个单次事件；跑步加快的是触发频率，素材音高 / 随机变化仍由 Studio 控制。
+  step() {
+    sound.play(FOLEY.step);
+    sound.cloth();
+  },
+
+  cloth() { sound.play(FOLEY.cloth); },
 
   // 黑梦：城市退远，只剩闷住的雨
   setDream(on) { guard(() => fmod.setSnapshot(SNAPSHOTS.dream, on)); },
@@ -79,17 +87,12 @@ export const sound = {
   // 平板举起：环境让位给 UI
   setTablet(on) { guard(() => fmod.setSnapshot(SNAPSHOTS.tablet, on)); },
 
-  // VCA 音量 0..1：ambience / sfx / ui
-  setVolume(name, volume) { guard(() => fmod.setVcaVolume(VCAS[name], volume)); },
-  getVolume(name) { return guard(() => fmod.getVcaVolume(VCAS[name])) ?? 1; },
-
   // 按住分析的持续音：progress 0..1 推高音高；null 停止
   analyze(progress) {
     const path = 'event:/scifi/analyze_loop';
     guard(() => {
       if (progress == null) { fmod.stopLoop(path); return; }
       const inst = fmod.startLoop(path);
-      inst.setVolume(0.9);
       inst.setPitch(0.85 + progress * 0.55);
     });
   },
