@@ -1,10 +1,18 @@
 // 调查界面：全部为 HTML 叠加层（细线、编号、等宽数字，接近底特律的界面风格）
 import { sound } from '../audio/sound.js';
+import { recordedVoiceId } from '../audio/dialogue.en.js';
 import { createDialoguePlayer } from '../audio/dialoguePlayer.js';
 import { LINES } from './clues.js';
 
+// 只把逐字未改的句子绑到已录配音。改写过的字幕、以及 dreamGuide 这种现造的句子，不套旧录音。
 const voiceIds = new WeakMap();
-for (const [group, lines] of Object.entries(LINES)) lines.forEach((line, i) => voiceIds.set(line, `${group}_${String(i + 1).padStart(2, '0')}`));
+for (const [group, lines] of Object.entries(LINES)) {
+  if (!Array.isArray(lines)) continue;
+  for (const line of lines) {
+    const id = recordedVoiceId(group, line.text);
+    if (id) voiceIds.set(line, id);
+  }
+}
 
 const CSS = `
 .inv { position: fixed; pointer-events: none; font-family: "PingFang SC", "Helvetica Neue", sans-serif; color: #dff2ff; user-select: none; }
@@ -18,6 +26,9 @@ const CSS = `
 #inv-hud .count b { font-weight: 500; color: #ffcf4a; }
 #inv-hud .bar { margin-top: 8px; width: 220px; height: 2px; background: rgba(108,200,255,.2); transition: opacity .32s ease, transform .32s ease; }
 #inv-hud .bar i { display: block; height: 100%; width: 0; background: #6cc8ff; transition: width .4s; }
+#inv-hud .scan { display: none; margin-top: 12px; font-size: 13px; letter-spacing: .06em; color: rgba(223,242,255,.78); }
+#inv-hud.search .scan { display: block; }
+#inv-hud .scan b { display: inline-block; min-width: 18px; margin-right: 6px; padding: 0 5px; border: 1px solid rgba(223,242,255,.55); text-align: center; font-weight: 500; color: #ffcf4a; }
 #inv-hud.done .count { color: #b6f3c6; }
 #inv-hud.ready .mode, #inv-hud.ready .count { color: #ffcf4a; }
 #inv-hud.ready .mode::before { border-color: #ffcf4a; }
@@ -25,37 +36,47 @@ const CSS = `
 #inv-hud.out .count, #inv-hud.out .bar { opacity: 0; transform: translateY(-12px); }
 #inv-hud.in .count, #inv-hud.in .bar { animation: inv-task-in .42s ease; }
 @keyframes inv-task-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-#inv-solved { left: 32px; top: 25%; transform: translateY(-6px) scale(1.5); transform-origin: left bottom; font-size: 12px; letter-spacing: .3em; color: #ffb35c; opacity: 0; transition: opacity .4s; }
-#inv-solved.on { opacity: .9; }
 #inv-hint { left: 32px; bottom: 28px; font-size: 12px; opacity: .55; letter-spacing: .08em; line-height: 1.9; }
 #inv-hint.recon { left: 50%; bottom: 36px; width: min(900px, 86vw); transform: translateX(-50%); text-align: center; }
 #inv-hint b { display: inline-block; min-width: 18px; padding: 0 5px; margin-right: 6px; border: 1px solid rgba(223,242,255,.5); text-align: center; font-weight: 400; }
+#inv-skip { right: 32px; bottom: 28px; padding: 9px 18px; overflow: hidden; font-size: 14px; letter-spacing: .12em; border: 1px solid rgba(223,242,255,.35); background: rgba(4,12,20,.55); opacity: 0; transition: opacity .25s, border-color .2s, color .2s; z-index: 7; }
+#inv-skip.on { opacity: .9; }
+#inv-skip .fill { position: absolute; inset: 0; background: rgba(255,207,74,.32); transform: scaleX(0); transform-origin: left; }
+#inv-skip .txt { position: relative; }
+#inv-skip b { display: inline-block; min-width: 18px; padding: 0 5px; margin: 0 6px; border: 1px solid rgba(223,242,255,.5); text-align: center; font-weight: 400; transition: border-color .2s; }
+#inv-skip.holding { border-color: rgba(255,207,74,.8); color: #ffe7a3; }
+#inv-skip.holding b { border-color: #ffcf4a; }
 #inv-markers { inset: 0; }
 .inv-mk { position: absolute; transform: translate(-50%, -50%) scale(1.5); transition: opacity .3s; }
-.inv-mk .d { width: 16px; height: 16px; border: 1.5px solid #ffcf4a; transform: rotate(45deg); background: rgba(255,207,74,.12); box-shadow: 0 0 10px rgba(255,207,74,.5); }
-.inv-mk .n { position: absolute; left: 22px; top: -3px; font-size: 11px; color: #ffcf4a; white-space: nowrap; letter-spacing: .1em; }
+.inv-mk .d { width: 22px; height: 22px; border: 2.5px solid #ffcf4a; transform: rotate(45deg); background: rgba(255,207,74,.16); box-shadow: 0 0 12px rgba(255,207,74,.55); }
+.inv-mk .snap { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border: 2px solid #ffcf4a; transform: rotate(45deg) scale(1); opacity: 0; }
+.inv-mk .snap.go { animation: inv-snap .55s ease-out; }
+.inv-mk .n { position: absolute; left: 30px; top: -2px; font-size: 11px; color: #ffcf4a; white-space: nowrap; letter-spacing: .1em; }
 .inv-mk.done .d { border-color: #e8f6ff; background: rgba(232,246,255,.15); box-shadow: none; }
 .inv-mk.done .n { color: #e8f6ff; opacity: .7; }
-.inv-mk.aim .d { width: 22px; height: 22px; margin: -3px; background: rgba(255,207,74,.3); }
+.inv-mk.aim .d { width: 30px; height: 30px; margin: -4px; background: rgba(255,207,74,.3); }
 .inv-mk.pop .d { animation: inv-pop .5s ease-out; }
 @keyframes inv-pop { 0% { transform: rotate(45deg) scale(2.4); opacity: 0; } 100% { transform: rotate(45deg) scale(1); opacity: 1; } }
+@keyframes inv-snap { 0% { transform: rotate(45deg) scale(3.4); opacity: .95; } 100% { transform: rotate(45deg) scale(1); opacity: 0; } }
 #inv-prompt { left: 50%; bottom: 190px; transform: translateX(-50%); font-size: 14px; letter-spacing: .12em; padding: 8px 18px; border: 1px solid rgba(108,200,255,.5); background: rgba(4,12,20,.55); opacity: 0; transition: opacity .2s; white-space: nowrap; }
 #inv-prompt.on { opacity: 1; }
 #inv-prompt.gold { border-color: rgba(255,179,92,.7); color: #ffd9a8; }
 #inv-analysis { inset: 0; opacity: 0; transition: opacity .18s; z-index: 2; }
 #inv-analysis.on { opacity: 1; }
-#inv-analysis .target { position: absolute; width: 136px; height: 108px; transform: translate(-50%, -50%); color: #eac65a; transition: width .2s, height .2s; }
-#inv-analysis.working .target, #inv-analysis.complete .target { width: 116px; height: 92px; }
-#inv-analysis .corner { position: absolute; width: 10px; height: 10px; border: 0 solid currentColor; }
-#inv-analysis .a { left: 0; top: 0; border-top-width: 2px; border-left-width: 2px; }
-#inv-analysis .b { right: 0; top: 0; border-top-width: 2px; border-right-width: 2px; }
-#inv-analysis .c { left: 0; bottom: 0; border-bottom-width: 2px; border-left-width: 2px; }
-#inv-analysis .d { right: 0; bottom: 0; border-bottom-width: 2px; border-right-width: 2px; }
+#inv-analysis .target { position: absolute; width: 176px; height: 140px; transform: translate(-50%, -50%); color: #ffe08a; filter: drop-shadow(0 0 6px rgba(255,207,74,.75)); transition: width .2s, height .2s; }
+#inv-analysis.working .target, #inv-analysis.complete .target { width: 148px; height: 116px; }
+#inv-analysis .corner { position: absolute; width: 26px; height: 26px; border: 0 solid currentColor; }
+#inv-analysis .a { left: 0; top: 0; border-top-width: 4px; border-left-width: 4px; }
+#inv-analysis .b { right: 0; top: 0; border-top-width: 4px; border-right-width: 4px; }
+#inv-analysis .c { left: 0; bottom: 0; border-bottom-width: 4px; border-left-width: 4px; }
+#inv-analysis .d { right: 0; bottom: 0; border-bottom-width: 4px; border-right-width: 4px; }
 #inv-analysis .readout { position: absolute; width: 310px; color: #ffcf4a; transform: perspective(850px) rotateY(-9deg) rotateZ(2deg); transform-origin: left center; text-shadow: 0 1px 5px rgba(0,10,20,.9); }
 #inv-analysis .readout::before { content: ''; position: absolute; left: -12px; top: -14px; bottom: -10px; width: 1px; background: linear-gradient(transparent, rgba(255,207,74,.45), transparent); }
 #inv-analysis .heading { display: flex; align-items: center; gap: 18px; min-height: 54px; }
 #inv-analysis .percent { font-size: 25px; font-weight: 300; font-variant-numeric: tabular-nums; }
 #inv-analysis .status { margin-top: 2px; font-size: 16px; letter-spacing: .14em; }
+#inv-analysis:not(.working):not(.complete) .status { font-size: 26px; font-weight: 500; letter-spacing: .12em; color: #ffe7a3; text-shadow: 0 0 14px rgba(255,207,74,.7); }
+#inv-analysis .status b { display: inline-block; min-width: 32px; margin-right: 12px; padding: 2px 8px; border: 2px solid #ffcf4a; text-align: center; font-weight: 500; }
 #inv-analysis .track { margin-top: 12px; height: 2px; background: rgba(255,207,74,.22); }
 #inv-analysis .fill { display: block; width: 100%; height: 100%; background: #ffcf4a; transform: scaleX(0); transform-origin: left; }
 #inv-analysis .caption { margin-top: 9px; color: rgba(255,214,120,.9); font-size: 11px; letter-spacing: .12em; }
@@ -102,40 +123,68 @@ const CSS = `
 #inv-tl .track > i { position: relative; z-index: 1; flex: 1; height: 14px; background: rgba(176,186,198,.32); }
 #inv-tl .track > i.past { background: rgba(236,242,248,.92); }
 #inv-tl .track > i.now { z-index: 3; background: #3aa7ff; box-shadow: 0 0 8px rgba(58,167,255,.85); }
-#inv-tl .gap { position: relative; flex: 0 0 14px; align-self: stretch; background: repeating-linear-gradient(90deg, rgba(255,255,255,.7) 0 1px, transparent 1px 3px); }
-#inv-tl .gap span { position: absolute; bottom: 22px; transform: translateX(-40%); font-size: 10px; white-space: nowrap; letter-spacing: .12em; color: rgba(232,246,255,.7); }
 #inv-tl .clock { position: absolute; top: 20px; transform: translateX(-50%); font-size: 12px; letter-spacing: .08em; color: #7ec8ff; white-space: nowrap; }
 #inv-tl .ev { position: absolute; z-index: 2; top: 0; height: 14px; background: rgba(255,207,74,.72); }
 #inv-tl .ev.rec { background: #ffcf4a; }
 #inv-tl .ev.near { box-shadow: 0 0 8px #ffcf4a; }
-#inv-evlabels { inset: 0; }
-.inv-evl3 { position: absolute; transform: translate(-50%, -100%); font-size: 12px; padding: 3px 8px; border: 1px solid rgba(255,207,74,.6); color: #ffcf4a; background: rgba(5,10,16,.5); white-space: nowrap; letter-spacing: .08em; transition: opacity .2s; }
-.inv-evl3.rec { border-color: rgba(255,255,255,.6); color: #fff; }
-.inv-evl3.near { background: rgba(255,207,74,.25); }
-#inv-sub { left: 50%; bottom: 128px; transform: translateX(-50%); max-width: 64vw; text-align: center; font-size: 22px; line-height: 1.6; letter-spacing: .06em; color: #f2f6fa; text-shadow: 0 2px 6px rgba(0,0,0,.95), 0 0 18px rgba(0,0,0,.7); opacity: 0; transition: opacity .25s; z-index: 6; }
+#inv-sub { left: 50%; bottom: 128px; transform: translateX(-50%); max-width: 64vw; text-align: center; font-size: 28px; line-height: 1.6; letter-spacing: .06em; color: #f2f6fa; text-shadow: 0 2px 6px rgba(0,0,0,.95), 0 0 18px rgba(0,0,0,.7); opacity: 0; transition: opacity .25s; z-index: 6; }
 #inv-sub.on { opacity: 1; }
 #inv-sub.lift { bottom: calc(11vh + 36px); }
-#inv-sub .who { color: #6cc8ff; margin-right: 12px; font-size: 18px; letter-spacing: .2em; }
+#inv-sub .who { color: #6cc8ff; margin-right: 12px; font-size: 22px; letter-spacing: .2em; }
 #inv-sub.radio .who::before { content: '◉ '; color: #ff8a1a; }
 #inv-sub.inner { font-style: italic; color: #e6e0d4; }
-#inv-ptr { left: 0; top: 0; transform: translate(-50%, -50%); opacity: 0; transition: opacity .3s; z-index: 4; }
-#inv-ptr.on { opacity: 1; }
-#inv-ptr .ar { width: 0; height: 0; border-left: 13px solid transparent; border-right: 13px solid transparent; border-bottom: 22px solid #ffcf4a; filter: drop-shadow(0 0 6px rgba(255,207,74,.8)); margin: 0 auto; }
-#inv-ptr .lb { margin-top: 8px; font-size: 13px; letter-spacing: .25em; color: #ffcf4a; white-space: nowrap; text-align: center; text-shadow: 0 1px 4px #000; }
-#inv-ptr.onscreen .ar { display: none; }
-#inv-ptr.onscreen .lb { margin-top: 36px; }
+#inv-dream { left: 50%; top: 50%; width: 200px; height: 200px; transform: translate(-50%, -50%); opacity: 0; transition: opacity .15s; z-index: 4; }
+#inv-dream.on { opacity: 1; }
+#inv-dream svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 6px rgba(255,207,74,.6)); }
+#inv-dream circle, #inv-dream path { fill: none; }
+#inv-dream .bg { stroke: rgba(255,207,74,.22); stroke-width: 3; }
+#inv-dream .fg { stroke: #ffcf4a; stroke-width: 4; stroke-linecap: butt; }
+#inv-dream .ticks { stroke: rgba(255,207,74,.45); stroke-width: 1; stroke-dasharray: 2 6.42; transform-origin: 100px 100px; }
+#inv-dream .mark { stroke: #ffcf4a; stroke-width: 2; transform-origin: 100px 100px; }
+#inv-dream .mark .pupil { fill: #ffcf4a; stroke: none; }
+#inv-dream .mark .lid { stroke-width: 2.5; }
+#inv-dream .mark .ray { stroke-width: 1.5; opacity: .7; }
+#inv-dream .lb { position: absolute; left: 50%; top: calc(100% + 14px); transform: translateX(-50%); white-space: nowrap; font-size: 14px; letter-spacing: .32em; color: #ffcf4a; text-shadow: 0 1px 5px rgba(0,10,20,.9); }
+#inv-rite { left: 50%; top: 22%; transform: translateX(-50%); text-align: center; opacity: 0; z-index: 5; text-shadow: 0 0 18px rgba(63,184,255,.55), 0 2px 6px rgba(0,0,0,.9); }
+#inv-rite .t1 { font-size: 40px; font-weight: 300; letter-spacing: .3em; color: #cfeeff; white-space: nowrap; }
+#inv-rite .t2 { margin-top: 10px; font-size: 18px; letter-spacing: .5em; color: #6cc8ff; }
+#inv-rite .t3 { margin-top: 14px; font-size: 12px; letter-spacing: .3em; color: rgba(159,212,255,.75); }
+#inv-tip { right: 48px; top: 50%; width: 340px; padding: 20px 24px 18px; transform: translate(16px, -50%); border-left: 2px solid #ffcf4a; background: linear-gradient(90deg, rgba(6,18,30,.86), rgba(6,18,30,.5)); opacity: 0; transition: opacity .35s, transform .35s; z-index: 4; }
+#inv-tip.on { opacity: 1; transform: translate(0, -50%); }
+#inv-tip .tag { font-size: 11px; letter-spacing: .3em; color: #ffcf4a; }
+#inv-tip h3 { margin: 6px 0 14px; font-size: 20px; font-weight: 500; letter-spacing: .1em; }
+#inv-tip .row { display: flex; align-items: center; gap: 12px; margin-top: 10px; font-size: 15px; line-height: 1.5; letter-spacing: .04em; }
+#inv-tip .row b { flex: none; min-width: 52px; padding: 2px 6px; border: 1px solid rgba(223,242,255,.55); text-align: center; font-weight: 500; font-size: 13px; color: #ffcf4a; }
+#inv-tip .row i { flex: none; width: 52px; height: 10px; background: rgba(255,207,74,.72); }
+#inv-guide { left: 50%; bottom: 170px; transform: translate(-50%, 10px); display: flex; align-items: center; gap: 18px; padding: 14px 28px 14px 22px; border: 2px solid #ffcf4a; background: rgba(5,12,20,.8); box-shadow: 0 0 24px rgba(255,207,74,.35); font-size: 24px; letter-spacing: .1em; color: #ffe7a3; white-space: nowrap; opacity: 0; transition: opacity .3s, transform .3s; z-index: 6; }
+#inv-guide.on { opacity: 1; transform: translate(-50%, 0); animation: inv-guide-pulse 1.4s ease-in-out infinite; }
+#inv-guide b { font-weight: 500; color: #ffcf4a; }
+#inv-guide svg { flex: none; width: 30px; height: 46px; }
+#inv-guide .mouse { fill: none; stroke: #ffcf4a; stroke-width: 2.5; }
+#inv-guide .wheel { fill: #ffcf4a; animation: inv-wheel 1s ease-in-out infinite; }
+@keyframes inv-guide-pulse { 50% { box-shadow: 0 0 44px rgba(255,207,74,.75); border-color: #fff1c2; } }
+@keyframes inv-wheel { 0% { transform: translateY(5px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-6px); opacity: 0; } }
+#inv-tl .ev.goal { background: #ffcf4a; animation: inv-goal .9s ease-in-out infinite; }
+#inv-tl .ev.goal::after { content: '▼'; position: absolute; left: 50%; top: -30px; transform: translateX(-50%); font-size: 20px; color: #ffcf4a; text-shadow: 0 0 10px rgba(255,207,74,.9); animation: inv-goal-arrow .9s ease-in-out infinite; }
+@keyframes inv-goal { 50% { box-shadow: 0 0 16px 3px rgba(255,207,74,.9); } }
+@keyframes inv-goal-arrow { 50% { top: -22px; } }
 #inv-cine { inset: 0; z-index: 8; }
 #inv-cine::before, #inv-cine::after { content: ''; position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height .35s ease; }
 #inv-cine::before { top: 0; }
 #inv-cine::after { bottom: 0; }
 #inv-cine.on::before, #inv-cine.on::after { height: 11vh; }
 #inv-black { inset: 0; background: #000; opacity: 0; z-index: 9; }
+#inv-fin { inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; opacity: 0; transition: opacity 2s ease; }
+#inv-fin.on { opacity: 1; }
+#inv-fin .t1 { font-size: 46px; font-weight: 300; letter-spacing: .6em; text-indent: .6em; color: #d8e2ea; }
+#inv-fin .t2 { font-size: 22px; font-weight: 300; letter-spacing: .6em; text-indent: .6em; color: #ffcf4a; opacity: 0; transition: opacity 1.6s ease 1.4s; }
+#inv-fin.on .t2 { opacity: 1; }
 #inv-ending { inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; opacity: 0; transition: opacity 1.2s; }
 #inv-ending.on { opacity: 1; }
-#inv-ending h1 { margin: 0 0 22px; font-size: 34px; font-weight: 400; letter-spacing: .5em; color: #9fb4c4; }
+#inv-ending h1 { margin: 0 0 22px; font-size: 30px; font-weight: 400; letter-spacing: .18em; color: #d8e2ea; }
+#inv-ending h1 span { color: #ffcf4a; margin-right: .35em; }
 #inv-ending .ln { font-size: 19px; letter-spacing: .12em; color: #d8e2ea; opacity: 0; animation: inv-in .8s forwards; }
 #inv-ending .back { margin-top: 48px; font-size: 13px; letter-spacing: .3em; color: #ffcf4a; opacity: 0; animation: inv-in .8s forwards; }
-#inv-flash { inset: 0; background: radial-gradient(circle at 60% 55%, rgba(255,170,60,.55), rgba(255,120,20,.15) 60%, transparent); opacity: 0; z-index: 5; mix-blend-mode: screen; }
 `;
 
 // 证据图（Gemini 生成），启动时预加载，避免面板弹出时图片还没到
@@ -158,11 +207,11 @@ export function createUI() {
   style.textContent = CSS;
   document.head.appendChild(style);
 
-  const hud = el('inv-hud', '', `<div class="mode"><span>分析模式</span></div><div class="count inv-mono">0 / 0<small>线索</small></div><div class="bar"><i></i></div>`);
-  const solved = el('inv-solved', '', '◆ 案件已重建');
+  const hud = el('inv-hud', '', `<div class="mode"><span>分析模式</span></div><div class="count inv-mono">0 / 0<small>线索</small></div><div class="bar"><i></i></div><div class="scan">按 <b>Q</b> 可以进行扫描</div>`);
   const hint = el('inv-hint');
+  const skip = el('inv-skip', '', '<i class="fill"></i><span class="txt">按住<b>TAB</b>跳过</span>');
+  const skipFill = skip.querySelector('.fill');
   const markers = el('inv-markers');
-  const evlabels = el('inv-evlabels');
   const prompt = el('inv-prompt');
   const analysis = el('inv-analysis', '', `<div class="target"><i class="corner a"></i><i class="corner b"></i><i class="corner c"></i><i class="corner d"></i></div>
     <div class="readout"><div class="heading"><div><div class="percent inv-mono"></div><div class="status"></div></div></div>
@@ -178,10 +227,38 @@ export function createUI() {
   const toast = el('inv-toast', '', '<div class="t1"></div><div class="t2"></div>');
   const tl = el('inv-tl');
   const sub = el('inv-sub');
-  const ptr = el('inv-ptr', '', '<div class="ar"></div><div class="lb"></div>');
+  // 按住 R 的进度环：外圈读条 + 刻度圈 + 中心的黑梦标志（一只睁开的眼，菱形瞳孔与线索菱形呼应）
+  const DREAM_C = 2 * Math.PI * 88;
+  const dream = el('inv-dream', '', `<svg viewBox="0 0 200 200">
+    <circle class="bg" cx="100" cy="100" r="88"/>
+    <circle class="fg" cx="100" cy="100" r="88" transform="rotate(-90 100 100)" stroke-dasharray="${DREAM_C}" stroke-dashoffset="${DREAM_C}"/>
+    <circle class="ticks" cx="100" cy="100" r="74"/>
+    <g class="mark">
+      <path class="ray" d="M100 34 V50 M100 150 V166 M28 100 H42 M158 100 H172"/>
+      <g class="eye"><path class="lid" d="M50 100 Q100 62 150 100 Q100 138 50 100 Z"/></g>
+      <circle cx="100" cy="100" r="20" opacity=".55"/>
+      <path class="pupil" d="M100 87 L113 100 L100 113 L87 100 Z"/>
+    </g></svg><div class="lb">构建黑梦</div>`);
+  const dreamFg = dream.querySelector('.fg');
+  const dreamTicks = dream.querySelector('.ticks');
+  const dreamEye = dream.querySelector('.eye');
+  const dreamPupil = dream.querySelector('.pupil');
+  for (const e of [dreamEye, dreamPupil]) e.style.transformOrigin = '100px 100px';
+  const rite = el('inv-rite', '', '<div class="t1 inv-mono">BLACKDREAM</div><div class="t2">黑梦 · 现场重建</div><div class="t3 inv-mono"></div>');
+  const riteT1 = rite.querySelector('.t1');
+  // 第一次黑梦：引导玩家滚滚轮倒回异常时刻的大号提示（带滚轮动画）
+  const guide = el('inv-guide', '', `<svg viewBox="0 0 30 46"><rect class="mouse" x="2" y="2" width="26" height="42" rx="13"/><rect class="wheel" x="13" y="11" width="4" height="9" rx="2"/></svg><span></span>`);
+  const guideText = guide.querySelector('span');
+  // 第一次黑梦倒回异常时刻后弹出的操作说明
+  const tip = el('inv-tip', '', `<div class="tag inv-mono">BLACKDREAM · 操作</div><h3>在回放里找出异常</h3>
+    <div class="row"><b>滚轮</b><span>拖动回放时间</span></div>
+    <div class="row"><b>空格</b><span>播放 / 暂停</span></div>
+    <div class="row"><i></i><span>黄色时段：可以分析的异常时刻</span></div>
+    <div class="row"><b>E</b><span>按住分析</span></div>
+    <div class="row"><b>R</b><span>退出黑梦</span></div>`);
   const cine = el('inv-cine');
   const black = el('inv-black');
-  const flash = el('inv-flash');
+  const fin = el('inv-fin', '', '<div class="t1">序章</div><div class="t2">完</div>');
   const ending = el('inv-ending');
   let panelTimer = 0, toastTimer = 0, toastHold = null;
   const dialogue = createDialoguePlayer({
@@ -191,19 +268,20 @@ export function createUI() {
       sub.innerHTML = l.who ? `<span class="who">${l.who}</span>${l.text}` : l.text;
     },
     hide: () => sub.classList.remove('on'),
-    playVoice: (l) => sound.voice(voiceIds.get(l)),
+    playVoice: (l) => {
+      const id = voiceIds.get(l);
+      return id ? sound.voice(id) : null;
+    },
     radioOn: () => sound.play('ui/radio_on'),
     radioOff: () => sound.play('ui/radio_off'),
   });
 
   const HINTS = {
     explore: '<b>WASD</b>移动　<b>Shift</b>跑　<b>Q</b>扫描线索　<b>E</b>按住分析　<b>TAB</b>平板',
-    exploreReady: '<b>WASD</b>移动　<b>Shift</b>跑　<b>Q</b>扫描线索　<b>E</b>按住分析　<b>R</b>启动黑梦　<b>TAB</b>平板',
-    recon: '<b>滚轮</b>拖动时间　<b>空格</b>播放 / 暂停　<b>E</b>记录事件 / 按住分析全息　<b>Q</b>退出黑梦',
+    recon: '<b>滚轮</b>拖动时间　<b>空格</b>播放 / 暂停　<b>E</b>按住分析　<b>R</b>退出黑梦',
   };
 
   const markerEls = new Map();
-  const evEls = [];
   const markPos = new Map();
   let clueId = null;
 
@@ -225,40 +303,65 @@ export function createUI() {
       this._mode = mode;
       hud.classList.toggle('on', mode === 'explore' || mode === 'recon');
       hud.querySelector('.mode span').textContent = label;
-      hint.innerHTML = HINTS[mode === 'explore' && this._ready ? 'exploreReady' : mode] ?? '';
+      hint.innerHTML = HINTS[mode] ?? '';
       hint.classList.toggle('recon', mode === 'recon');
       if (mode !== 'explore' && mode !== 'recon') { markers.style.opacity = 0; this.setAnalysis(null); this.hidePanel(); }
       else markers.style.opacity = 1;
-      if (mode !== 'explore') this.setPointer(null);
       if (mode === 'cut') { clearTimeout(toastTimer); toast.classList.remove('on'); }
       sub.style.bottom = mode === 'recon' ? '250px' : '';   // 黑梦里避开时间轴
-      const ch = document.getElementById('crosshair');
-      if (ch) ch.style.opacity = mode === 'cut' ? 0 : '';
-      evlabels.style.opacity = mode === 'recon' ? 1 : 0;
       tl.classList.toggle('on', mode === 'recon');
-    },
-    setHint(ready) {
-      this._ready = ready;
-      if (this._mode === 'explore') hint.innerHTML = HINTS[ready ? 'exploreReady' : 'explore'];
     },
     // 平板举起时隐藏屏幕上的常驻界面
     setTabletOpen(on) {
-      for (const e of [hud, hint, markers, solved, document.getElementById('crosshair')]) if (e) e.style.visibility = on ? 'hidden' : '';
+      for (const e of [hud, hint, markers]) e.style.visibility = on ? 'hidden' : '';
       if (on) { prompt.classList.remove('on'); this.setAnalysis(null); }
     },
-    // 线索计数位置改为显示任务目标（html），进度条清空
-    setObjective(html) {
+    // 屏幕中心的「按住 R 构建黑梦」进度环，p 为 0~1，0 时隐藏
+    setDreamHold(p) {
+      p = Math.min(1, p);
+      dream.classList.toggle('on', p > 0);
+      dreamFg.style.strokeDashoffset = `${DREAM_C * (1 - p)}`;
+      // 眼睛随进度睁开，瞳孔放大，刻度圈慢慢转
+      const e = 1 - (1 - p) * (1 - p);
+      dreamEye.style.transform = `scaleY(${0.1 + 0.9 * e})`;
+      dreamPupil.style.transform = `scale(${0.3 + 0.7 * e}) rotate(${p * 90}deg)`;
+      dreamTicks.style.transform = `rotate(${p * 60}deg)`;
+    },
+    setTip(on) { tip.classList.toggle('on', on); },
+    // 滚轮引导：html 为提示文字（null 隐藏）；goal 为时间轴上要闪烁、加箭头的黄块序号
+    setGuide(html, goal = -1) {
+      if (html && html !== this._guideHtml) guideText.innerHTML = html;
+      this._guideHtml = html;
+      guide.classList.toggle('on', !!html);
+      this._goal = html ? goal : -1;
+    },
+    // 第一次进入黑梦的标题：a 为不透明度，k 为 0~1 的进度（字距逐渐拉开）
+    setRite(a = 0, k = 0, code = '') {
+      rite.style.opacity = a;
+      riteT1.style.letterSpacing = `${0.3 + 0.35 * k}em`;
+      if (code) rite.querySelector('.t3').textContent = code;
+    },
+    // 右下角「按住 TAB 跳过」：质询对话期间显示，p 为按住读条进度（0~1）
+    setSkip(on, p = 0) {
+      skip.classList.toggle('on', on);
+      skip.classList.toggle('holding', on && p > 0);
+      skipFill.style.transform = `scaleX(${on ? Math.min(1, p) : 0})`;
+    },
+    // 线索计数位置改为显示任务目标（html），进度条清空；ready 为黄色高亮（黑梦已就绪）
+    setObjective(html, ready = false) {
+      const stamp = `objective:${html}`;
+      if (stamp === this._countStamp) return;
       clearTimeout(this._taskTimer);
       clearTimeout(this._taskTimer2);
-      this._countStamp = `objective:${html}`;
+      this._countStamp = stamp;
       this._taskReady = false;
-      hud.classList.remove('done', 'out', 'ready');
+      hud.classList.remove('done', 'out', 'ready', 'search');
+      hud.classList.toggle('ready', ready);
       hud.querySelector('.count').innerHTML = html;
-      hud.querySelector('.bar i').style.width = '0%';
+      hud.querySelector('.bar i').style.width = ready ? '100%' : '0%';
       hud.classList.add('in');
       setTimeout(() => hud.classList.remove('in'), 460);
     },
-    setSolved(text) { if (text) solved.textContent = text; solved.classList.toggle('on', !!text); },
     setCounter(done, total, label = '线索') {
       const count = hud.querySelector('.count');
       const bar = hud.querySelector('.bar i');
@@ -273,17 +376,17 @@ export function createUI() {
         bar.style.width = width;
         hud.classList.toggle('ready', ready);
       };
-      // 线索刚满：先停在 3/3，再切成「按 R 构建黑梦」
+      // 线索刚满：先停在 3/3，再切成「按住 R 构建黑梦」
       if (taskDone && !this._taskReady) {
         this._taskReady = true;
-        hud.classList.remove('in', 'out', 'ready');
+        hud.classList.remove('in', 'out', 'ready', 'search');
         hud.classList.add('done');
         show(`${done} / ${total}<small>${label}完成</small>`, '100%', false);
         this._taskTimer = setTimeout(() => {
           hud.classList.add('out');
           this._taskTimer2 = setTimeout(() => {
             hud.classList.remove('done', 'out');
-            show('按 <b>R</b> 构建<small>黑梦</small>', '100%', true);
+            show('按住 <b>R</b> 构建<small>黑梦</small>', '100%', true);
             hud.classList.add('in');
             setTimeout(() => hud.classList.remove('in'), 460);
           }, 340);
@@ -292,7 +395,8 @@ export function createUI() {
       }
       this._taskReady = taskDone;
       hud.classList.remove('done', 'out', 'in');
-      show(taskDone ? '按 <b>R</b> 构建<small>黑梦</small>' : `${done} / ${total}<small>${label}</small>`, `${total ? (done / total) * 100 : 0}%`, taskDone);
+      hud.classList.toggle('search', !taskDone && label === '线索' && total > 0);
+      show(taskDone ? '按住 <b>R</b> 构建<small>黑梦</small>' : `${done} / ${total}<small>${label}</small>`, `${total ? (done / total) * 100 : 0}%`, taskDone);
     },
     // list: [{ id, x, y, show, done, aim, label }]
     updateMarkers(list) {
@@ -301,12 +405,18 @@ export function createUI() {
         if (!e) {
           e = document.createElement('div');
           e.className = 'inv-mk';
-          e.innerHTML = `<div class="d"></div><div class="n"></div>`;
+          e.innerHTML = `<div class="d"></div><div class="snap"></div><div class="n"></div>`;
           e.style.opacity = 0;
           markers.appendChild(e);
           markerEls.set(m.id, e);
         }
-        if (m.show && !e._shown) { e.classList.remove('pop'); void e.offsetWidth; e.classList.add('pop'); }
+        if (m.show && !e._shown && !m.flash) { e.classList.remove('pop'); void e.offsetWidth; e.classList.add('pop'); }
+        if (m.flash) {
+          const ring = e.querySelector('.snap');
+          ring.classList.remove('go');
+          void ring.offsetWidth;
+          ring.classList.add('go');
+        }
         e._shown = m.show;
         e.style.opacity = m.show ? 1 : 0;
         e.style.left = `${m.x}px`;
@@ -343,10 +453,11 @@ export function createUI() {
       const progress = Math.max(0, Math.min(1, p));
       const percent = phase === 'complete' ? 100 : Math.min(99, Math.floor(progress * 100));
       analysisPercent.textContent = `${percent}%`;
-      analysisStatus.textContent = phase === 'complete' ? '分析完成' : phase === 'working'
+      analysisStatus.innerHTML = phase === 'complete' ? '分析完成' : phase === 'working'
         ? progress < 0.3 ? '探头接通' : progress < 0.85 ? '读取表面特征' : '证据比对'
-        : '按住 E 分析';
-      analysisCaption.textContent = phase === 'ready' ? '' : target.name;
+        : phase === 'tap' ? '<b>E</b>单按'
+        : '<b>E</b>按住分析';
+      analysisCaption.textContent = phase === 'ready' ? '' : (target.name || '');
       analysisFill.style.transform = `scaleX(${progress})`;
       analysisTrack.setAttribute('aria-valuenow', String(percent));
     },
@@ -392,24 +503,20 @@ export function createUI() {
       toastHold = null;
       toast.classList.remove('on', 'big');
     },
-    buildTimeline(events, duration, jumpT, jumpLabel, frac, title = 'BLACKDREAM · 黑梦回放') {
+    // marks：[{ t0, t1 }] 进度条上的黄块（秒）；frac 把秒换成 0~1
+    buildTimeline(marks, frac, title = 'BLACKDREAM · 黑梦回放') {
       const CELLS = 72;
       this._frac = frac;
       this._cells = CELLS;
-      this._evSpan = events.map((e) => [frac(e.t0 ?? e.t), frac(e.t1 ?? e.t)]);
-      const jumpAt = jumpT == null ? null : Math.round(frac(jumpT) * CELLS);
-      const before = jumpAt == null ? CELLS : jumpAt;
-      const cell = (i) => `<i data-i="${i}"></i>`;
-      const strip = Array.from({ length: before }, (_, i) => cell(i)).join('')
-        + (jumpAt == null ? '' : `<b class="gap"><span>${jumpLabel}</span></b>`)
-        + Array.from({ length: CELLS - before }, (_, i) => cell(before + i)).join('');
+      this._evSpan = marks.map((e) => [frac(e.t0), frac(e.t1)]);
+      const strip = Array.from({ length: CELLS }, (_, i) => `<i data-i="${i}"></i>`).join('');
       tl.innerHTML = `<div class="head"><span>${title}</span><span class="count inv-mono"></span></div>
         <div class="track">${strip}
-        ${events.map((e, i) => `<div class="ev" data-i="${i}"></div>`).join('')}
+        ${marks.map((e, i) => `<div class="ev" data-i="${i}"></div>`).join('')}
         <div class="clock inv-mono">00:00.0</div></div>`;
     },
     // recorded / nearIdx 按 buildTimeline 传入的标记顺序；countText 为标题右侧的计数文字
-    updateTimeline(t, duration, clockText, recorded, nearIdx, countText = '') {
+    updateTimeline(t, clockText, recorded, nearIdx, countText = '') {
       const track = tl.querySelector('.track');
       if (!track) return;
       const cells = track.querySelectorAll(':scope > i');
@@ -428,7 +535,6 @@ export function createUI() {
         const ar = anchor.getBoundingClientRect();
         clock.style.left = `${ar.left - cr.left + ar.width / 2}px`;
       }
-      const done = recorded.filter(Boolean).length;
       tl.querySelector('.count').textContent = countText;
       const cr = track.getBoundingClientRect();
       const xAt = (f) => {
@@ -443,6 +549,7 @@ export function createUI() {
         const i = +e.dataset.i;
         e.classList.toggle('rec', recorded[i]);
         e.classList.toggle('near', i === nearIdx);
+        e.classList.toggle('goal', i === this._goal);
         const span = this._evSpan[i] ?? [0, 0];
         const left = xAt(span[0]);
         const right = xAt(span[1]);
@@ -450,51 +557,19 @@ export function createUI() {
         e.style.width = `${Math.max(2, right - left)}px`;
       });
     },
-    // list: [{ x, y, show, rec, near }]
-    updateEventLabels(list) {
-      list.forEach((m, i) => {
-        const e = evEls[i];
-        if (!e) return;
-        e.style.opacity = m.show ? 1 : 0;
-        e.style.left = `${m.x}px`;
-        e.style.top = `${m.y}px`;
-        e.classList.toggle('rec', m.rec);
-        e.classList.toggle('near', m.near);
-      });
-    },
     // 保留原中文字幕；有配音时等 FMOD 真正播完，无音频时用原阅读时长。
     say(lines, options) { return dialogue.say(lines, options); },
     updateDialogue(dt) { if (!document.hidden) dialogue.update(dt); },
-    // 方向标记：目标在屏幕内时只显示文字，在屏幕外时箭头贴边指向目标
-    setPointer(p) {
-      if (!p) { ptr.classList.remove('on'); return; }
-      ptr.querySelector('.lb').textContent = p.label;
-      const m = 70;
-      let { x, y } = p;
-      const on = p.front && x > m && x < innerWidth - m && y > m && y < innerHeight - m;
-      ptr.classList.add('on');
-      ptr.classList.toggle('onscreen', on);
-      const ar = ptr.querySelector('.ar');
-      if (on) { ptr.style.left = `${x}px`; ptr.style.top = `${y}px`; return; }
-      // 相机后方时投影点会翻转，取反方向
-      const cx = innerWidth / 2, cy = innerHeight / 2;
-      let dx = x - cx, dy = y - cy;
-      if (!p.front) { dx = -dx; dy = -dy; }
-      if (Math.abs(dx) < 1e-3 && Math.abs(dy) < 1e-3) dy = 1;
-      const k = Math.min((cx - m) / Math.abs(dx || 1e-3), (cy - m) / Math.abs(dy || 1e-3));
-      ptr.style.left = `${cx + dx * k}px`;
-      ptr.style.top = `${cy + dy * k}px`;
-      ar.style.transform = `rotate(${Math.atan2(dy, dx) + Math.PI / 2}rad)`;
-    },
     setCinema(on) { cine.classList.toggle('on', on); sub.classList.toggle('lift', on); },
     hush() { dialogue.cancel(); },
     // 黑场：a 为不透明度，ms 为过渡时长
     black(a, ms = 0) { black.style.transition = `opacity ${ms}ms`; black.style.opacity = a; },
-    flash(a, ms = 0) { flash.style.transition = `opacity ${ms}ms`; flash.style.opacity = a; },
+    // 终章字幕「序章 · 完」：结局动画黑屏后淡入
+    fin(on) { fin.classList.toggle('on', on); },
     // 结局黑场文字：{ title, lines, back }；传 null 隐藏
     ending(d) {
       if (!d) { ending.classList.remove('on'); return; }
-      ending.innerHTML = `<h1>${d.title}</h1>`
+      ending.innerHTML = `<h1>${d.unlock ? `<span>${d.unlock}</span>：` : ''}${d.title}</h1>`
         + d.lines.map((l, i) => `<div class="ln" style="animation-delay:${0.8 + i * 1.1}s">${l}</div>`).join('')
         + `<div class="back" style="animation-delay:${1.2 + d.lines.length * 1.1}s">${d.back}</div>`;
       ending.classList.add('on');

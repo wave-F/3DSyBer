@@ -34,22 +34,7 @@ const CARD_PULLBACK = 0.16;       // 推入前卡头停在卡槽外的距离
 const CARD_TINT = 0.5;
 const CARD_T = { lower: 0.3, raise: 0.45, push: 0.42, pull: 0.38, drop: 0.35 };
 
-// 撬门：手握撬棍（占位方块，等模型做好替换）
-// 原点在撬棍支点（B 柱边、门缝口），局部 -Z 指向门缝里，+Z 指向握柄
-const PRY = {
-  barLen: 0.66,      // 撬棍全长
-  tipLen: 0.06,      // 支点往门缝里伸进去的长度
-  grip: 0.56,        // 握手位置（离支点）
-  hand: new THREE.Vector3(0.22, -0.3, -0.45),   // 相机空间：手大致的位置，决定撬棍朝向
-  arm: new THREE.Vector3(0.35, -0.6, 0.7),      // 相机空间：前臂伸出画面的方向
-  k: 1.3,            // 撬棍扳动角度 = (门角度 - 7°) × k
-  pop: 15,           // 卡扣崩开时扳过头的角度
-  pull: 0.06,        // 插入前尖端停在缝外的距离
-  hidden: new THREE.Vector3(0.25, -0.5, 0.3),   // 相机空间：收到画面外的偏移
-  T: { raise: 0.35, jab: 0.18, settle: 0.2 },
-};
-
-const dbg = { on: false, pos: new THREE.Vector3(0, 0, -0.4), rot: new THREE.Euler(), card: CARD_POSE, pry: PRY };
+const dbg = { on: false, pos: new THREE.Vector3(0, 0, -0.4), rot: new THREE.Euler(), card: CARD_POSE };
 if (import.meta.env.DEV) window.__vm = dbg;
 
 export function createViewmodel(overlayScene, camera, gait = { phase: 0, amplitude: 0 }) {
@@ -145,88 +130,6 @@ export function createViewmodel(overlayScene, camera, gait = { phase: 0, amplitu
     if (card.hide) cardHolder.visible = false;
   }
 
-  // ---------- 撬门：手握撬棍 ----------
-  // phase：null | raise | jab | settle | drive（由 state 每帧传入撬门时间和门角度）
-  const pryHolder = new THREE.Group();
-  pryHolder.visible = false;
-  rig.add(pryHolder);
-  const pryProp = buildPryProp();
-  pryHolder.add(pryProp.group);
-  const pv = { phase: null, t: 0, F: new THREE.Vector3(), q0: new THREE.Quaternion(), sign: 1, onHit: null, onReady: null, driveT: 0, deg: 7 };
-  const pOff = new THREE.Vector3(), pSlide = new THREE.Vector3(), pq = new THREE.Quaternion(), _pq = new THREE.Quaternion(), pe = new THREE.Euler();
-  const Y_AXIS = new THREE.Vector3(0, 1, 0);
-
-  // F：支点在相机空间的位置；out：车门向外张开的方向（相机空间）
-  function pryStart(F, out, { onHit, onReady } = {}) {
-    pv.F.copy(F);
-    const toHand = PRY.hand.clone().sub(F).normalize();
-    pv.q0.setFromRotationMatrix(_lm.lookAt(toHand, new THREE.Vector3(), Y_AXIS));   // 局部 +Z 指向手
-    const inv = pv.q0.clone().invert();
-    // 绕局部 Y 正转时尖端往局部 -X 走：选符号让尖端朝车门外侧顶
-    pv.sign = out.clone().applyQuaternion(inv).x < 0 ? 1 : -1;
-    pryProp.armPivot.quaternion.setFromUnitVectors(Y_AXIS, PRY.arm.clone().normalize().applyQuaternion(inv));
-    pv.phase = 'raise'; pv.t = 0; pv.onHit = onHit; pv.onReady = onReady;
-  }
-  function pryDrive(t, deg) { pv.driveT = t; pv.deg = deg; }
-  function pryEnd() { pv.phase = null; pryHolder.visible = false; }
-
-  function updatePryVm(dt) {
-    if (!pv.phase) { pryHolder.visible = false; return; }
-    pv.t += dt;
-    pryHolder.visible = true;
-    const { T } = PRY;
-    const ss = THREE.MathUtils.smootherstep;
-    pOff.set(0, 0, 0);
-    let slide = 0, lever = 0, pitch = 0, roll = 0;
-    if (pv.phase === 'raise') {
-      // 从画面右下抬上来，尖端停在缝外
-      const u = ss(pv.t / T.raise, 0, 1);
-      pOff.copy(PRY.hidden).multiplyScalar(1 - u);
-      pitch = -0.6 * (1 - u);
-      slide = PRY.pull;
-      if (pv.t >= T.raise) { pv.phase = 'jab'; pv.t = 0; }
-    } else if (pv.phase === 'jab') {
-      // 往缝里一捅（加速插入）
-      const u = Math.min(1, pv.t / T.jab);
-      slide = PRY.pull * (1 - u * u);
-      if (pv.t >= T.jab) { pv.phase = 'settle'; pv.t = 0; pv.onHit?.(); }
-    } else if (pv.phase === 'settle') {
-      // 顶到底弹一下，再攥紧
-      const u = Math.min(1, pv.t / T.settle);
-      slide = 0.008 * Math.sin(u * Math.PI);
-      pOff.y = -0.004 * Math.sin(u * Math.PI);
-      if (pv.t >= T.settle) { pv.phase = 'drive'; pv.t = 0; pv.driveT = 0; pv.deg = 7; const f = pv.onReady; pv.onReady = null; f?.(); }
-    } else {
-      const t = pv.driveT;
-      const POP = 1.38;
-      if (t < POP) {
-        // 撬棍角度跟门角度走；越到后面越僵持，手抖越大
-        lever = PRY.k * (pv.deg - 7);
-        const tension = THREE.MathUtils.clamp((pv.deg - 7) / 7, 0, 1);
-        const a = t < 0.8 ? 0.0012 : 0.0025 + 0.002 * (t - 0.8) / (POP - 0.8);
-        pOff.x += a * Math.sin(t * 113);
-        pOff.y += a * Math.sin(t * 97 + 1.3) - 0.01 * tension;
-        roll = -0.04 * tension;
-      } else {
-        // 卡扣崩开：扳过头、尖端滑出门缝、手被惯性带回右下，再放下到画面外
-        const p = t - POP;
-        lever = PRY.k * 6 + PRY.pop * (1 - Math.pow(1 - Math.min(1, p / 0.08), 3));
-        slide = 0.07 * ss(p / 0.15, 0, 1);
-        const r = ss(p / 0.22, 0, 1);
-        pOff.set(0.06, -0.05, 0.08).multiplyScalar(r);
-        roll = -0.04 + 0.15 * r;
-        const d = ss((t - 1.6) / 0.5, 0, 1);
-        pOff.lerp(PRY.hidden, d);
-        pitch = -0.6 * d;
-        if (t >= 2.1) pryHolder.visible = false;
-      }
-    }
-    pq.copy(pv.q0).multiply(_pq.setFromEuler(pe.set(pitch, pv.sign * lever * Math.PI / 180, roll)));
-    pSlide.set(0, 0, slide).applyQuaternion(pq);
-    pryHolder.position.copy(pv.F).add(pOff).add(pSlide);
-    pryHolder.quaternion.copy(pq);
-  }
-
   const st = {
     hide: 1,                 // 0 显示，1 收起
     scanT: -1,               // 扫描动作计时，-1 表示未在扫描
@@ -273,7 +176,7 @@ export function createViewmodel(overlayScene, camera, gait = { phase: 0, amplitu
     // 收起/显示
     st.hide = THREE.MathUtils.clamp(st.hide + (visible ? -dt * 3 : dt * 5), 0, 1);
     holder.visible = st.hide < 1;
-    rig.visible = holder.visible || !!card.phase || !!pv.phase;
+    rig.visible = holder.visible || !!card.phase;
     camera.updateMatrixWorld();
     rig.position.copy(camera.position);
     rig.quaternion.copy(camera.quaternion);
@@ -348,44 +251,14 @@ export function createViewmodel(overlayScene, camera, gait = { phase: 0, amplitu
     device.flash = Math.max(0, device.flash - dt * 4);
     device.update(dt, visible && !!st.target, st.progress);
     updateCard(dt);
-    updatePryVm(dt);
   }
 
   return {
     update, scan, analyze, emitterWorld, insertCard, removeCard,
-    pryStart, pryDrive, pryEnd,
     setCardHidden(on) { card.hide = on; },
     get scanning() { return st.scanT >= 0; },
     get cardPhase() { return card.phase; },
   };
-}
-
-// ---------- 撬棍 + 手（占位方块） ----------
-// 原点在支点，撬棍沿 +Z 指向握柄；armPivot 在握手处，前臂沿其局部 +Y 伸出
-// 正式模型做好后：替换 group 里的内容，保持同样的原点和朝向即可
-function buildPryProp() {
-  const g = new THREE.Group();
-  const steel = new THREE.MeshStandardMaterial({ color: 0x3a3f46, metalness: 0.7, roughness: 0.45 });
-  const tape = new THREE.MeshStandardMaterial({ color: 0xc9a416, roughness: 0.7 });
-  const glove = new THREE.MeshStandardMaterial({ color: 0x23272c, roughness: 0.85 });
-  const sleeve = new THREE.MeshStandardMaterial({ color: 0x15181c, roughness: 0.9 });
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, PRY.barLen), steel);
-  bar.position.z = PRY.barLen / 2 - PRY.tipLen;
-  // 弯头爪：在缝里的那一截往下勾
-  const claw = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.05), steel);
-  claw.position.set(0, -0.01, -PRY.tipLen);
-  claw.rotation.x = 0.5;
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.024, 0.16), tape);
-  grip.position.z = PRY.grip;
-  const fist = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.085, 0.1), glove);
-  fist.position.set(0, 0.012, PRY.grip);
-  const armPivot = new THREE.Group();
-  armPivot.position.z = PRY.grip;
-  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.042, 0.36, 12), sleeve);
-  arm.position.y = 0.21;
-  armPivot.add(arm);
-  g.add(bar, claw, grip, fist, armPivot);
-  return { group: g, armPivot };
 }
 
 // ---------- 设备模型 ----------

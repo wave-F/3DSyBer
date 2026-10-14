@@ -1,5 +1,5 @@
-// 英文配音稿，不替换 clues.js 的中文字幕。source 用于阻止中文台词改动后误用旧配音。
-import { LINES } from '../investigation/clues.js';
+// 英文配音稿，不替换 clues.js 的中文字幕。
+// 这是已录音的那一版台词。游戏里的 LINES 可以改写；逐字相同才播放对应录音，见 recordedVoiceId。
 
 export const VOICE_ROLES = {
   chen: {
@@ -156,20 +156,63 @@ export const AUDITION_IDS = [
   'cardRead_02', 'dream3_02', 'keyFound_03', 'rootRead_04', 'target_03',
 ];
 
+// 录音时每句的说话人。跟着 ENGLISH 的分组和顺序，不跟着后来改写过的 LINES。
+const WHO = {
+  opening: ['派单员', '陈墨', '派单员'],
+  dream1: ['', '', ''],
+  after1: [''],
+  call: ['陈墨', '派单员', '陈墨', '派单员'],
+  dream2: ['', ''],
+  question2: ['陈墨', '仪器', '陈墨', '仪器', '陈墨', '仪器'],
+  revised2: [''],
+  call2: ['派单员', '陈墨', '派单员', '', '', '', ''],
+  cardRead: ['', ''],
+  dream3: ['', ''],
+  question3: ['陈墨', '仪器', '陈墨', '仪器', '仪器'],
+  revised3: [''],
+  after3: ['', '', '', '', ''],
+  keyFound: ['', '', ''],
+  rootRead: ['', '陈墨', '仪器', '陈墨', ''],
+  dream4: ['', ''],
+  dream4b: ['', ''],
+  after4: [''],
+  target: ['', '', '陈墨', ''],
+  transferred: ['派单员', '派单员', '陈墨', '', '', ''],
+  archived: ['派单员', '派单员', '陈墨', '', '', ''],
+};
+
+const recordedSource = new Map();
+for (const [group, lines] of Object.entries(ENGLISH)) {
+  if (WHO[group]?.length !== lines.length) throw new Error(`Speaker map mismatch: ${group}`);
+  lines.forEach((line, index) => recordedSource.set(`${group}_${String(index + 1).padStart(2, '0')}`, line.source));
+}
+
+// 已录音的句子。游戏字幕改写后，这里仍然描述原来的 71 条，避免把旧英文套到新中文上再生成。
 export function dialogueLines({ includeReserve = false, includeSilent = false } = {}) {
-  if (Object.keys(LINES).join('|') !== Object.keys(ENGLISH).join('|')) throw new Error('English dialogue groups no longer match LINES. Review the localization.');
-  return Object.entries(LINES).flatMap(([group, originals]) => {
-    const translations = ENGLISH[group];
-    if (translations.length !== originals.length) throw new Error(`English line count changed: ${group}`);
-    return originals.map((original, index) => {
-      const english = translations[index];
-      const id = `${group}_${String(index + 1).padStart(2, '0')}`;
-      if (english.source !== original.text) throw new Error(`Stale English voice script: ${id}. Review the changed source before generating.`);
-      const speaker = original.who === '派单员' ? 'dispatch' : original.who === '仪器' ? 'device' : 'chen';
-      const channel = !original.who ? 'inner' : speaker === 'dispatch' ? 'radio' : speaker === 'device' ? 'device' : 'spoken';
-      return { ...english, id, group, index, speaker, channel, reserve: group === 'call' };
+  return Object.entries(ENGLISH).flatMap(([group, translations]) => translations.map((english, index) => {
+    const id = `${group}_${String(index + 1).padStart(2, '0')}`;
+    if (english.source !== recordedSource.get(id)) throw new Error(`Stale English voice script: ${id}. Review the changed source before generating.`);
+    const who = WHO[group][index];
+    const speaker = who === '派单员' ? 'dispatch' : who === '仪器' ? 'device' : 'chen';
+    const channel = !who ? 'inner' : speaker === 'dispatch' ? 'radio' : speaker === 'device' ? 'device' : 'spoken';
+    return { ...english, id, group, index, speaker, channel, reserve: group === 'call' };
+  })).filter((l) => (includeReserve || !l.reserve) && (includeSilent || !l.silent));
+}
+
+// 当前字幕能用的录音。同一组里逐字相同优先；否则只在全局唯一时才用，避免两句相同的字配错段。
+export function recordedVoiceId(group, text) {
+  const bank = ENGLISH[group];
+  if (bank) {
+    const index = bank.findIndex((l) => !l.silent && l.source === text);
+    if (index >= 0) return `${group}_${String(index + 1).padStart(2, '0')}`;
+  }
+  const hits = [];
+  for (const [name, lines] of Object.entries(ENGLISH)) {
+    lines.forEach((l, index) => {
+      if (!l.silent && l.source === text) hits.push(`${name}_${String(index + 1).padStart(2, '0')}`);
     });
-  }).filter((l) => (includeReserve || !l.reserve) && (includeSilent || !l.silent));
+  }
+  return hits.length === 1 ? hits[0] : null;
 }
 
 export function spokenText(text) {

@@ -486,11 +486,18 @@ export function createRecon(scene, crash) {
     return true;
   }
 
+  // A 车在回放开头（t = 0）的位置，进入黑梦时镜头转向这里。不依赖模型是否加载完
+  function startPos(out) {
+    TRACK_A.sample(0, s);
+    return out.set(s.p.x, DECK_Y + CENTER_Y.carA, s.p.z);
+  }
+
   return {
     root,
     setTime,
     setRound,
     targetPos,
+    startPos,
     get ready() { return ready; },
   };
 }

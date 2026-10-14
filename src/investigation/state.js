@@ -6,6 +6,7 @@ import { createRecon } from './recon.js';
 import { buildTwistProps } from './props.js';
 import { createTablet } from './tablet.js';
 import { createViewmodel } from './viewmodel.js';
+import { createPryArm, PRY_INSERT, PRY_HIT } from './pryArm.js';
 import { CLUES, PROBES, ROUNDS, REPORTS, LINES, ENDINGS, CARD_HACK, ROOT_HACK, TARGET_INDEX } from './clues.js';
 import { buildCardSlot, buildRootKey } from './cardSlot.js';
 import { metalCreak, metalPop } from './sfx.js';
@@ -15,29 +16,41 @@ import { sound } from '../audio/sound.js';
 
 const HOLD_TIME = 1.4;      // Includes raising the instrument and one readable scan pass.
 const AIM_RANGE = 6;        // 准星可分析距离
-const PROBE_RANGE = 5;      // 黑梦分析点要走近到这个距离内才能瞄准，和现场 NEAR_RANGE 一致
+const PROBE_RANGE = 8;      // 黑梦分析点要走近到这个距离内才能瞄准（更远时只显示菱形和距离）
 const NEAR_RANGE = 5;       // 走近到此距离内自动发现线索
 const SCAN_RANGE = 40;      // Q 扫描可发现的范围
 const SCAN_SHOW = 2;        // 扫描出的标记显示秒数，之后隐藏
 const SCAN_COOLDOWN = 5;    // 扫描冷却
-const RECORD_WINDOW = 0.22; // 事件节点可记录的时间窗口
 const PROBE_WINDOW = 0.25;  // 带时间点 t 的分析点：回放时间在 t ± 此值内才出现
 const CONFIRM_TIME = 1.8;   // 按住确认走满所需时间
+const SKIP_TIME = 1.0;      // 质询对话按住 TAB 跳过所需时间
+// 黑梦分析点完成后的独白（LINES 的键）
+const DREAM_LINES = { p1turn: 'dream1', p2gap: 'dream2', p3halo: 'dream3', p4halo: 'dream4', p4cut: 'dream4b' };
+const DREAM_EXIT_DELAY = 4450;   // 结果面板在完成 0.45 秒后弹出，停留 4 秒。等它关掉再自动打开终端
+// 进入黑梦：按住 R 读满 → 回放立即开始播放，同时镜头缓慢转向 A 车起点（转向期间不能操作）
+// 只有第一次进入有标题 + 扫描波，之后只转镜头
+const DREAM_HOLD = 1.0;          // 按住 R 读满所需时间（秒）
+const DREAM_TURN = 1.8;          // 镜头转向时长（秒）
+const DREAM_RITE = 2.6;          // 第一次进入：标题显示总时长（秒）
+// 第一次黑梦的引导（秒）
+const GUIDE_WAIT = 0.8;          // 镜头转到 A 车起点后，等这么久再开车
+const GUIDE_FOLLOW = 4;          // 跟车镜头的跟随速度（越大越紧）
+const GUIDE_END = 0.8;           // 播完后停这么久，陈墨开口
+const TIP_TIME = 15;             // 操作说明最长显示时间
 
-// 流程：
+// 流程（下车后自动弹出系统初判，收起后交还控制）：
+// 每轮黑梦：分析点全部完成 → 独白说完后自动离开黑梦、直接弹出本轮报告（Q 可提前离开）
 // 第 1 轮：取证（单车线索）→ 黑梦 1 → 复核报告 01 → 收起后进入第 2 轮
 // 第 2 轮：三处线索同时出现 → 黑梦 2（A 车前轮：先转向后接触）→ 复核报告 02
 //   按住 E 归档 → 假结局 → 按 E 回到报告 02
-//   TAB 暂不归档 → 陈墨质问仪器 → 报告改写为「复核挂起」→ 收起平板 → 派单员施压 → 第 3 轮
+//   TAB 暂不归档 → 陈墨质问仪器（按住 TAB 跳过）→ 报告改写为「复核挂起」→ 收起平板 → 派单员施压 → 第 3 轮
 // 第 3 轮：撬开右侧车门（门尾已被撞得外翻）→ 驾驶舱转向柱下方检修接口 → 按 E 插卡（镜头下蹲、扫描枪换成取证卡）→ 平板接入画面 → 车载数据线索
-//   → TAB 收起平板 → 倒放拔卡、换回扫描枪 → 按 R 黑梦 3（A 车接管 / 零号保障边界 / A 车去向）
-//   → Q 离开 → 复核报告 03（特权保护）
+//   → TAB 收起平板 → 倒放拔卡、换回扫描枪 → 按住 R 黑梦 3（A 车接管 / 零号保障边界）→ 复核报告 03（特权保护）
 //   按住 E 移交审查 → 假结局 → 按 E 回到报告 03
-//   TAB 暂不移交 → 追问 P0 何时写入 → 报告改写为「移交暂缓」→ 收起后独白（接口日志：根钥登录过）→ 第 4 轮
-// 第 4 轮：驾驶舱里找到程叙的根钥（驾驶座与中控通道之间）→ 平板里对锁住的「车辆 B 原始记录」插入根钥
-//   → 接入画面 → 原始字段、P0 授予、时间轴叠合
-//   → 陈墨质问仪器 → 按 R 黑梦 4（边界生成 / 黄车切入 / A 车去向）→ 复核报告 04（系统主动制造事故）
-//   → 收起后对象索引（处置目标：注销）→ 独白 → 结局动画
+//   TAB 暂不移交 → 追问 P0 何时写入（按住 TAB 跳过）→ 报告改写为「移交暂缓」→ 收起后独白（接口日志：根钥登录过）→ 第 4 轮
+// 第 4 轮：驾驶舱里拾取程叙的根钥（驾驶座与中控通道之间）→ 平板自动举起、根钥接入
+//   → 原始字段、P0 授予、时间轴叠合 → 陈墨质问仪器 → 按住 R 黑梦 4（边界生成 / 黄车切入 / A 车去向）→ 复核报告 04（系统主动制造事故）
+//   → 报告页按 TAB：平板不收起，直接播对象索引（处置目标：注销）→ 再按 TAB 收起 → 独白 → 结局动画
 // 结局（src/investigation/finale.js）：跑车撞飞陈墨 → 地上的终端自动写报告并归档 → 黑屏
 export function createInvestigation(scene, camera, crash, controls, gait) {
   const props = buildTwistProps(scene, crash);
@@ -46,14 +59,17 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   preloadClueImages(CLUES);
   const recon = createRecon(scene, crash);
   const tablet = createTablet(camera);
+  tablet.onBlank = closeTabletFromBlank;
   const vm = createViewmodel(tablet.uiScene, camera, gait);
   const slot = buildCardSlot(crash);
   const rootKey = buildRootKey(crash);
   // 右侧车门：开局外翻 7°，第 3 轮撬到 55°
   const DOOR_OPEN = 55 * Math.PI / 180;
   const door = { node: null, handle: new THREE.Vector3(), out: new THREE.Vector3() };
+  let pryArm = null;   // 撬门的手和撬棍（挂在车模根节点下）
   crash.onCarReady(({ door: node }) => {
     door.node = node;
+    pryArm = createPryArm(node.parent);
     // 把手点：门尾上部外侧（车门本地坐标，原点在前铰链，车尾 -Z、外侧 -X）
     const box = new THREE.Box3().setFromBufferAttribute(node.geometry.attributes.position);
     door.box = box;
@@ -65,11 +81,6 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     door.node.updateMatrixWorld(true);
     return door.handle.copy(door.handleLocal).applyMatrix4(door.node.matrixWorld);
   }
-  // 撬棍支点：门关死时门尾外侧所在的位置（B 柱边），和把手同高。门怎么转它都不动
-  function doorPillar() {
-    const local = new THREE.Vector3(door.box.min.x, door.handleLocal.y, door.box.min.z - 0.01);
-    return local.applyMatrix4(doorClosedMatrix());
-  }
   const death = createFinale({ scene, camera, tablet, ui });
   let deathForce = false;   // 开发调试：鼠标没锁定也继续播放
   const emitter = new THREE.Vector3();
@@ -77,18 +88,17 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   // reveal：扫描后剩余显示时间；hit：本次扫描是否已扫到
   const clues = CLUES.map((c) => ({ ...c, p: c.pos ? new THREE.Vector3(...c.pos) : new THREE.Vector3(), done: false, reveal: 0, hit: false, unlocked: c.round === 1 }));
   const probes = PROBES.map((c) => ({ ...c, probe: true, p: c.pos ? new THREE.Vector3(...c.pos) : new THREE.Vector3(), done: false, visible: false }));
-  const recorded = Object.fromEntries(Object.entries(ROUNDS).map(([k, r]) => [k, r.events.map(() => false)]));
   const reports = ['initial'];
-  let guideTablet = true;   // 下车后第一次按 Tab，直接落在报告页
+  let guideTablet = true;   // 下车后第一次按 Tab，直接落在系统初判
   const roundDone = { 1: false, 2: false, 3: false, 4: false };
   let round = 1;
-  let lead = false;            // 第 2 轮：只有车门残漆可查，分析后解锁其余线索
   let glint = false;           // 残漆随双闪反光
   let paintTask = false;       // 第 1 次黑梦的报告收起后，进入第 2 轮
-  let pendingReport = null;    // 黑梦结束后等玩家按 Tab 才打开的报告
+  let dreamExit = 0;           // 自动离开黑梦的计时器
   // { key, p, state: 'idle' | 'talking' | 'suspended' | 'archived', text, onDecline }
   let confirm = null;
   let holdConfirm = false;
+  let holdSkip = false, skipP = 0;   // 质询对话：按住 TAB 跳过
   let reportT = 0;
   const revised = new Set();   // 已被质疑改写的报告
   let storyTask = false;       // 报告 02 挂起、派单施压之后：左侧任务改由 showTask 按剧情阶段给出
@@ -114,7 +124,16 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   let dbgAim = -1;
   let started = false;
   let intro = false;   // 开场下车镜头播放中（src/intro.js 控制）
-  let wasHolding = false, analysisDone = false;
+  let holdR = false, dreamHold = 0;   // 按住 R 构建黑梦的进度（0~1）
+  let firstDream = true;              // 第一次进入黑梦有完整过场
+  // 进入黑梦的过场：on 期间锁定视角与操作，镜头从 (yaw0, pitch0) 转到 A 车起点
+  // phase：turn | wait | watch | end | talk | scrub（后五个只在第一次黑梦的引导里出现）
+  const enter = { on: false, phase: null, guide: false, t: 0, yaw0: 0, pitch0: 0, dYaw: 0, pitch1: 0, back1: 0 };
+  const rite = { on: false, t: 0 };   // 第一次进入黑梦的标题
+  let tipT = 0;                       // 黑梦操作说明剩余显示时间
+  const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
+  const _look = new THREE.Vector3();
+  let wasHolding = false, analysisDone = false;   // 分析音效：是否正在按住 / 本次是否已完成
 
   const R = () => ROUNDS[round];
   const unlocked = () => clues.filter((c) => c.unlocked);
@@ -124,23 +143,16 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   const roundKeys = () => clues.filter((c) => c.round === round && c.key);
   // 第 3、4 轮没有现场线索：读完车载数据 / 根钥展开原始字段才能进黑梦
   const gates = { 3: () => ins.done, 4: () => root.done };
-  const reconReady = () => !!ROUNDS[round] && !lead && roundKeys().every((c) => c.done) && (gates[round]?.() ?? true);
-  const events = () => R().events;
+  const rootPending = () => round === 4 && root.picked && !root.done;   // 根钥已拾取、还没插入
+  const reconReady = () => !!ROUNDS[round] && !roundDone[round] && roundKeys().every((c) => c.done) && (gates[round]?.() ?? true);
   const locked = () => document.pointerLockElement != null;
 
-  // 时间轴显示：时间跳跃前为实时秒数，跳跃后映射到事故后约 50~83 秒
-  function clockText(t, r = R()) {
-    const sec = r.jump == null || t < r.jump ? t : 50 + (t - r.jump) * 5.5;
-    const m = Math.floor(sec / 60);
-    const s = sec - m * 60;
+  function clockText(t) {
+    const m = Math.floor(t / 60);
+    const s = t - m * 60;
     return `${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}`;
   }
-  // 时间轴分段显示：有跳跃时，跳跃前占 62% 宽度
-  function frac(t) {
-    const r = R();
-    if (r.jump == null) return t / r.duration;
-    return t < r.jump ? (t / r.jump) * 0.62 : 0.62 + ((t - r.jump) / (r.duration - r.jump)) * 0.38;
-  }
+  const frac = (t) => t / R().duration;
 
   // 打开平板：释放鼠标用来点击界面，视角固定；收起：重新锁定鼠标
   // relock = false 时（Esc 收起）不重新锁定，回到暂停层
@@ -160,14 +172,13 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
 
   // 把当前调查进度同步给平板
   function syncTablet() {
-    // 第 4 轮根钥未用：锁住的车辆 B 原始记录下方出现「插入根钥」按钮
-    const rootAction = round === 4 && root.picked && !root.done ? { label: '插入根钥 · 读取原始字段', fn: startRoot } : null;
+    // 第 4 轮根钥已拾取未用：锁住的车辆 B 原始记录下方出现「插入根钥」按钮
+    const rootAction = rootPending() ? { label: '插入根钥 · 读取原始字段', fn: startRoot } : null;
     tablet.setData({
       // 第 3 轮起只列出上一轮和本轮，避免列表过长
       clues: [...unlocked(), ...probes.filter((p) => p.done)]
         .filter((c) => round < 3 || c.round >= round - 1)
         .map((c) => (rootAction && c.id === 'dRaw' ? { ...c, action: rootAction } : c)),
-      events: [],
       reports: reports.map((k) => ({ key: k, ...REPORTS[k], revisedOn: revised.has(k) })),
       confirm,
       status: statusText(),
@@ -181,36 +192,34 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
 
   setMode('explore');
 
-  // 测试按钮：跳过取证，标记本轮线索已分析并直接进入黑梦
-  // 只在鼠标未锁定时显示（暂停画面、平板打开时）
-  const testBtn = document.createElement('button');
-  testBtn.textContent = '测试 · 直接进黑梦';
-  testBtn.style.cssText = 'position:fixed;right:24px;top:20px;transform:scale(1.5);transform-origin:right top;z-index:10;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#ffcf6a;background:rgba(5,12,20,.7);border:1px solid rgba(255,207,106,.6);cursor:pointer;';
-  document.body.appendChild(testBtn);
-  testBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    sound.play('ui/click');
-    if (!ROUNDS[round]) { ui.toast(`黑梦 ${round} 尚未接入`, '', 2500); return; }
-    if (lead) unlockRound2();
+  // ---------- 开发测试：跳关 ----------
+  // 本轮线索全部标完，直接进入黑梦
+  function skipToDream() {
+    if (!ROUNDS[round]) return;
     clues.forEach((c) => { if (c.round === round) c.done = true; });
-    ui.setHint(true);
     if (tablet.open) tablet.toggle(false);
-    setMode('recon');
-    controls.lock();
-    testBtn.blur();
-  });
-  const round2Btn = document.createElement('button');
-  round2Btn.textContent = '测试 · 第二轮搜证';
-  round2Btn.style.cssText = 'position:fixed;right:24px;top:68px;transform:scale(1.5);transform-origin:right top;z-index:10;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#ffcf6a;background:rgba(5,12,20,.7);border:1px solid rgba(255,207,106,.6);cursor:pointer;';
-  document.body.appendChild(round2Btn);
-  const round3Btn = document.createElement('button');
-  round3Btn.textContent = '测试 · 第三轮插卡';
-  round3Btn.style.cssText = round2Btn.style.cssText.replace('top: 68px', 'top: 116px');
-  document.body.appendChild(round3Btn);
-  const round4Btn = document.createElement('button');
-  round4Btn.textContent = '测试 · 第四轮根钥';
-  round4Btn.style.cssText = round2Btn.style.cssText.replace('top: 68px', 'top: 164px');
-  document.body.appendChild(round4Btn);
+    enterDream();
+  }
+  // 第 1 轮做完，停在第 2 轮开头
+  function skipToRound2() {
+    clues.forEach((c) => {
+      if (c.round === 1) { c.unlocked = true; c.done = true; }
+      if (c.round === 2) { c.unlocked = false; c.done = false; }
+    });
+    probes.forEach((p) => { if (p.round === 1) p.done = true; if (p.round === 2) p.done = false; });
+    roundDone[1] = true;
+    roundDone[2] = false;
+    if (!reports.includes('r1')) reports.push('r1');
+    paintTask = false;
+    confirm = null;
+    revised.clear();
+    storyTask = false;
+    if (reports.includes('r2')) reports.splice(reports.indexOf('r2'), 1);
+    if (tablet.open) tablet.toggle(false);
+    resetRound4();
+    resetRound3();
+    startRound2();
+  }
   // 前两轮做完、报告 02 挂起，停在第 3 轮开头
   function skipToRound3() {
     clues.forEach((c) => { if (c.round <= 2) { c.unlocked = true; c.done = true; } });
@@ -218,22 +227,15 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     roundDone[1] = roundDone[2] = true;
     for (const k of ['r1', 'r2']) if (!reports.includes(k)) reports.push(k);
     revised.add('r2');
-    paintTask = false; pendingReport = null; lead = false; glint = false;
+    paintTask = false; glint = false;
     confirm = null;
     if (tablet.open) tablet.toggle(false);
     resetRound4();
     resetRound3();
     startRound3();
   }
-  round3Btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    skipToRound3();
-    controls.lock();
-    round3Btn.blur();
-  });
-  // 第 3 轮做完、报告 03 暂不移交，停在第 4 轮开头（根钥未用）
-  round4Btn.addEventListener('click', (e) => {
-    e.stopPropagation();
+  // 第 3 轮做完、报告 03 暂不移交，停在第 4 轮开头（根钥未拾取）
+  function skipToRound4() {
     skipToRound3();
     clues.forEach((c) => { if (c.round === 3) { c.unlocked = true; c.done = true; } });
     probes.forEach((p) => { if (p.round === 3) p.done = true; });
@@ -245,49 +247,38 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     if (!reports.includes('r3')) reports.push('r3');
     revised.add('r3');
     startRound4();
-    controls.lock();
-    round4Btn.blur();
-  });
-  const deathBtn = document.createElement('button');
-  deathBtn.textContent = '测试 · 结局被撞';
-  deathBtn.style.cssText = round2Btn.style.cssText.replace('top: 68px', 'top: 212px');
-  document.body.appendChild(deathBtn);
-  deathBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    startDeath();
-    controls.lock();
-    deathBtn.blur();
-  });
-  const syncTestBtns = () => {
-    const hide = locked() || mode === 'report' || mode === 'ending' || mode === 'insert' || mode === 'death' ? 'none' : '';
-    for (const b of [testBtn, round2Btn, round3Btn, round4Btn, deathBtn]) b.style.display = hide;
-  };
-  document.addEventListener('pointerlockchange', syncTestBtns);
-  round2Btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    clues.forEach((c) => {
-      if (c.round === 1) { c.unlocked = true; c.done = true; }
-      if (c.round === 2) { c.unlocked = false; c.done = false; }
+  }
+
+  // 测试按钮只在开发态出现：鼠标未锁定时（暂停画面、平板打开时）显示在右上角
+  let syncTestBtns = () => {};
+  if (import.meta.env.DEV) {
+    const btns = [
+      ['测试 · 直接进黑梦', skipToDream],
+      ['测试 · 第二轮搜证', skipToRound2],
+      ['测试 · 第三轮插卡', skipToRound3],
+      ['测试 · 第四轮根钥', skipToRound4],
+      ['测试 · 结局被撞', () => startDeath()],
+    ].map(([label, fn], i) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = `position:fixed;right:24px;top:${20 + i * 48}px;transform:scale(1.5);transform-origin:right top;z-index:10;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#ffcf6a;background:rgba(5,12,20,.7);border:1px solid rgba(255,207,106,.6);cursor:pointer;`;
+      document.body.appendChild(b);
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sound.play('ui/click');
+        fn();
+        controls.lock();
+        b.blur();
+      });
+      return b;
     });
-    probes.forEach((p) => { if (p.round === 1) p.done = true; });
-    roundDone[1] = true;
-    roundDone[2] = false;
-    if (!reports.includes('r1')) reports.push('r1');
-    paintTask = false;
-    pendingReport = null;
-    confirm = null;
-    revised.clear();
-    storyTask = false;
-    if (reports.includes('r2')) reports.splice(reports.indexOf('r2'), 1);
-    probes.forEach((p) => { if (p.round === 2) p.done = false; });
-    if (tablet.open) tablet.toggle(false);
-    startRound2();
-    controls.lock();
-    round2Btn.blur();
-  });
-  // 第 2 轮测试按钮也要清掉第 3 轮状态
-  round2Btn.addEventListener('click', () => { resetRound4(); resetRound3(); });
-  syncTestBtns();
+    syncTestBtns = () => {
+      const hide = locked() || mode === 'report' || mode === 'ending' || mode === 'insert' || mode === 'death' ? 'none' : '';
+      for (const b of btns) b.style.display = hide;
+    };
+    document.addEventListener('pointerlockchange', syncTestBtns);
+    syncTestBtns();
+  }
 
   function setMode(m) {
     if (m === 'recon' && mode !== 'recon') sound.play('scifi/dream_enter');
@@ -300,28 +291,174 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     clock.target = m === 'explore' || m === 'ending' || m === 'insert' || m === 'death' ? 1 : 0;
     fx.setActive(m === 'recon');
     recon.root.visible = m === 'recon';
-    ui.setMode(m, m === 'recon' ? '黑梦回放' : '现场调查');
+    ui.setMode(m, m === 'recon' ? '黑梦回放 · 找出异常' : '现场调查');
     ui.setPrompt(null);
     ui.setCinema(m === 'ending');
-    ui.setSolved(null);
     controls.enabled = m !== 'ending' && m !== 'insert' && m !== 'death';
+    if (m !== 'recon') clearTimeout(dreamExit);
+    holdR = false; setDreamHold(0);
+    enter.on = false; enter.phase = null;
+    if (rite.on) { rite.on = false; ui.setRite(0); }
+    hideTip();
+    ui.setGuide(null);
     if (m === 'explore') {
-      if (pendingReport) showReportTask();
-      else if (storyTask) showTask();
-      else {
-        ui.setCounter(stageClues().filter((c) => c.done).length, stageClues().length);
-        ui.setHint(reconReady());
-      }
+      if (storyTask) showTask();
+      else ui.setCounter(stageClues().filter((c) => c.done).length, stageClues().length);
     }
     if (m === 'recon') {
       ui.clearToast();
       rt = 0; playing = true;
       recon.setRound(round);
-      const r = R();
-      ui.buildTimeline(timeMarks(), r.duration, r.jump, r.jumpLabel, frac);
-      if (r.events.length) ui.setCounter(recorded[round].filter(Boolean).length, r.events.length, '事件');
-      else ui.setCounter(keyProbes().filter((c) => c.done).length, keyProbes().length, '分析');
+      ui.buildTimeline(timeMarks(), frac);
+      ui.setCounter(keyProbes().filter((c) => c.done).length, keyProbes().length, '异常已分析');
     }
+  }
+
+  // ---------- 进入黑梦 ----------
+  // 按住 R 的进度：世界随进度变慢、画面逐渐灰蓝化；松手回落
+  function setDreamHold(p) {
+    const was = dreamHold;
+    dreamHold = p;
+    ui.setDreamHold(p);
+    if (mode === 'explore' && (p > 0 || was > 0)) {
+      clock.target = 1 - p * 0.9;
+      fx.setActive(p * 0.7);
+    }
+  }
+  function updateDreamHold(dt) {
+    const can = holdR && reconReady() && !tablet.open && locked();
+    if (!can && dreamHold === 0) return;
+    const p = can ? Math.min(1, dreamHold + dt / DREAM_HOLD) : Math.max(0, dreamHold - dt * 3);
+    setDreamHold(p);
+    if (p >= 1) { holdR = false; enterDream(); }
+  }
+
+  // 切到黑梦，镜头缓慢转向 A 车起点
+  // 之后的黑梦：回放立即开始播放，转完交还操作
+  // 第一次黑梦（引导）：转向 → 稍等 → 播放，镜头全程跟车 → 播完陈墨说有问题 → 玩家滚滚轮倒回第一个异常时刻 → 暂停、弹出操作说明、交还操作
+  function enterDream() {
+    setMode('recon');
+    const first = firstDream;
+    rt = 0; playing = !first;
+    recon.setTime(0);
+    recon.startPos(_look).sub(camera.position).normalize();
+    _euler.setFromQuaternion(camera.quaternion, 'YXZ');
+    const yaw1 = Math.atan2(-_look.x, -_look.z);
+    enter.yaw0 = _euler.y;
+    enter.pitch0 = _euler.x;
+    enter.dYaw = THREE.MathUtils.euclideanModulo(yaw1 - _euler.y + Math.PI, Math.PI * 2) - Math.PI;
+    enter.pitch1 = Math.asin(THREE.MathUtils.clamp(_look.y, -1, 1));
+    enter.t = 0;
+    enter.on = true;
+    enter.phase = 'turn';
+    enter.guide = first;
+    controls.enabled = false;
+    // 第一次进入：扫描波 + 标题
+    if (first) {
+      rite.t = 0; rite.on = true;
+      ui.setRite(0, 0, `RECONSTRUCTION ${String(round).padStart(2, '0')}`);
+      fx.pulse(camera.position);
+    }
+    firstDream = false;
+  }
+
+  function endEnter() {
+    enter.on = false;
+    enter.phase = null;
+    controls.enabled = true;
+  }
+
+  // 镜头跟车：平滑地把视线拉向 A 车全息（撞击后换成变形车）
+  function followCar(dt) {
+    if (!recon.targetPos('carA', _look)) return;
+    _look.sub(camera.position).normalize();
+    _euler.setFromQuaternion(camera.quaternion, 'YXZ');
+    const yaw1 = Math.atan2(-_look.x, -_look.z);
+    const pitch1 = Math.asin(THREE.MathUtils.clamp(_look.y, -1, 1));
+    const dYaw = THREE.MathUtils.euclideanModulo(yaw1 - _euler.y + Math.PI, Math.PI * 2) - Math.PI;
+    const k = 1 - Math.exp(-dt * GUIDE_FOLLOW);
+    _euler.set(_euler.x + (pitch1 - _euler.x) * k, _euler.y + dYaw * k, 0, 'YXZ');
+    camera.quaternion.setFromEuler(_euler);
+  }
+
+  function updateEnter(dt) {
+    enter.t += dt;
+    const dur = R().duration;
+    const advance = () => {
+      if (!playing) return;
+      rt = Math.min(dur, rt + dt);
+      if (rt >= dur) playing = false;
+    };
+    switch (enter.phase) {
+      // 转向 A 车起点：前后都缓，中段也不快
+      case 'turn': {
+        const u = Math.min(1, enter.t / DREAM_TURN);
+        const e = u * u * u * (u * (u * 6 - 15) + 10);
+        _euler.set(enter.pitch0 + (enter.pitch1 - enter.pitch0) * e, enter.yaw0 + enter.dYaw * e, 0, 'YXZ');
+        camera.quaternion.setFromEuler(_euler);
+        advance();
+        if (u >= 1) {
+          if (enter.guide) { enter.phase = 'wait'; enter.t = 0; } else endEnter();
+        }
+        break;
+      }
+      // 镜头停稳后再开车
+      case 'wait':
+        if (enter.t >= GUIDE_WAIT) { enter.phase = 'watch'; enter.t = 0; playing = true; }
+        break;
+      // 完整看一遍，镜头跟车
+      case 'watch':
+        advance();
+        recon.setTime(rt);
+        followCar(dt);
+        if (!playing) { enter.phase = 'end'; enter.t = 0; }
+        break;
+      // 播完停一下，陈墨说有问题，要倒回去看
+      case 'end':
+        followCar(dt);
+        if (enter.t >= GUIDE_END) {
+          const target = timedProbes().find((c) => !c.done);
+          if (!target) { endEnter(); break; }
+          enter.phase = 'talk';
+          enter.back1 = target.t;
+          const r = round;
+          // 这段过场不能操作。对白被打断也要进入倒回，否则会停在 talk。
+          ui.say(LINES.dreamGuide(clockText(target.t))).then(() => {
+            if (mode === 'recon' && round === r && enter.phase === 'talk') { enter.phase = 'scrub'; enter.t = 0; }
+          });
+        }
+        break;
+      case 'talk':
+        followCar(dt);
+        break;
+      // 玩家自己滚滚轮倒回异常时刻（只响应滚轮），车跟着倒退，镜头继续跟。进入异常时段即暂停、交还操作
+      case 'scrub': {
+        recon.setTime(rt);
+        followCar(dt);
+        const hit = Math.abs(rt - enter.back1) <= PROBE_WINDOW;
+        const goal = timedProbes().findIndex((c) => c.t === enter.back1);
+        ui.setGuide(hit ? null : `滚动<b>滚轮</b>，把时间倒回 <b class="inv-mono">${clockText(enter.back1)}</b>`, goal);
+        if (hit) { playing = false; endEnter(); showTip(); }
+        break;
+      }
+    }
+    recon.setTime(rt);
+    const tp = timedProbes();
+    ui.updateTimeline(rt, clockText(rt), tp.map((c) => c.done), tp.findIndex((c) => Math.abs(rt - c.t) <= PROBE_WINDOW), '');
+    ui.updateMarkers(markerList(false, false, null));   // 过场里不显示任何菱形
+  }
+
+  // 操作说明：第一次黑梦倒回后弹出；开始分析或 TIP_TIME 秒后收起
+  function showTip() { tipT = TIP_TIME; ui.setTip(true); }
+  function hideTip() { tipT = 0; ui.setTip(false); }
+
+  // 第一次进入的标题：淡入、停留、淡出，字距逐渐拉开
+  function updateRite(dt) {
+    if (!rite.on) return;
+    rite.t = Math.min(DREAM_RITE, rite.t + dt);
+    const a = Math.min(1, rite.t / 0.4) * Math.min(1, (DREAM_RITE - rite.t) / 0.6);
+    ui.setRite(a, rite.t / DREAM_RITE);
+    if (rite.t >= DREAM_RITE) { rite.on = false; ui.setRite(0); }
   }
 
   // ---------- 输入 ----------
@@ -340,15 +477,15 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       else if (ins.phase === 'data') tablet.nav(e.code);
       return;
     }
-    // 测试：探索中按 F，完成当前轮下一条现场线索。暂停时也能按
-    if (e.code === 'KeyF' && !e.repeat && mode === 'explore' && !tablet.open) {
+    // 开发测试：探索中按 F，完成当前轮下一条现场线索。暂停时也能按
+    if (import.meta.env.DEV && e.code === 'KeyF' && !e.repeat && mode === 'explore' && !tablet.open) {
       completeOneClue();
       return;
     }
     // 平板打开时鼠标已释放，按键照常处理
     if (!locked() && !tablet.open) return;
 
-    // 报告页：待确认时按住 E 确认、TAB 暂不确认；没有确认或已挂起时 TAB / Esc 收起
+    // 报告页：待确认时按住 E 确认、TAB 暂不确认；质询对话中 TAB 跳过；没有确认或已挂起时 TAB / Esc 收起
     // 接入画面（根钥、对象索引）播放期间不响应
     if (mode === 'report') {
       if (tablet.hacking) return;
@@ -356,6 +493,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       const closable = !confirm || st === 'suspended';
       if (e.code === 'KeyE' && st === 'idle') holdConfirm = true;
       else if (e.code === 'Tab' && st === 'idle' && !e.repeat) declineReport();
+      else if (e.code === 'Tab' && st === 'talking' && !e.repeat) holdSkip = true;
       else if ((e.code === 'Tab' || e.code === 'Escape') && closable && !e.repeat) closeReport(e.code === 'Tab');
       else tablet.nav(e.code);
       return;
@@ -364,21 +502,10 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     // 平板只在探索时可用；打开期间按键都交给平板
     if (e.code === 'Tab' && mode === 'explore') {
       if (!e.repeat) {
-        // 第 1 轮黑梦结束后不自动打开：按 Tab 才进入报告页
-        if (pendingReport && !tablet.open) {
-          const key = pendingReport;
-          pendingReport = null;
-          setMode('report');
-          setTablet(true);
-          tablet.showReport(key);
-          syncTablet();
-          return;
-        }
         const first = !tablet.open && guideTablet;
-        const rootGuide = !tablet.open && round === 4 && root.picked && !root.done;
         setTablet(!tablet.open);
         if (first) { guideTablet = false; tablet.showReport('initial'); }
-        else if (rootGuide) tablet.showClue('dRaw');
+        else if (tablet.open && rootPending()) tablet.showClue('dRaw');
       }
       return;
     }
@@ -386,30 +513,32 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       if (!tablet.nav(e.code) && e.code === 'Escape') setTablet(false, false);
       return;
     }
-    if (e.code === 'KeyQ') {
-      if (mode === 'explore') scan();
-      else if (mode === 'recon') leaveRecon();
-    }
+    if (enter.on) return;   // 进入黑梦的过场：不响应操作
+    if (e.code === 'KeyQ' && mode === 'explore') scan();
+    if (e.code === 'KeyR' && mode === 'recon' && !e.repeat) leaveRecon();
     if (e.code === 'KeyE') {
       holdKey = true;
       if (mode === 'recon' && !e.repeat) {
-        // 正对事件节点时点 E 记录；否则按住分析全息物体
-        if (tryRecord()) holdKey = false;
-        else if (aimedProbe && aimedProbe.done) ui.showClue(aimedProbe, 0);
+        if (aimedProbe && aimedProbe.done) ui.showClue(aimedProbe, 0);
       } else if (mode === 'explore' && !e.repeat && doorAimed) { holdKey = false; startPry(); }
       else if (mode === 'explore' && !e.repeat && portAimed) { holdKey = false; startInsert(); }
       else if (mode === 'explore' && !e.repeat && keyAimed) { holdKey = false; startKeyGrab(); }
       else if (mode === 'explore' && !e.repeat && aimed && aimed.done) ui.showClue(aimed, evIndex(aimed));
     }
-    if (e.code === 'KeyR' && mode === 'explore' && reconReady() && !pendingReport) setMode('recon');
+    if (e.code === 'KeyR' && mode === 'explore' && !e.repeat) holdR = true;
     if (e.code === 'Space' && mode === 'recon') {
       if (rt >= R().duration) rt = 0;
       playing = !playing;
     }
   });
-  addEventListener('keyup', (e) => { if (e.code === 'KeyE') { holdKey = false; holdConfirm = false; } });
+  addEventListener('keyup', (e) => {
+    if (e.code === 'KeyE') { holdKey = false; holdConfirm = false; }
+    if (e.code === 'KeyR') holdR = false;
+    if (e.code === 'Tab') holdSkip = false;
+  });
   document.addEventListener('pointerlockchange', () => {
     if (!locked()) {
+      holdR = false;
       holdKey = false; holdT = 0; finishedAnalysis = null;
       fx.setFocus(false); vm.analyze(null, 0); ui.setAnalysis(null);
     }
@@ -421,46 +550,34 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     ui.say(LINES.opening, { radio: true });
   }
   addEventListener('wheel', (e) => {
-    if (mode !== 'recon') return;
+    if (mode !== 'recon' || (enter.on && enter.phase !== 'scrub')) return;
     playing = false;
     rt = THREE.MathUtils.clamp(rt + e.deltaY * 0.0025, 0, R().duration);
   }, { passive: true });
 
-  // ---------- 黑梦：事件记录 ----------
-  function nearEvent() {
-    let best = -1, bd = RECORD_WINDOW;
-    events().forEach((ev, i) => { const d = Math.abs(ev.t - rt); if (d <= bd) { bd = d; best = i; } });
-    return best;
-  }
-
-  function tryRecord() {
-    const i = nearEvent();
-    const rec = recorded[round];
-    if (i < 0 || rec[i]) return false;
-    rec[i] = true;
-    sound.play('ui/record');
-    const ev = events()[i];
-    ui.toast(`事件已记录 · ${clockText(ev.t)}`, ev.fact);
-    ui.setCounter(rec.filter(Boolean).length, rec.length, '事件');
-    checkRoundDone();
-    return true;
-  }
-
-  // 本轮黑梦完成：事件全部记录，且 key 分析点全部分析（黑梦 1 没有事件，只要分析车辙）
+  // ---------- 黑梦：分析点 ----------
+  // 本轮黑梦完成：key 分析点全部分析
   const keyProbes = () => probes.filter((c) => c.round === round && c.key);
   // 带时间点的分析点，在进度条上显示为黄块
   const timedProbes = () => probes.filter((c) => c.round === round && c.t != null);
   // 黄块覆盖可分析的整段：分析点时刻前后各 PROBE_WINDOW
-  const timeMarks = () => [...R().events, ...timedProbes()].map((m) => ({
+  const timeMarks = () => timedProbes().map((m) => ({
     t0: Math.max(0, m.t - PROBE_WINDOW),
     t1: Math.min(R().duration, m.t + PROBE_WINDOW),
   }));
-  const roundComplete = () => recorded[round].every(Boolean) && keyProbes().every((c) => c.done);
-  function checkRoundDone() {
-    // 分析做完留在黑梦里，按 Q 离开时才进入下一轮
+  const roundComplete = () => keyProbes().every((c) => c.done);
+
+  // 最后一个分析点完成：等结果面板关闭，独白没说完就再等它说完，然后自动离开黑梦并打开终端
+  function scheduleDreamExit(said) {
+    const r = round;
+    const wait = new Promise((res) => { dreamExit = setTimeout(res, DREAM_EXIT_DELAY); });
+    Promise.all([said, wait]).then(([completed]) => {
+      if (completed === false) return;
+      if (mode === 'recon' && round === r) advanceAfterDream();
+    });
   }
 
-  // 分析做完后按 Q：回到现场，等玩家按 Tab 再打开本轮报告
+  // 黑梦分析完：直接打开本轮报告
   function advanceAfterDream() {
     if (!roundComplete() || roundDone[round]) return;
     const r = round;
@@ -471,18 +588,16 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     holdConfirm = false;
     reportT = 0;
     paintTask = r === 1;
-    pendingReport = key;
-    setMode('explore');
-  }
-
-  function showReportTask() {
-    ui.setObjective('按 <b>TAB</b> 查看<small>终端报告</small>');
-    ui.setHint(false);
+    setMode('report');
+    setTablet(true);
+    tablet.showReport(key);
+    syncTablet();
   }
 
   // ---------- 复核报告 ----------
+  // R 离开黑梦：分析已完成就直接出报告，否则回到现场
   function leaveRecon() {
-    if (roundComplete()) advanceAfterDream();
+    if (roundComplete() && !roundDone[round]) advanceAfterDream();
     else setMode('explore');
   }
 
@@ -491,34 +606,50 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     return { key, p: 0, state: 'idle', text: '', onDecline: declineReport };
   }
 
+  // 点在终端画面外面：和 Tab / Esc 能收起时一样收起
+  function closeTabletFromBlank() {
+    if (intro || mode === 'death' || mode === 'ending') return;
+    if (mode === 'insert') {
+      if (ins.phase === 'data') finishInsert(false);
+      return;
+    }
+    if (mode === 'report') {
+      if (tablet.hacking) return;
+      const closable = !confirm || confirm.state === 'suspended';
+      if (closable) closeReport(false);
+      return;
+    }
+    if (tablet.open) setTablet(false, true);
+  }
+
   // 收起报告：按剧情阶段决定下一步
   function closeReport(relock) {
+    // 报告 04：平板不收起，直接接着播对象索引，走完停住再按 TAB 收起
+    if (round === 4 && roundDone[4] && !finale) {
+      finale = 'index';
+      tablet.hack(TARGET_INDEX, null);
+      return;
+    }
     const key = confirm?.key;
     const suspended = confirm?.state === 'suspended';
     confirm = null;
+    if (key === 'r2' && suspended && !storyTask) storyTask = true;
     setTablet(false, relock);
     setMode('explore');
     if (paintTask) {
       paintTask = false;
       startRound2();
-    } else if (key === 'r2' && suspended && !storyTask) {
-      storyTask = true;
+    } else if (key === 'r2' && suspended && round === 2) {
       pressureCall();
     } else if (key === 'r3' && suspended && !after3Said) {
       after3Said = true;
       setTimeout(() => ui.say(LINES.after3).then((completed) => {
         if (!completed) return;
-        if (round !== 3) return;
-        startRound4();
-        ui.toast('新的疑点', '程叙的根钥可能还在驾驶舱里', 4500);
+        if (round === 3) startRound4();
       }), 700);
     } else if (round === 4 && root.done && !root.told) {
       root.told = true;
       showTask();
-      ui.toast('信息量达到重建要求', '黑梦已就绪 · 按 R 启动回放', 4000);
-    } else if (round === 4 && roundDone[4] && !finale) {
-      finale = 'index';
-      setTimeout(() => ui.say(LINES.after4).then((completed) => { if (completed) showTargetIndex(); }), 600);
     } else if (finale === 'index') {
       finale = 'done';
       showTask();
@@ -532,6 +663,13 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
 
   function updateReport(dt) {
     reportT += dt;
+    // 质询对话：按住 TAB 读条，走满跳过；松开回退
+    if (confirm?.state === 'talking') {
+      skipP = holdSkip ? skipP + dt / SKIP_TIME : Math.max(0, skipP - dt * 2);
+      ui.setSkip(true, skipP);
+      if (skipP >= 1) skipQuestion();
+      return;
+    }
     if (!confirm || confirm.state !== 'idle') return;
     const ready = reportT > 1.8;   // 报告逐行打完、确认按钮出现之后
     const before = confirm.p;
@@ -541,25 +679,38 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   }
 
   // ---------- 暂不确认 → 质问仪器 → 报告改写（报告 02、03）----------
+  // 质询对话中右下角提示「按住 TAB 跳过」（读条走满才跳），跳过后直接改写报告
   function declineReport() {
     if (!confirm || confirm.state !== 'idle') return;
     const key = confirm.key;
-    const cf = REPORTS[key].confirm;
     confirm.state = 'talking';
     confirm.text = '复核质询中…';
     holdConfirm = false;
     syncTablet();
-    ui.say(LINES[cf.question]).then((completed) => {
+    holdSkip = false; skipP = 0;
+    ui.setSkip(true);
+    ui.say(LINES[REPORTS[key].confirm.question]).then((completed) => {
       if (!completed) return;
-      if (mode !== 'report' || confirm?.key !== key) return;
-      revised.add(key);
-      confirm.state = 'suspended';
-      confirm.text = cf.suspended;
-      tablet.glitch(0.45);
-      tablet.showReport(key);
-      syncTablet();
-      return ui.say(LINES[cf.after]);
+      finishQuestion(key);
     });
+  }
+  function skipQuestion() {
+    if (confirm?.state !== 'talking') return;
+    ui.hush();
+    finishQuestion(confirm.key);
+  }
+  function finishQuestion(key) {
+    if (mode !== 'report' || confirm?.key !== key || confirm.state !== 'talking') return;
+    const cf = REPORTS[key].confirm;
+    holdSkip = false; skipP = 0;
+    ui.setSkip(false);
+    revised.add(key);
+    confirm.state = 'suspended';
+    confirm.text = cf.suspended;
+    tablet.glitch(0.45);
+    tablet.showReport(key);
+    syncTablet();
+    ui.say(LINES[cf.after]);
   }
 
   // 收起挂起的报告 02：派单员催单，陈墨拒绝交单，给出第 3 轮目标
@@ -567,23 +718,22 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     setTimeout(() => {
       ui.say(LINES.call2, { radio: true }).then((completed) => {
         if (!completed) return;
-        startRound3();
-        ui.toast('新的疑点', '撬开右侧车门 · 驾驶舱转向柱下方有检修接口', 4500);
+        if (round === 2) startRound3();
       });
     }, 700);
   }
-  // 第 3 轮起的 HUD 任务：按剧情阶段给出
+  // 第 3 轮起的 HUD 任务：按剧情阶段给出。「按 R」只在这里（和第 1、2 轮的线索计数）出现
   function showTask() {
+    const dream = () => ui.setObjective('按住 <b>R</b> 构建<small>黑梦</small>', true);
     if (round < 3) ui.setObjective('查清<b>接触前</b>为什么转向');
     else if (round === 3 && !pry.done) ui.setObjective('撬开<b>右侧车门</b><small>门尾已经翘起</small>');
     else if (round === 3 && !ins.done) ui.setObjective('在转向柱下方<b>检修接口</b>插卡');
-    else if (round === 3 && !roundDone[3]) ui.setObjective('黑梦已就绪 · 按 <b>R</b> 启动回放');
+    else if (round === 3 && !roundDone[3]) dream();
     else if (round === 3) ui.setObjective('核实<b>零号保障</b>的来源');
     else if (!root.picked) ui.setObjective('在驾驶舱里找<b>程叙的根钥</b>');
     else if (!root.done) ui.setObjective('用<b>根钥</b>读取车辆 B 原始记录<small>TAB 打开平板</small>');
-    else if (!roundDone[4]) ui.setObjective('黑梦已就绪 · 按 <b>R</b> 启动回放');
-    else ui.setObjective('枢核在杀能核对它的人');
-    ui.setHint(round >= 3 && reconReady() && !roundDone[round]);
+    else if (!roundDone[4]) dream();
+    else ui.setObjective('回到<b>警车</b>');
   }
 
   // ---------- 第 3 轮：插卡读取车载数据 ----------
@@ -591,7 +741,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     round = 3;
     storyTask = true;
     ins.done = false; ins.phase = null;
-    pry.done = false; pry.phase = null; setDoor(DOOR_AJAR); vm.pryEnd();
+    pry.done = false; pry.phase = null; setDoor(DOOR_AJAR); pryArm?.hide();
     slot.setState('idle');
     if (mode === 'explore') setMode('explore');
     syncTablet();
@@ -601,7 +751,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     after3Said = false;
     roundDone[3] = false;
     ins.done = false; ins.phase = null;
-    pry.done = false; pry.phase = null; setDoor(DOOR_AJAR); vm.pryEnd();
+    pry.done = false; pry.phase = null; setDoor(DOOR_AJAR); pryArm?.hide();
     slot.setState('idle');
     clues.forEach((c) => { if (c.round === 3) { c.unlocked = false; c.done = false; } });
     probes.forEach((p) => { if (p.round === 3) p.done = false; });
@@ -631,10 +781,20 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     Object.assign(raw, { locked: true, lines: def.lines, result: def.result, prob: def.prob });
     if (reports.includes('r4')) reports.splice(reports.indexOf('r4'), 1);
   }
-  // 平板里点「插入根钥」：切到报告模式（接入期间不能收起），播放接入画面
+  // 拾取根钥后自动举起平板，停在锁住的车辆 B 原始记录上，等玩家点「插入根钥」
+  // said：拾取独白的 Promise，说完才接着播读取后的质问
+  let keySaid = Promise.resolve();
+  function openRootTablet(said = Promise.resolve()) {
+    keySaid = said;
+    setTablet(true);
+    tablet.showClue('dRaw');
+  }
+  // 点「插入根钥」：切到报告模式（接入期间不能收起），播放接入画面
   function startRoot() {
-    if (root.done || tablet.hacking) return;
+    if (!rootPending() || tablet.hacking) return;
     setMode('report');
+    if (!tablet.open) setTablet(true);
+    tablet.showClue('dRaw');
     tablet.hack(ROOT_HACK, onRootDone);
   }
   function onRootDone() {
@@ -644,18 +804,52 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     root.done = true;
     syncTablet();
     tablet.showClue('rTime');
-    ui.say(LINES.rootRead);
-  }
-  // 报告 04 收起后：对象索引，走完停住，TAB 收起
-  function showTargetIndex() {
-    if (mode !== 'explore' || finale !== 'index') return;
-    setMode('report');
-    setTablet(true);
-    tablet.hack(TARGET_INDEX, null);
+    keySaid.then((completed) => {
+      if (completed === false) return;
+      if (round === 4 && mode !== 'death') ui.say(LINES.rootRead);
+    });
   }
 
-  const CAM_IN = 0.6, CAM_OUT = 0.5;
+  const CAM_IN = 0.9, CAM_OUT = 0.7;
   const _m = new THREE.Matrix4();
+
+  // ---------- 进出驾驶舱的镜头路径（第 3 轮插卡、第 4 轮拿根钥共用） ----------
+  // 不能从站姿直线插进车里（会从车顶穿进去）：先蹲到右门门洞外侧、门框顶以下，再横着从门洞钻进驾驶舱
+  const CABIN_OUTSIDE = 0.55;            // 门洞外侧的过渡点离门线多远（米）
+  const CABIN_HEADROOM = 0.15;           // 车内机位至少比门框顶低这么多（米）
+  const _zAxis = new THREE.Vector3(0, 0, 1);
+  const _cp = new THREE.Vector3(), _cq = new THREE.Quaternion(), _cr = new THREE.Quaternion();
+  // 车门关上时的位置（门本地坐标 → 世界）：门洞就在这里。门绕本地 Y 转开，去掉 Y 旋转即关闭姿态
+  function doorClosedMatrix() {
+    const n = door.node;
+    const m = new THREE.Matrix4().compose(n.position, new THREE.Quaternion().setFromEuler(new THREE.Euler(n.rotation.x, 0, n.rotation.z, n.rotation.order)), n.scale);
+    if (n.parent) { n.parent.updateMatrixWorld(true); m.premultiply(n.parent.matrixWorld); }
+    return m;
+  }
+  // start：站姿镜头位置；camTo：车内机位（高度会被压到门框顶以下，原地修改）。返回 0 站姿 → 1 车内 的曲线
+  function cabinPath(start, camTo) {
+    if (!door.node) return new THREE.CatmullRomCurve3([start.clone(), camTo.clone()]);
+    const out = new THREE.Vector3(0, 0, 1).transformDirection(crash.carGroup.matrixWorld).setY(0).normalize();   // 副驾一侧（右门）
+    const b = door.box, dm = doorClosedMatrix();
+    const cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2;
+    const opening = new THREE.Vector3(cx, b.min.y + (b.max.y - b.min.y) * 0.55, cz).applyMatrix4(dm);
+    const top = new THREE.Vector3(cx, b.max.y, cz).applyMatrix4(dm).y;
+    camTo.y = Math.min(camTo.y, top - CABIN_HEADROOM);
+    // 门洞外侧的过渡点：和门洞同一前后位置、在门线外，高度与车内机位一致（已经蹲下）
+    const outside = opening.addScaledVector(out, CABIN_OUTSIDE);
+    outside.y = camTo.y;
+    return new THREE.CatmullRomCurve3([start.clone(), outside, camTo.clone()], false, 'centripetal');
+  }
+  // 沿路径第 v 处摆镜头：位置在路径上；朝向前段从站姿视线转向 look，之后一直盯着 look，roll（歪头）随 v 逐渐加上
+  // v = 1 时与 lookAt(camTo, look) × roll 一致
+  function poseCabin(path, v, quatFrom, look, roll = 0) {
+    path.getPointAt(v, _cp);
+    camera.position.copy(_cp);
+    _m.lookAt(_cp, look, camera.up);
+    _cq.setFromRotationMatrix(_m);
+    if (roll) _cq.multiply(_cr.setFromAxisAngle(_zAxis, roll * v));
+    camera.quaternion.slerpQuaternions(quatFrom, _cq, THREE.MathUtils.smoothstep(v, 0, 0.35));
+  }
   // 镜头探进驾驶舱、正对转向柱下方的接口，微微俯视
   function startInsert() {
     if (!slot.ready || ins.phase) return;
@@ -671,6 +865,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     const back = new THREE.Vector3(-1, 0, 0).transformDirection(crash.carGroup.matrixWorld).setY(0).normalize();
     ins.camTo.copy(slot.world).addScaledVector(slot.normal, 0.42).addScaledVector(back, 0.18);
     ins.camTo.y += 0.16;
+    ins.path = cabinPath(ins.saved, ins.camTo);
     _m.lookAt(ins.camTo, slot.world, camera.up);
     ins.quatTo.setFromRotationMatrix(_m);
   }
@@ -711,15 +906,11 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     if (ins.phase === 'camIn' || ins.phase === 'camOut') {
       const out = ins.phase === 'camOut';
       const u = THREE.MathUtils.smootherstep(Math.min(1, ins.t / (out ? CAM_OUT : CAM_IN)), 0, 1);
-      const from = out ? ins.camTo : ins.camFrom, to = out ? ins.saved : ins.camTo;
-      const qf = out ? ins.quatTo : ins.quatFrom, qt = out ? ins.savedQuat : ins.quatTo;
-      camera.position.lerpVectors(from, to, u);
-      camera.quaternion.slerpQuaternions(qf, qt, u);
+      poseCabin(ins.path, out ? 1 - u : u, ins.quatFrom, slot.world);
       if (ins.t >= (out ? CAM_OUT : CAM_IN)) {
         if (out) {
           ins.phase = null;
           setMode('explore');
-          if (ins.done) ui.toast('信息量达到重建要求', '黑梦已就绪 · 按 R 启动回放', 4000);
           return;
         }
         ins.phase = 'card';
@@ -752,6 +943,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     return PRY_KEYS[PRY_KEYS.length - 1][1];
   }
   // 镜头走到门尾斜后方、站在门的外侧：门向外张开时从画面前方扫过，不会撞到镜头
+  // 撬棍模型加载好后，机位用 Blender 里摆好的 PryCam（和手、撬棍的动画对齐）
   function startPry() {
     if (!door.node || pry.phase || pry.done) return;
     setMode('insert');
@@ -772,8 +964,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     look.y -= 0.1;
     _m.lookAt(pry.camTo, look, camera.up);
     pry.quatTo.setFromRotationMatrix(_m);
-    pry.out = out;
-    pry.pillar = doorPillar();
+    if (pryArm?.ready) pryArm.camPose(pry.camTo, pry.quatTo);
   }
   function updatePry(dt) {
     pry.t += dt;
@@ -791,21 +982,18 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
         ui.toast('车门已撬开', '转向柱下方有检修接口 · 瞄准按 E 插卡', 4000);
         return;
       }
-      // 镜头到位：右手举起撬棍插进门缝，插稳后开始撬
-      pry.phase = 'brace'; pry.t = 0;
-      camera.position.copy(pry.camTo);
-      camera.quaternion.copy(pry.quatTo);
-      camera.updateMatrixWorld();
-      _m.copy(camera.matrixWorld).invert();
-      vm.pryStart(pry.pillar.clone().applyMatrix4(_m), pry.out.clone().transformDirection(_m), {
-        onHit: () => metalPop({ gain: 0.22 }),
-        onReady: () => { pry.phase = 'pry'; pry.t = 0; pry.sfx = 0; },
-      });
+      // 镜头到位：右手举起撬棍插进门缝，插稳后开始撬（模型没加载好就直接撬）
+      if (pryArm?.ready) { pry.phase = 'brace'; pry.hit = false; pryArm.set(0); }
+      else { pry.phase = 'pry'; pry.sfx = 0; }
+      pry.t = 0;
       return;
     }
     if (pry.phase === 'brace') {
       camera.position.copy(pry.camTo);
       camera.quaternion.copy(pry.quatTo);
+      pryArm.set(pry.t);
+      if (!pry.hit && pry.t >= PRY_HIT) { pry.hit = true; metalPop({ gain: 0.22 }); }
+      if (pry.t >= PRY_INSERT) { pry.phase = 'pry'; pry.t = 0; pry.sfx = 0; }
       return;
     }
     // pry：车门按关键帧张开，镜头跟着用力的节奏晃
@@ -816,7 +1004,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     }
     const deg = pryAngle(pry.t);
     setDoor(deg * Math.PI / 180);
-    vm.pryDrive(pry.t, deg);
+    pryArm?.set(PRY_INSERT + pry.t);
     const tug = pry.t < 1.3 ? Math.max(0, Math.sin(pry.t * 9)) * 0.012 : 0;
     const jolt = Math.max(0, 1 - Math.abs(pry.t - 1.4) / 0.25) * 0.03;
     camera.position.copy(pry.camTo);
@@ -826,30 +1014,19 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     if (pry.t >= PRY_END) {
       pry.done = true;
       setDoor(DOOR_OPEN);
-      vm.pryEnd();
+      pryArm?.hide();
       pry.phase = 'camOut'; pry.t = 0;
     }
   }
 
   // ---------- 第 4 轮：驾驶舱里拾取根钥 ----------
   // 按 E：从副驾门探身进驾驶舱，俯视座椅和中控之间的缝，往前一够把根钥拿走，再退出来
-  // 只做镜头，不显示手。镜头退回站姿后才播独白（pickRootKey）
-  // 路径不能直线进去（会从车顶穿进去）：先蹲到车门开口外侧、门框顶以下，再横着从门洞钻进驾驶舱
+  // 只做镜头，不显示手。镜头退回站姿后播独白，同时平板自动举起接入根钥（pickRootKey）
+  // 镜头路径同插卡：先蹲到门洞外侧，再从门洞钻进去（cabinPath）
   const GRAB_IN = 1.0, GRAB_REACH = 0.3, GRAB_HOLD = 0.35, GRAB_OUT = 0.8;
   const GRAB_DIP = 0.07;                 // 「够」一下时镜头朝根钥前探的距离（米）
   const GRAB_ROLL = THREE.MathUtils.degToRad(6); // 身体压在副驾座上，头略歪
-  const GRAB_OUTSIDE = 0.55;             // 门洞外侧的过渡点离门线多远（米）
-  const GRAB_HEADROOM = 0.15;            // 镜头至少比门框顶低这么多（米）
-  const _zAxis = new THREE.Vector3(0, 0, 1);
   const grab = { phase: null, t: 0, path: null, quatFrom: new THREE.Quaternion(), camTo: new THREE.Vector3(), quatTo: new THREE.Quaternion(), dir: new THREE.Vector3() };
-  const _gp = new THREE.Vector3(), _gq = new THREE.Quaternion();
-  // 车门关上时的位置（门本地坐标 → 世界）：门洞就在这里。门绕本地 Y 转开，去掉 Y 旋转即关闭姿态
-  function doorClosedMatrix() {
-    const n = door.node;
-    const m = new THREE.Matrix4().compose(n.position, new THREE.Quaternion().setFromEuler(new THREE.Euler(n.rotation.x, 0, n.rotation.z, n.rotation.order)), n.scale);
-    if (n.parent) { n.parent.updateMatrixWorld(true); m.premultiply(n.parent.matrixWorld); }
-    return m;
-  }
   function startKeyGrab() {
     if (root.picked || grab.phase || !rootKey.ready || !door.node) return;
     setMode('insert');
@@ -857,37 +1034,18 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     ui.clearToast();
     grab.phase = 'camIn'; grab.t = 0;
     grab.quatFrom.copy(camera.quaternion);
-    const start = camera.position.clone();
     const m = crash.carGroup.matrixWorld;
     const out = new THREE.Vector3(0, 0, 1).transformDirection(m).setY(0).normalize();   // 副驾一侧（右门）
     const back = new THREE.Vector3(-1, 0, 0).transformDirection(m).setY(0).normalize();
     const key = rootKey.world;
-    // 门洞：关闭姿态的车门包围盒中心（前后、内外），以及门框顶的高度
-    const b = door.box, dm = doorClosedMatrix();
-    const opening = new THREE.Vector3((b.min.x + b.max.x) / 2, b.min.y + (b.max.y - b.min.y) * 0.55, (b.min.z + b.max.z) / 2).applyMatrix4(dm);
-    const top = new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2).applyMatrix4(dm).y;
-    // 头在中控通道上方偏副驾一侧、略靠后，往下斜看那条缝；高度压在门框顶以下
+    // 头在中控通道上方偏副驾一侧、略靠后，往下斜看那条缝（高度由 cabinPath 压到门框顶以下）
     grab.camTo.copy(key).addScaledVector(out, 0.5).addScaledVector(back, 0.12);
-    grab.camTo.y = Math.min(key.y + 0.38, top - GRAB_HEADROOM);
-    // 门洞外侧的过渡点：和门洞同一前后位置、在门线外，高度与车内机位一致（已经蹲下）
-    const outside = opening.clone().addScaledVector(out, GRAB_OUTSIDE);
-    outside.y = grab.camTo.y;
-    grab.path = new THREE.CatmullRomCurve3([start, outside, grab.camTo.clone()], false, 'centripetal');
+    grab.camTo.y = key.y + 0.38;
+    grab.path = cabinPath(camera.position, grab.camTo);
     _m.lookAt(grab.camTo, key, camera.up);
     grab.quatTo.setFromRotationMatrix(_m);
     grab.quatTo.multiply(_q.setFromAxisAngle(_zAxis, GRAB_ROLL));
     grab.dir.copy(key).sub(grab.camTo).normalize();
-  }
-  // 沿路径的第 v（0 站姿 → 1 车内）处：位置在路径上；朝向前段从站姿视线转向根钥，之后一直盯着根钥，歪头逐渐加上
-  function poseGrab(v) {
-    grab.path.getPointAt(v, _gp);
-    camera.position.copy(_gp);
-    if (_gp.distanceToSquared(rootKey.world) > 1e-6) {
-      _m.lookAt(_gp, rootKey.world, camera.up);
-      _gq.setFromRotationMatrix(_m);
-    } else _gq.copy(grab.quatTo);
-    _gq.multiply(_q.setFromAxisAngle(_zAxis, GRAB_ROLL * v));
-    camera.quaternion.slerpQuaternions(grab.quatFrom, _gq, THREE.MathUtils.smoothstep(v, 0, 0.35));
   }
   function updateKeyGrab(dt) {
     grab.t += dt;
@@ -896,7 +1054,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       const out = P === 'camOut';
       const dur = out ? GRAB_OUT : GRAB_IN;
       const u = THREE.MathUtils.smootherstep(Math.min(1, grab.t / dur), 0, 1);
-      poseGrab(out ? 1 - u : u);
+      poseCabin(grab.path, out ? 1 - u : u, grab.quatFrom, rootKey.world, GRAB_ROLL);
       if (grab.t >= dur) {
         grab.t = 0;
         if (out) {
@@ -925,10 +1083,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     rootKey.setVisible(false);
     syncTablet();
     showTask();
-    ui.say(LINES.keyFound).then((completed) => {
-      if (!completed) return;
-      if (round === 4 && !root.done) ui.toast('取得 · 程叙的根钥', 'TAB 打开平板 · 读取车辆 B 原始记录', 4500);
-    });
+    openRootTablet(ui.say(LINES.keyFound));
   }
 
   // ---------- 真的确认（报告 02 归档 / 报告 03 移交）→ 假结局 ----------
@@ -977,7 +1132,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   function startDeath() {
     if (mode === 'death') return;
     if (tablet.open) tablet.toggle(false);
-    confirm = null; holdConfirm = false; pendingReport = null;
+    confirm = null; holdConfirm = false; ui.setSkip(false);
     ui.hush(); ui.clearToast(); ui.hidePanel(); ui.ending(null);
     setMode('death');
     ui.setMode('cut', '');
@@ -986,6 +1141,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       // 游戏结束：停在黑屏，释放鼠标但不弹暂停层
       controls.keepOverlayHidden = true;
       controls.unlock();
+      // 黑屏停一会儿，再淡入「序章 · 完」
+      setTimeout(() => ui.fin(true), 1200);
     });
   }
 
@@ -993,7 +1150,6 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
 
   function startRound2() {
     round = 2;
-    lead = false;
     glint = true;
     props.setTracks(true);
     clues.forEach((c) => { if (c.round === 2) c.unlocked = true; });
@@ -1002,17 +1158,10 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     setTimeout(() => ui.say(LINES.after1), 700);
   }
 
-  // 分析完车门残漆：只熄掉残漆反光。三处线索从这一轮开始就能查，不再插派单通话
-  function unlockRound2() {
-    lead = false;
-    clues.forEach((c) => { if (c.round === 2) c.unlocked = true; });
-    ui.setCounter(stageClues().filter((c) => c.done).length, stageClues().length);
-    syncTablet();
-  }
-  function onLeadDone() {
+  // 分析完车门残漆：熄掉残漆反光
+  function onScrapeDone() {
     glint = false;
     props.setScrape(SCRAPE_ALPHA, 0);
-    unlockRound2();
   }
 
   // ---------- 探索 ----------
@@ -1048,13 +1197,12 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     scanCd = SCAN_COOLDOWN;
   }
 
-  // 测试：按 F 直接完成一条，收尾和按住 E 分析完相同
+  // 现场线索分析完：线索计数满了以后 HUD 自己切成「按住 R 构建黑梦」
   function finishClue(c) {
     ui.setCounter(stageClues().filter((x) => x.done).length, stageClues().length);
-    if (c.lead) onLeadDone();
-    else if (c.key && reconReady()) ui.toast('信息量达到重建要求', '黑梦已就绪 · 按 R 启动回放', 0);
-    ui.setHint(reconReady());
+    if (c.id === 'scrape') onScrapeDone();
   }
+  // 开发测试：按 F 直接完成一条，收尾和按住 E 分析完相同
   function completeOneClue() {
     const c = fieldClues().find((x) => !x.done);
     if (!c) { ui.toast('本轮现场线索已完成', '', 1500); return; }
@@ -1119,16 +1267,20 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       const s = project(c.p);
       const d = c.p.distanceTo(camera.position);
       const show = showClues && !c.data && c.unlocked && c.round === round && c !== analysisClue && s.front && (d < NEAR_RANGE || (!c.nearOnly && (c === aimed || (!c.done && c.reveal > 0))));
+      const flash = !!c.scanFlash;
+      c.scanFlash = false;
       return {
-        id: c.id, x: s.x, y: s.y, front: s.front, show, done: c.done, aim: c === aimed,
+        id: c.id, x: s.x, y: s.y, front: s.front, show, done: c.done, aim: c === aimed, flash,
         label: c.done ? (c === aimed ? c.name : '') : (c === aimed || d < 8 ? `${d.toFixed(1)} m` : ''),
       };
     });
+    // 黑梦分析点：时间窗内就显示（不论远近），走远时标名称和距离，瞄准时只标名称
     for (const c of probes) {
       const s = project(c.p);
-      const mine = c.round === round && c.visible;
-      const show = showProbes && mine && c !== analysisClue && s.front && (!c.done || c === aimedProbe);
-      list.push({ id: c.id, x: s.x, y: s.y, front: s.front, show, done: c.done, aim: c === aimedProbe, label: c === aimedProbe ? c.name : '' });
+      const d = c.p.distanceTo(camera.position);
+      const show = showProbes && c.inTime && c !== analysisClue && s.front && (!c.done || c === aimedProbe);
+      const label = c === aimedProbe ? c.name : `${c.name} ${d.toFixed(0)} m`;
+      list.push({ id: c.id, x: s.x, y: s.y, front: s.front, show, done: c.done, aim: c === aimedProbe, label });
     }
     return list;
   }
@@ -1140,7 +1292,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       c.reveal = Math.max(0, c.reveal - dt);
       if (!c.unlocked) continue;
       const d = c.p.distanceTo(camera.position);
-      if (fx.pulsing && !c.nearOnly && !c.hit && d < SCAN_RANGE && d < fx.pulseRadius) { c.hit = true; c.reveal = SCAN_SHOW; }
+      if (fx.pulsing && !c.nearOnly && !c.hit && d < SCAN_RANGE && d < fx.pulseRadius) { c.hit = true; c.reveal = SCAN_SHOW; c.scanFlash = true; }
     }
     const nextAim = aimAt(fieldClues(), AIM_RANGE);
     if (nextAim !== aimed) holdT = 0;
@@ -1163,12 +1315,13 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
 
     // 车门残漆和普通线索一样：走近出现菱形，没有远处方向标记
     if (glint) props.setScrape(SCRAPE_ALPHA, crash.hazardLit ? 1.2 : 0.1);
-    ui.setPointer(null);
 
-    if (analysisClue) ui.setPrompt(null);
-    else if (doorAimed) ui.setPrompt('按 E 撬开车门', true);
-    else if (portAimed) ui.setPrompt('按 E 插入取证卡', true);
-    else if (keyAimed) ui.setPrompt('按 E 拾取', true);
+    const tap = doorAimed ? { ...project(doorTarget().p), name: '右侧车门' }
+      : portAimed ? { ...project(portTarget().p), name: '检修接口' }
+      : keyAimed ? { ...project(keyTarget().p), name: '根钥' }
+      : null;
+    if (!analysisClue && tap) ui.setAnalysis(tap, 0, 'tap');
+    if (analysisClue || tap) ui.setPrompt(null);
     else if (aimed && aimed.done) ui.setPrompt(`按 E 查看：${aimed.name}`);
     else ui.setPrompt(null);
 
@@ -1194,43 +1347,38 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   function updateRecon(dt) {
     const r = R();
     if (playing) {
-      rt += dt * (r.jump != null && rt >= r.jump ? 0.5 : 1); // 时间跳跃后放慢，人物动作看得清
+      rt += dt;
       if (rt >= r.duration) { rt = r.duration; playing = false; }
     }
     recon.setTime(rt);
 
-    // 分析点一律：回放到自己的时间窗，并且人走到 5 m 内，菱形才出现、才能瞄准
+    // 分析点：回放到自己的时间窗内，菱形就出现并标距离（inTime）；走到 PROBE_RANGE 内才能瞄准（visible）
     for (const c of probes) {
       const inTime = c.t == null || Math.abs(rt - c.t) <= PROBE_WINDOW;
       const placed = c.pos ? true : recon.targetPos(c.target, c.p);
-      c.visible = c.round === round && inTime && placed && c.p.distanceTo(camera.position) < PROBE_RANGE;
+      c.inTime = c.round === round && inTime && placed;
+      c.visible = c.inTime && c.p.distanceTo(camera.position) < PROBE_RANGE;
     }
     const nextAim = aimAt(probes.filter((c) => c.visible), PROBE_RANGE);
     if (nextAim !== aimedProbe) holdT = 0;
     aimedProbe = nextAim;
     tickFinished(dt);
     holdAnalyze(aimedProbe, dt, (c) => {
-      if (c.id === 'p1turn') ui.say(LINES.dream1);
-      if (c.id === 'p2gap') ui.say(LINES.dream2);
-      if (c.id === 'p3halo') ui.say(LINES.dream3);
-      if (c.id === 'p4halo') ui.say(LINES.dream4);
-      if (c.id === 'p4cut') ui.say(LINES.dream4b);
-      if (c.key) ui.setCounter(keyProbes().filter((x) => x.done).length, keyProbes().length, '分析');
-      checkRoundDone();
+      const line = DREAM_LINES[c.id];
+      const said = line ? ui.say(LINES[line]) : Promise.resolve();
+      if (c.key) ui.setCounter(keyProbes().filter((x) => x.done).length, keyProbes().length, '异常已分析');
+      if (roundComplete()) scheduleDreamExit(said);
     });
     if (holdT > 0) playing = false;
+    if (tipT > 0) { tipT -= dt; if (tipT <= 0 || holdT > 0) hideTip(); }
     const analysisClue = showAnalysis(aimedProbe);
 
-    const rec = recorded[round];
-    const ni = nearEvent();
-    // 进度条黄块：先是事件，后是带时间点的分析点（已分析视为已记录）
+    // 进度条黄块：带时间点的分析点（已分析的高亮）
     const tp = timedProbes();
-    const tpNear = tp.findIndex((c) => Math.abs(rt - c.t) <= PROBE_WINDOW);
-    const markNear = ni >= 0 ? ni : (tpNear >= 0 ? rec.length + tpNear : -1);
-    const countText = r.events.length ? `已记录事件 ${rec.filter(Boolean).length}/${rec.length}` : `已分析 ${tp.filter((c) => c.done).length}/${tp.length}`;
-    ui.updateTimeline(rt, r.duration, clockText(rt), [...rec, ...tp.map((c) => c.done)], markNear, countText);
-    if (ni >= 0 && !rec[ni]) ui.setPrompt(`按 E 记录：${r.events[ni].label}`, true);
-    else if (analysisClue) ui.setPrompt(null);
+    const markNear = tp.findIndex((c) => Math.abs(rt - c.t) <= PROBE_WINDOW);
+    const countText = `已分析 ${tp.filter((c) => c.done).length}/${tp.length}`;
+    ui.updateTimeline(rt, clockText(rt), tp.map((c) => c.done), markNear, countText);
+    if (analysisClue) ui.setPrompt(null);
     else if (aimedProbe && aimedProbe.done) ui.setPrompt(`按 E 查看：${aimedProbe.name}`);
     else ui.setPrompt(null);
     ui.updateMarkers(markerList(false, true, analysisClue));
@@ -1263,7 +1411,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       if (mode === 'explore') setMode('explore');   // 测试按钮已切到别的阶段时不覆盖
       ui.hush();
     },
-    get moveScale() { return intro ? 0 : mode === 'report' || mode === 'ending' || mode === 'insert' || mode === 'death' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
+    get moveScale() { return intro || enter.on ? 0 : mode === 'report' || mode === 'ending' || mode === 'insert' || mode === 'death' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
     update(realDt) {
       ui.updateDialogue(realDt);
       tablet.update(realDt);
@@ -1301,13 +1449,19 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
         return;
       }
       const available = !tablet.open && tablet.amount <= 0.05;
-      if (mode === 'explore' && available) updateExplore(realDt);
+      if (mode === 'recon' && enter.on) {
+        vm.analyze(null, 0);
+        fx.analyze(null);
+        updateEnter(realDt);
+      } else if (mode === 'explore' && available) updateExplore(realDt);
       else if (mode === 'recon' && available) updateRecon(realDt);
       else {
         vm.analyze(null, 0);
         fx.analyze(null);
         if (mode === 'report') updateReport(realDt);
       }
+      if (mode === 'explore') updateDreamHold(realDt);
+      updateRite(realDt);
       syncAnalyzeSound();
       vm.update(realDt, mode === 'explore' && !tablet.open && tablet.amount < 0.02);
       fx.update(realDt, vm.emitterWorld(emitter));
@@ -1322,11 +1476,11 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       tabletClue(id) { tablet.showClue(id); },
       aim(i) { dbgAim = i; },
       showClue(i) { clues[i].done = true; ui.showClue(clues[i], i); },
-      recordAll() { events().forEach((ev) => { rt = ev.t; tryRecord(); }); },
       confirm(on = true) { holdConfirm = on; },
       decline() { declineReport(); },
-      round3() { round3Btn.click(); },
-      round4() { round4Btn.click(); },
+      round2() { skipToRound2(); },
+      round3() { skipToRound3(); },
+      round4() { skipToRound4(); },
       // 本轮黑梦分析点全部标完，按离开黑梦的流程生成本轮报告
       report() { probes.forEach((p) => { if (p.round === round) p.done = true; }); advanceAfterDream(); },
       root() { startRoot(); },
@@ -1340,7 +1494,6 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       slot,
       returnFromArchive() { returnFromArchive(); },
       get confirmState() { return confirm?.state ?? null; },
-      leadDone() { const c = clues.find((x) => x.lead); c.done = true; onLeadDone(); },
       get mode() { return mode; },
       // 结局：death() 直接播放；force 为 true 时鼠标没锁定也播放；deathSeek(秒) 跳到某一秒
       death(force = false) { deathForce = force; startDeath(); },

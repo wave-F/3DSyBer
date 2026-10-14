@@ -121,7 +121,8 @@ export function createAnalysisFx(scene, camera) {
   return {
     apply,
     update,
-    setActive(on) { state.target = on ? 1 : 0; },
+    // on 可传 0~1 的数值（按住 R 构建黑梦时画面逐渐灰蓝化）
+    setActive(on) { state.target = typeof on === 'number' ? on : on ? 1 : 0; },
     setFocus(on) {
       state.focus = on;
       if (!on) { state.reading = false; state.complete = false; }
