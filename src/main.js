@@ -21,6 +21,7 @@ import { buildPoliceCar } from './policeCar.js';
 import { buildRain } from './rain.js';
 import { buildCordon } from './cordon.js';
 import { createPlayer } from './player.js';
+import { createIntro } from './intro.js';
 import { buildSky, FOG_HEX } from './sky.js';
 import { clock, tick } from './investigation/clock.js';
 import { createInvestigation } from './investigation/state.js';
@@ -77,7 +78,8 @@ const updateRain = buildRain(scene, camera);
 const updateCordon = buildCordon(scene);
 const updatePlayer = createPlayer(camera, document.body, document.getElementById('overlay'));
 const inv = createInvestigation(scene, camera, crash, updatePlayer.controls);
-if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; window.__renderer = renderer; window.__scene = scene; } // 开发时截图调机位用
+const intro = createIntro({ camera, police, controls: updatePlayer.controls, inv });
+if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; window.__renderer = renderer; window.__scene = scene; window.__police = police; window.__intro = intro; } // 开发时截图调机位用
 
 // ---------- 后期 ----------
 // Separate pre-pass avoids feeding the shaded scene back into its own AO.
@@ -174,7 +176,8 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   tick(dt);
-  updatePlayer(dt * inv.moveScale);
+  if (intro.playing) intro.update(dt);
+  else updatePlayer(dt * inv.moveScale);
   crash.update(clock.dt, clock.elapsed);
   police.update(clock.dt, clock.elapsed);
   updateRain(clock.dt);

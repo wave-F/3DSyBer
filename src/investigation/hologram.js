@@ -30,15 +30,24 @@ depthOnly.fog = false;
 
 // 把任意模型克隆成全息版本（几何共享，只替换材质）
 // shell：只显示外壳。精细模型（车内饰、引擎、底盘）层层叠加时轮廓线过多、加法混合过曝，开启后被外壳挡住的部分不再显示
+// 标了 userData.noHolo 的附加物（如车身贴花）不进全息
+function cloneForHolo(source) {
+  const c = source.clone(true);
+  const drop = [];
+  c.traverse((o) => { if (o.userData.noHolo) drop.push(o); });
+  drop.forEach((o) => o.removeFromParent());
+  return c;
+}
+
 export function hologramize(source, hex, strength = 1, { shell = false } = {}) {
-  const holo = source.clone(true);
+  const holo = cloneForHolo(source);
   const mat = hologramMaterial(hex, strength);
   holo.traverse((o) => {
     if (o.isMesh) { o.material = mat; o.castShadow = false; if (shell) o.renderOrder = 2; }
     if (o.isLight) o.visible = false;
   });
   if (!shell) return holo;
-  const mask = source.clone(true);
+  const mask = cloneForHolo(source);
   mask.traverse((o) => {
     if (o.isMesh) { o.material = depthOnly; o.castShadow = false; o.renderOrder = 1; }
     if (o.isLight) o.visible = false;

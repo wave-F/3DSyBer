@@ -100,7 +100,11 @@ export function buildTwistProps(scene, crash) {
       mesh.updateMatrixWorld(true);
       const geo = new DecalGeometry(mesh, center, orient, size);
       if (geo.attributes.position.count === 0) { geo.dispose(); continue; }
-      scene.add(new THREE.Mesh(geo, scrapeMat));
+      // 贴花几何是世界坐标，转到所投影网格的本地坐标再挂上去，车门打开时残漆跟着门走
+      geo.applyMatrix4(mesh.matrixWorld.clone().invert());
+      const decal = new THREE.Mesh(geo, scrapeMat);
+      decal.userData.noHolo = true;
+      mesh.add(decal);
     }
   });
 

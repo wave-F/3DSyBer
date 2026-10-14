@@ -2,7 +2,7 @@
 
 剧情依据 [../Story/事故之前-序章.md](../Story/事故之前-序章.md)，现网做到第 4 轮（报告 04 和对象索引），结局还没接。
 
-模式在 `state.js`：`explore`、`recon`（黑梦）、`report`（平板自动举起看报告）、`cut`（过场）、`ending`（报告 02 归档 / 报告 03 移交后的假结局）、`insert`（第 3 轮插卡）。文案、轮次、报告、台词都在 `clues.js`。HUD、字幕、方向标记、黑边在 `ui.js`。回放在 `recon.js`。平板在 `tablet.js`。过场镜头在 `cutscene.js`。可暂停的动画读 `clock.js` 的 `gameTime`，不用 TSL `time`。`uiTime` 不停。
+开场在 `intro.js`：高角度跟车约 7 秒，正面看停车约 4 秒，切到驾驶座并打开到场任务（`REPORTS.arrival`，不留在之后的报告列表）。TAB 收起后从 1.55 秒接着播下车。空格跳过整段。模式在 `state.js`：`explore`、`recon`（黑梦）、`report`（平板自动举起看报告）、`cut`（过场）、`ending`（报告 02 归档 / 报告 03 移交后的假结局）、`insert`（第 3 轮插卡）。文案、轮次、报告、台词都在 `clues.js`。HUD、字幕、方向标记、黑边在 `ui.js`。回放在 `recon.js`。平板在 `tablet.js`。过场镜头在 `cutscene.js`。可暂停的动画读 `clock.js` 的 `gameTime`，不用 TSL `time`。`uiTime` 不停。
 
 ## 轮次
 

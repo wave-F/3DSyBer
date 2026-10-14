@@ -50,6 +50,7 @@ export function createInvestigation(scene, camera, crash, controls) {
   const recorded = Object.fromEntries(Object.entries(ROUNDS).map(([k, r]) => [k, r.events.map(() => false)]));
   const reports = ['initial'];
   let guideTablet = true;   // 开场第一次按 Tab，直接落在报告页
+  let arrival = false;       // 车内到场任务，只在开场平板里出现一次
   const roundDone = { 1: false, 2: false, 3: false, 4: false };
   let round = 1;
   let lead = false;            // 第 2 轮：只有车门残漆可查，分析后解锁其余线索
@@ -79,6 +80,7 @@ export function createInvestigation(scene, camera, crash, controls) {
   let scanCd = 0;
   let dbgAim = -1;
   let started = false;
+  let intro = false;   // 开场下车镜头播放中（src/intro.js 控制）
 
   const R = () => ROUNDS[round];
   const unlocked = () => clues.filter((c) => c.unlocked);
@@ -129,7 +131,7 @@ export function createInvestigation(scene, camera, crash, controls) {
         .filter((c) => round < 3 || c.round >= round - 1)
         .map((c) => (rootAction && c.id === 'dRaw' ? { ...c, action: rootAction } : c)),
       events: [],
-      reports: reports.map((k) => ({ key: k, ...REPORTS[k], revisedOn: revised.has(k) })),
+      reports: (arrival ? ['arrival', ...reports] : reports).map((k) => ({ key: k, ...REPORTS[k], revisedOn: revised.has(k) })),
       confirm,
       status: statusText(),
     });
@@ -273,6 +275,7 @@ export function createInvestigation(scene, camera, crash, controls) {
   // ---------- 输入 ----------
   addEventListener('keydown', (e) => {
     if (e.code === 'Tab') e.preventDefault();
+    if (intro) return;   // 开场下车镜头期间不响应调查操作
     // 假结局：鼠标未锁定，按 E 回到报告 02
     if (mode === 'ending') {
       if ((e.code === 'KeyE' || e.code === 'Enter') && !e.repeat && endingT > 4) returnFromArchive();
@@ -354,14 +357,15 @@ export function createInvestigation(scene, camera, crash, controls) {
     if (!locked()) {
       holdKey = false; holdT = 0; finishedAnalysis = null;
       fx.setFocus(false); vm.analyze(null, 0); ui.setAnalysis(null);
-    } else if (!started) {
-      // 开场：第一次进入游戏时派单员呼叫，提示平板里已有系统初判
-      started = true;
-      setTimeout(() => {
-        ui.say(LINES.opening, { radio: true }).then(() => ui.toast('系统初判已下发', 'TAB 打开平板查看报告', 4500));
-      }, 900);
-    }
+    } else if (!started && !intro) startOpening();
   });
+  // 开场：第一次进入游戏（下车镜头结束后）派单员呼叫，提示平板里已有系统初判
+  function startOpening() {
+    started = true;
+    setTimeout(() => {
+      ui.say(LINES.opening, { radio: true }).then(() => ui.toast('系统初判已下发', 'TAB 打开平板查看报告', 4500));
+    }, 900);
+  }
   addEventListener('wheel', (e) => {
     if (mode !== 'recon') return;
     playing = false;
@@ -923,12 +927,46 @@ export function createInvestigation(scene, camera, crash, controls) {
   return {
     fx,
     tablet,
-    get moveScale() { return mode === 'report' || mode === 'ending' || mode === 'insert' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
+    // 开场下车镜头：隐藏界面与扫描枪、屏蔽输入、推迟派单员开场呼叫
+    startIntro() {
+      intro = true;
+      ui.setMode('cut', '');
+      ui.setCinema(true);
+    },
+    // 车停稳后：打开到场任务。关平板后再下车
+    openArrival() {
+      arrival = true;
+      setTablet(true);
+      tablet.showReport('arrival');
+      ui.setCinema(false);
+    },
+    closeArrival() {
+      if (!arrival) return;
+      arrival = false;
+      setTablet(false);
+      syncTablet();
+      ui.setCinema(true);
+    },
+    endIntro() {
+      if (!intro) return;
+      intro = false;
+      ui.setCinema(false);
+      if (mode === 'explore') setMode('explore');   // 测试按钮已切到别的阶段时不覆盖
+      if (!started && locked()) startOpening();
+    },
+    get moveScale() { return intro ? 0 : mode === 'report' || mode === 'ending' || mode === 'insert' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
     update(realDt) {
       tablet.update(realDt);
       ui.setTabletOpen(tablet.amount > 0.05);
       if (mode === 'ending') endingT += realDt;
       slot.update(realDt);
+      if (intro) {
+        vm.analyze(null, 0);
+        fx.analyze(null);
+        vm.update(realDt, false);
+        fx.update(realDt, vm.emitterWorld(emitter));
+        return;
+      }
       if (mode === 'insert') {
         updateInsert(realDt);
         vm.analyze(null, 0);
