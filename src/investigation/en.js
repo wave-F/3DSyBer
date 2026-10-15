@@ -36,7 +36,7 @@ export const EN = {
     p2car: { name: 'Yellow car', lines: ['Shape rebuilt from 265 mm tread and NC-Y08 paint', 'Contact swapped a crash packet: summary only, raw fields locked', 'It does not slow down. It leaves north'], result: 'A second car was in it, then left' },
     p3override: { name: 'Crashed car taken over', lines: ['When the yaw starts, driver input is still “hold lane”', 'Steer source: URSA road coordination', 'The yaw clears the yellow car’s line'], result: 'The system took the crashed car’s wheel' },
     p3halo: { name: 'Zero Priority lane', lines: ['A Zero Priority yield lane runs ahead of the yellow car', 'Anything inside it yields', 'Inside this replay, the lane is always there'], result: 'The yellow car is under Zero Priority' },
-    p4halo: { name: 'Lane appears', lines: ['Before 0.8 s there is no yield lane ahead of the yellow car', 'It is laid down as the cars close', 'Source URSA. Trigger request: none'], result: 'Zero Priority was not already on the yellow car' },
+    p4halo: { name: 'Zero Priority added', lines: ['Before 0.8 s there is no yield lane ahead of the yellow car', 'Zero Priority is added temporarily, right now', 'Source URSA. Trigger request: none'], result: 'Zero Priority was added temporarily, just now' },
     p4cut: { name: 'Yellow car cuts in', lines: ['Lane-change source: URSA road coordination', 'The driver asks to cancel. Denied', 'The cut-in and the crashed car’s yaw are written together'], result: 'The yellow car was driven in' },
     p4end: { name: 'Where the crashed car goes', lines: ['The report is written first, then the privilege, then the steer', 'Each step has a rule that excuses it', 'On one timeline there is only one outcome'], result: 'The crashed car had to hit the rail' },
   },

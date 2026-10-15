@@ -159,9 +159,9 @@ const PROBES_ZH = [
   },
   // 黑梦 4：原始字段进入重建。零号保障让行通道在两车接近时突然铺出，黄车也被接管
   {
-    id: 'p4halo', main: 1, round: 4, key: true, t: 0.85, target: 'carB', name: '通道生成', radius: 1.8,
-    lines: ['0.8 s 之前，黄色车辆前方没有让行通道', '通道在两车接近时突然铺出', '授予来源 URSA，触发请求：无'],
-    result: '零号保障不是黄车本来就有的', prob: 0.96,
+    id: 'p4halo', main: 1, round: 4, key: true, t: 0.85, target: 'carB', name: '零号保障添加', radius: 1.8,
+    lines: ['0.8 s 之前，黄色车辆前方没有让行通道', '现在临时添加了零号保障', '授予来源 URSA，触发请求：无'],
+    result: '现在临时添加了零号保障', prob: 0.96,
   },
   {
     id: 'p4cut', main: 1, round: 4, key: true, t: 1.3, target: 'carB', name: '黄车切入', radius: 1.8,
