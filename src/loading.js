@@ -49,6 +49,7 @@ let assetsDone = false, warmStart = 0, good = 0, lastFrame = 0;
 let shown = 0, ready = false;
 let startFn = null;
 let fadeAt = 0;
+let replay = false;
 let phase = 'init';
 let lastUrl = '';
 
@@ -127,18 +128,45 @@ function toggleLang(e) {
 root.querySelector('.ld-lang').addEventListener('click', toggleLang);
 document.getElementById('lang-btn').addEventListener('click', toggleLang);
 
-root.addEventListener('click', () => {
-  if (!ready) return;
+function beginGame() {
   ready = false;
   root.style.pointerEvents = 'none';
   root.classList.add('closing');
   startFn?.();
   setTimeout(() => { fadeAt = performance.now(); root.classList.add('fading'); }, BLACK_MS + HOLD_MS);
   setTimeout(() => root.classList.add('gone'), BLACK_MS + HOLD_MS + FADE_MS);
+}
+
+root.addEventListener('click', () => {
+  if (!ready) return;
+  // 结局回到标题后再点「开始」：先盖黑，再整页重开，调查进度不带着进下一轮
+  if (replay) {
+    ready = false;
+    replay = false;
+    root.style.pointerEvents = 'none';
+    root.classList.add('closing');
+    setTimeout(() => location.reload(), BLACK_MS);
+    return;
+  }
+  beginGame();
 });
 
 export const loading = {
   onStart(fn) { startFn = fn; },
+  // 序章结束后：标题页从黑里淡入，进度条保持收起，等再次点击开始
+  showTitle() {
+    replay = true;
+    ready = true;
+    root.style.pointerEvents = '';
+    root.classList.remove('gone', 'fading', 'closing');
+    root.classList.add('ready', 'hide-bar');
+    root.style.transition = 'none';
+    root.style.opacity = '0';
+    void root.offsetWidth;
+    root.style.transition = 'opacity 1.4s ease-in-out';
+    root.style.opacity = '1';
+    setTimeout(() => { root.style.transition = ''; root.style.opacity = ''; }, 1500);
+  },
   get done() { return root.classList.contains('gone'); },
   // 距离黑幕完全揭开还剩多少毫秒；还没开始淡出时为 null
   get fadeLeft() {

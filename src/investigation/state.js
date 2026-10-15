@@ -68,6 +68,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   const props = buildTwistProps(scene, crash);
   const fx = createAnalysisFx(scene, camera);
   const ui = createUI();
+  ui.onFinale(() => loading.showTitle());
   preloadClueImages(CLUES);
   const recon = createRecon(scene, crash);
   const tablet = createTablet(camera);
@@ -1197,7 +1198,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       // 游戏结束：停在黑屏，释放鼠标但不弹暂停层
       controls.keepOverlayHidden = true;
       controls.unlock();
-      // 黑屏停一会儿，再淡入「序章 · 完」
+      // 黑屏停一会儿，再淡入「序章 · 完」。点任意处后淡出，回到标题界面
       setTimeout(() => ui.fin(true), 1200);
     });
   }
