@@ -241,7 +241,8 @@ let last = performance.now();
 let pauseShown = false;
 renderer.setAnimationLoop(() => {
   const now = performance.now();
-  const dt = Math.min((now - last) / 1000, 0.1);
+  const frame = (now - last) / 1000;
+  const dt = Math.min(frame, 0.1);
   last = now;
   // Esc 只解锁鼠标并弹出「已暂停」。平板打开时的解锁不算暂停
   const controls = updatePlayer.controls;
@@ -265,6 +266,7 @@ renderer.setAnimationLoop(() => {
   updateSky(clock.dt, clock.elapsed);
   updateCity();
   gi.update(renderer);
+  inv.setFps(frame);
   inv.update(step);
   sound.updateBillboards(clock.elapsed);
   sound.update(dt, camera);

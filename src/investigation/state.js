@@ -1589,6 +1589,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     // 加载界面期间预热结局跑车的材质（见 finale.warm）
     warmFinale(on) { death.warm(on); },
     get moveScale() { return intro || enter.on ? 0 : mode === 'report' || mode === 'ending' || mode === 'insert' || mode === 'death' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
+    setFps(dt) { ui.setFps(dt); },
     update(realDt) {
       ui.updateDialogue(realDt);
       tablet.update(realDt);

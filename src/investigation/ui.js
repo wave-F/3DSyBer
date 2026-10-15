@@ -11,6 +11,7 @@ const voiceIdOf = createVoiceMap(LINES, VOICE_LINES);
 const CSS = `
 .inv { position: fixed; pointer-events: none; font-family: "PingFang SC", "Helvetica Neue", sans-serif; color: #dff2ff; user-select: none; }
 .inv-mono { font-family: "SF Mono", Menlo, monospace; letter-spacing: 0.04em; }
+#inv-fps { left: 16px; top: 12px; z-index: 8; font-size: 13px; letter-spacing: .08em; color: #9fd4ff; text-shadow: 0 1px 4px #000; }
 #inv-hud { left: 32px; top: 25%; transform: translateY(-6px) scale(1.5); transform-origin: left bottom; opacity: 0; transition: opacity .4s; }
 #inv-hud.on { opacity: 1; }
 #inv-hud .mode { font-size: 13px; letter-spacing: .32em; color: #6cc8ff; display: flex; align-items: center; gap: 10px; }
@@ -220,6 +221,9 @@ export function createUI() {
   style.textContent = CSS;
   document.head.appendChild(style);
 
+  const fpsEl = el('inv-fps', 'inv-mono', '— FPS');
+  let fpsSmooth = 0;
+  let fpsShown = '';
   const hud = el('inv-hud', '', `<div class="mode"><span class="lb">分析模式</span><span class="tag"></span></div><div class="count inv-mono"><span class="txt"><span class="body"></span></span></div><div class="bar"><i></i></div><div class="scan"></div>`);
   const hint = el('inv-hint');
   const skip = el('inv-skip', '', '<i class="fill"></i><span class="txt"></span>');
@@ -489,6 +493,16 @@ export function createUI() {
     // 只播完成、不切新任务（黑梦里异常分析满）；之后的 advance 直接从「新目标」开始
     completeTask() { completeTask(); },
     updateHud(dt) { updateHud(dt); },
+    // 左上角帧率。用真实帧间隔，暂停时也继续走。
+    setFps(dt) {
+      if (!(dt > 0) || dt > 1) return;
+      const inst = 1 / dt;
+      fpsSmooth = fpsSmooth ? fpsSmooth * 0.9 + inst * 0.1 : inst;
+      const text = `${Math.round(fpsSmooth)} FPS`;
+      if (text === fpsShown) return;
+      fpsShown = text;
+      fpsEl.textContent = text;
+    },
     // list: [{ id, x, y, show, done, aim, label }]
     updateMarkers(list) {
       for (const m of list) {

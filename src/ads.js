@@ -126,9 +126,3 @@ const glowArray = uniformArray(AD_GLOW, 'color');
 export function adGlowNode(adpNode) {
   return glowArray.element(adIndex(adpNode).gi.toInt());
 }
-// JS 里（点光源用）
-export function adGlowAt(slot, t, out) {
-  const n = slot.pool ? NV : NH;
-  const idx = ((Math.floor((t + slot.phase) / AD_DWELL) + slot.start) % n + n) % n;
-  return out.copy(AD_GLOW[idx + slot.pool * NH]);
-}

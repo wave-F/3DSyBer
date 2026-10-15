@@ -75,7 +75,7 @@ const NO_AD = new THREE.Vector4(0, 0, 0, 0);
 
 // 招牌：按 Blender 里摆好的招牌挂上（tools/blender/city_signs.py 摆放，city_export.py 导出）
 // c = 安装面（所有外凸物之前的平面），gap = 安装面到墙的距离（撑杆长度）
-export function placeModelSigns(signs, screenLights) {
+export function placeModelSigns(signs) {
   for (const s of LAYOUT.signs) {
     const n = new THREE.Vector3(s.n[0], 0, s.n[1]);
     const t = new THREE.Vector3().crossVectors(UP, n);
@@ -101,10 +101,6 @@ export function placeModelSigns(signs, screenLights) {
     const a = slot ? new THREE.Vector4(slot.start, slot.phase, slot.pool, 1) : NO_AD;
     const col = slot ? new THREE.Color(k, k, k) : new THREE.Color(hex).multiplyScalar(k);
     signLights[s.b].push({ p: new THREE.Vector4(pos.x, pos.y, pos.z, radius), c: col, a });
-    if (slot && (s.type === 'screen' || s.type === 'vscreen')) {
-      const lp = c.clone().addScaledVector(n, 6); lp.y = s.y;
-      screenLights.push({ pos: lp, z: lp.z, color: new THREE.Color(), slot });
-    }
   }
 }
 
