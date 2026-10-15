@@ -90,16 +90,16 @@ export function buildCrash(scene) {
 // 模型本地坐标：地面 y=0，车头朝 +Z，车身左侧在 +X；节点 Body + Door_R + Wheel_FL/FR/RL/RR
 // Door_R：右侧（副驾）车门，原点在前铰链，绕本地 Y 轴转，正角度门尾外翻；导出时已带撞后外翻 7°
 // 源文件 art/supercar_door.blend，由 tools/blender/build_door_car.py 生成
-const CAR_URL = '/assets/supercar_door.glb';
+const CAR_URL = `${import.meta.env.BASE_URL}assets/supercar_door.glb`;
 export const DOOR_AJAR = 7 * Math.PI / 180;
-const CAR_GLASS_URL = '/assets/supercar_glass_damage.glb';
+const CAR_GLASS_URL = `${import.meta.env.BASE_URL}assets/supercar_glass_damage.glb`;
 const CRUMPLE = 1; // 车头撞击变形强度，0 = 完好无损
 
 function buildCar(onReady) {
   const group = new THREE.Group();
   const hazardMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffa020, emissiveIntensity: 0 });
 
-  const draco = new DRACOLoader().setDecoderPath('/draco/');
+  const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
   const loader = new GLTFLoader().setDRACOLoader(draco);
   Promise.all([loader.loadAsync(CAR_URL), loader.loadAsync(CAR_GLASS_URL)]).then(([gltf, glass]) => {
     const model = gltf.scene;

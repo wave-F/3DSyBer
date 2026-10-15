@@ -9,7 +9,7 @@ import { addLightGroup } from './debugLights.js';
 // 模型：NCPD Villefort Police Cruiser by valvetin (CC-BY-4.0)，见 public/assets/police_cruiser_LICENSE.txt
 // 已预处理（删引擎舱、拆出玻璃/灯罩/警灯材质、驾驶门拆成独立节点 Door_FL 且原点在铰链、Draco + WebP，约 1MB）
 // 模型本地坐标：地面 y≈-0.05，车头朝 +Z，车身左侧在 +X，原始长 6.4m
-const URL = '/assets/police_cruiser.glb';
+const URL = `${import.meta.env.BASE_URL}assets/police_cruiser.glb`;
 export const POLICE_SCALE = 0.92;
 export const POLICE_POS = new THREE.Vector3(3.2, DECK_Y, -15);
 export const POLICE_YAW = 0.05; // 车头 +Z 略偏向护栏，对着事故车
@@ -34,7 +34,7 @@ export function buildPoliceCar(scene) {
 
   let door = null;
   let doorAmount = 0;
-  const draco = new DRACOLoader().setDecoderPath('/draco/');
+  const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
   new GLTFLoader().setDRACOLoader(draco).loadAsync(URL).then((gltf) => {
     const model = gltf.scene;
     model.scale.setScalar(POLICE_SCALE);

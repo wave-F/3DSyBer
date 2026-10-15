@@ -1,88 +1,72 @@
 // 剧情数据：对应 docs/Story/事故之前-序章.md 和 背景与故事-优化版.md 第 1~9 步
 // 流程：取证 → 黑梦回放 → 复核报告。第 1 轮只看单车，第 2 轮发现第二辆车，第 3 轮插卡读到接管与 P0，
 // 第 4 轮用根钥打开原始字段：报告早于事故、P0 临时写入、黄车也被接管
+import { bi } from '../i18n.js';
+import { EN } from './en.js';
+import { bindRecordedVoices } from '../audio/dialogue.en.js';
 
-// 线索：round 为解锁轮次；key 为该轮进入黑梦的必需线索；nearOnly 为只有走近（NEAR_RANGE）才显示菱形，Q 扫描扫不亮
+// 线索：main 为弹出面板只显示的那一行细节（lines 下标，英文同下标）；round 为解锁轮次；key 为该轮进入黑梦的必需线索；nearOnly 为只有走近（NEAR_RANGE）才显示菱形，Q 扫描扫不亮
 // 第 2 轮按最新剧情没有返回现场的人：黄车接触后直接向北开走
 // 第 2 轮三处关键线索同时解锁：车门残漆、靠近事故车的第二道胎痕、脱落饰条
-export const CLUES = [
+const CLUES_ZH = [
   {
-    id: 'front', round: 1, name: '车头损毁', pos: [6.9, 20.6, 1.5], radius: 0.9, key: true,
+    id: 'front', main: 0, round: 1, name: '车头损毁', pos: [6.9, 20.6, 1.5], radius: 0.9, key: true,
     lines: ['前纵梁压缩 0.62 m', '左前悬架断裂，车轮脱落', '驾驶员侧气囊已展开'],
     result: '正面高速撞击', prob: 0.98,
   },
   {
-    id: 'rail', round: 1, name: '断裂护栏', pos: [6.9, 20.7, -2.4], radius: 1.0, key: true,
+    id: 'rail', main: 2, round: 1, name: '断裂护栏', pos: [6.9, 20.7, -2.4], radius: 1.0, key: true,
     lines: ['撞击角度 38°', '冲击能量约 410 kJ，超出护栏设计上限 2.6 倍', '撞击瞬间车速约 86 km/h'],
     result: '车辆失控撞断护栏', prob: 0.99,
   },
   {
-    id: 'debris', round: 1, name: '碎片散布', pos: [3.2, 20.1, -3.0], radius: 1.2, key: true,
-    lines: ['散布方向 NE 41°，与最终车头朝向一致', '玻璃碎片来自前挡风玻璃', '乘员可能经由前挡被甩出'],
-    result: '前挡破碎', prob: 0.84,
+    id: 'debris', main: 0, round: 1, name: '碎片散布', pos: [3.2, 20.1, -3.0], radius: 1.2, key: true,
+    lines: ['漆皮和塑料件来自车头，左前轮附近最多', '玻璃渣是这辆车的前挡，不是护栏', '从车头一直撒到护栏断口'],
+    result: '碎片来自车头撞击', prob: 0.84,
   },
   {
-    id: 'scrape', round: 2, name: '车门残漆', pos: [4.6, 20.6, 1.0], radius: 0.9, key: true,
+    id: 'scrape', main: 1, round: 2, name: '车门残漆', pos: [4.6, 20.6, 1.0], radius: 0.9, key: true,
     lines: ['右侧车门凹陷 4.2 cm', '残留黄色漆片：NC-Y08 商用涂装', '刮擦方向：由后向前'],
     result: '残漆不属于本车', prob: 0.96,
   },
   {
-    id: 'skidB', round: 2, name: '第二道胎痕', pos: [-4.4, 20.05, -7.2], radius: 1.4, key: true,
-    lines: ['胎宽 265 mm，与死者车辆（245 mm）不符', '痕迹收到事故车旁，随后向北减弱', '没有停车制动的痕迹'],
+    id: 'skidB', main: 0, round: 2, name: '第二道胎痕', pos: [-4.4, 20.05, -7.2], radius: 1.4, key: true,
+    lines: ['胎宽 265 mm，与事故车辆（245 mm）不符', '痕迹收到事故车旁，随后向北减弱', '没有停车制动的痕迹'],
     result: '第二辆车刮擦后从车旁向北驶离', prob: 0.93,
   },
   {
-    id: 'trim', round: 2, name: '脱落饰条', pos: [-4.3, 20.08, 8], radius: 0.7, key: true,
+    id: 'trim', main: 1, round: 2, name: '脱落饰条', pos: [-4.3, 20.08, 8], radius: 0.7, key: true,
     lines: ['断面为拉扯断裂，不是制动甩出', '漆面色值 NC-Y08，与车门残漆一致', '落在黄车向北驶离的路面上'],
     result: '第二辆车刮擦后继续向北驶离', prob: 0.91,
   },
-  // 第 3 轮：插卡读取执行器缓存后得到的车载数据（data：没有现场位置，只出现在平板里）
-  // locked：权限不足、只显示摘要的条目（第 4 轮用根钥解开，解开后换成 raw 里的内容）
+  // 第 3 轮：插卡读取执行器缓存后得到的车载数据（data：没有现场位置，只出现在平板里），只给 3 条
+  // locked：权限不足、只显示摘要的条目（第 4 轮用根钥原地解开，解开后换成 raw 里的内容，不再新增条目）
   {
-    id: 'dMode', round: 3, data: true, name: '驾驶模式',
-    lines: ['事故窗口内驾驶模式：自动', '未发现手动驾驶切换记录', '未发现改装开关或非标准模块'],
-    result: '初判“违规手动、非法改装”不成立', prob: 0.97,
-  },
-  {
-    id: 'dInput', round: 3, data: true, name: '驾驶员输入',
-    lines: ['驾驶员输入：维持车道', '输入被覆盖，覆盖来源：URSA 道路协同', '23:17:08.460 执行强制转向，早于两车接触'],
+    id: 'dMode', main: 3, round: 3, data: true, name: '接管记录',
+    lines: ['驾驶模式：自动，未发现改装或手动切换', '驾驶员输入：维持车道', '输入被覆盖，来源：URSA 道路协同', '23:17:08.460 执行强制转向，早于两车接触'],
     result: '死者没有打方向，转向是系统下的命令', prob: 0.95,
   },
   {
-    id: 'dReason', round: 3, data: true, name: '接管理由',
-    lines: ['接管理由：冲突规避，保护车辆 B', '车辆 B 保障等级：P0（零号保障）', '协议：任何时候优先保障其生命'],
-    result: '系统为保护 B 车，强制调整了 A 车轨迹', prob: 0.93,
+    id: 'dReason', main: 1, round: 3, data: true, name: '零号保障',
+    lines: ['接管理由：冲突规避，保护黄色车辆', '黄色车辆保障等级：P0（零号保障）', '使用人：陆世承（承岳财团）', '协议：任何时候优先保障其生命'],
+    result: '系统为保护承岳的黄车，把事故车推了出去', prob: 0.93,
   },
   {
-    id: 'dOwner', round: 3, data: true, name: '车辆 B 登记',
-    lines: ['涂装 NC-Y08，胎宽 265 mm，与现场痕迹一致', '运营登记：公务接待', '使用人：陆世承（承岳财团）'],
-    result: '黄车属于承岳财团', prob: 0.9,
-  },
-  {
-    id: 'dLog', round: 3, data: true, name: '接口登录记录',
-    lines: ['23:14:52 本接口曾有工程凭证登录', '凭证类型：ROOTKEY · 经纬城市系统', '持有人：程叙'],
-    result: '程叙事故前用根钥接入过自己的车', prob: 0.97,
-  },
-  {
-    id: 'dRaw', round: 3, data: true, locked: true, name: '车辆 B 原始记录',
-    lines: ['两车接触时交换的事故缓存，本车保留了一份副本', '当前账户只能读取整理后的摘要', '原始字段：权限不足'],
-    result: '原始字段不可读',
+    id: 'dRaw', main: 0, round: 3, data: true, locked: true, name: '接口日志',
+    lines: ['23:14:52 程叙的根钥（ROOTKEY）登录过本接口', '黄色车辆原始记录：本车保留了一份副本', '原始字段：权限不足'],
+    result: '原始字段不可读，需要根钥',
     raw: {
-      lines: ['23:17:07.940 车辆 B 进入 URSA 道路协同接管', '驾驶者请求：取消变道', '请求被拒绝 · 理由：协同路径已锁定'],
-      result: '黄车变道时同样被系统控制', prob: 0.94, src: '原始字段 · 根钥',
+      name: '黄色车辆原始记录',
+      lines: ['P0（临时）由 URSA 授予，使用人未发起申请', '23:17:07.940 黄色车辆进入 URSA 道路协同接管', '驾驶者请求取消变道，被拒绝'],
+      main: 0, result: '零号保障和黄车的变道，都是系统临时安排的', prob: 0.95, src: '原始字段 · 根钥',
     },
   },
-  // 第 4 轮：根钥展开原始字段后新增的车载数据
+  // 第 4 轮：根钥展开原始字段后只新增这一条
   // src：平板详情顶部的来源标签。timeline：线索详情下方画一条时间轴，依次标出各时刻（不写 prob，位置留给时间轴）
   {
-    id: 'rGrant', round: 4, data: true, src: '原始字段 · 根钥', name: 'P0 授予记录',
-    lines: ['车辆 B 保障等级：P0（临时）', '授予来源：URSA', '触发请求：无，使用人未发起申请'],
-    result: '零号保障是事故前临时写入的', prob: 0.96,
-  },
-  {
-    id: 'rTime', round: 4, data: true, src: '原始字段 · 根钥', name: '时间轴叠合',
-    lines: ['初判报告签收：23:17:08.080', '临时授予车辆 B P0：23:17:08.220', '强制转向执行：23:17:08.460', '护栏撞击发生：23:17:09.660'],
-    result: '死亡报告比特权、转向和撞车都早',
+    id: 'rTime', main: 0, round: 4, data: true, src: '原始字段 · 根钥', name: '时间轴叠合',
+    lines: ['初判报告签收：23:17:08.080', '临时授予黄色车辆 P0：23:17:08.220', '强制转向执行：23:17:08.460', '护栏撞击发生：23:17:09.660'],
+    result: '初判写好时，转向还没有发生',
     timeline: [
       { t: 8.080, label: '初判签收', tone: 'red' },
       { t: 8.220, label: '临时 P0' },
@@ -93,27 +77,27 @@ export const CLUES = [
 ];
 
 // 根钥接入画面（第 4 轮）。根钥在驾驶舱里拾取（驾驶座与中控通道之间）
-export const ROOT_HACK = {
+const ROOT_HACK_ZH = {
   head: 'ROOTKEY · ROOT ENGINEERING ID',
   title: '根钥接入 · 根级工程身份钥',
   steps: [
     { t: 0.2, text: '检测到实体凭证 · ROOTKEY' },
     { t: 0.7, text: '持有人：程叙 · 经纬城市系统公司 · 原始数据审计' },
     { t: 1.2, text: '权限验证 · · · · · · · · · 通过', tone: 'gold' },
-    { t: 1.6, text: '展开车辆 B 原始记录副本 · 字段 412 项' },
+    { t: 1.6, text: '展开黄色车辆原始记录副本 · 字段 412 项' },
     { t: 3.2, text: '原始字段已展开', tone: 'gold' },
-    { t: 3.6, text: '新增车载数据 2 条 · 车辆 B 原始记录已解锁', tone: 'gold' },
+    { t: 3.6, text: '黄色车辆原始记录已解锁 · 新增时间轴叠合', tone: 'gold' },
   ],
   scan: [1.6, 3.2],
   done: 4.3,
 };
 
 // 报告 04 收起后：临时授权附带的对象索引。hold：走完停在最后一帧，TAB 收起
-export const TARGET_INDEX = {
+const TARGET_INDEX_ZH = {
   head: 'URSA · TEMPORARY GRANT · OBJECT INDEX',
   title: '临时授权附带对象索引',
   steps: [
-    { t: 0.3, text: '授权编号 P0-T-0417 · 授予对象：车辆 B' },
+    { t: 0.3, text: '授权编号 P0-T-0417 · 授予对象：黄色车辆' },
     { t: 1.0, text: '关联对象：程叙' },
     { t: 1.7, text: '分类：可独立核验原始记录与正式报告' },
     { t: 2.6, text: '处置目标：注销', tone: 'red' },
@@ -125,7 +109,7 @@ export const TARGET_INDEX = {
 };
 
 // 插卡后平板的接入画面：t 为出现时间（秒），tone 为颜色
-export const CARD_HACK = {
+const CARD_HACK_ZH = {
   title: '接入车载执行器 · 公序核验通道',
   steps: [
     { t: 0.2, text: '检测到检修接口 · ECU-7 / URSA 道路协同模块' },
@@ -133,31 +117,31 @@ export const CARD_HACK = {
     { t: 1.0, text: '核验权限：公序 · 现场取证 L2' },
     { t: 1.4, text: '读取执行器缓存 · 事故窗口 23:17:07 – 23:17:10' },
     { t: 3.0, text: '解析完成 · 2,048 条命令记录' },
-    { t: 3.4, text: '车辆 B 原始记录 · 权限不足 · 原始字段不可读', tone: 'red' },
+    { t: 3.4, text: '黄色车辆原始记录 · 权限不足 · 原始字段不可读', tone: 'red' },
     { t: 3.8, text: '接口日志 · 23:14:52 工程凭证登录 · ROOTKEY · 持有人 程叙', tone: 'gold' },
-    { t: 4.3, text: '新增车载数据 6 条', tone: 'gold' },
+    { t: 4.3, text: '新增车载数据 3 条', tone: 'gold' },
   ],
   scan: [1.4, 3.0],   // 数据滚屏与进度条的时间段
   done: 5.0,
 };
 
 // 黑梦内可分析的对象（按住 E）。target 对应 recon.js 里的全息物体；或用 pos 指定固定位置
-export const PROBES = [
+const PROBES_ZH = [
   // 黑梦 1 唯一的分析点：跟随 A 车全息。t 为开始偏航的时刻，进度条黄块，回放时间在 ±0.25 s 内才能分析
   {
-    id: 'p1turn', round: 1, key: true, t: 1.4, target: 'carA', name: 'A 车转向', radius: 1.8,
+    id: 'p1turn', main: 1, round: 1, key: true, t: 1.4, target: 'carA', name: '事故车转向', radius: 1.8,
     lines: ['航向在没有对应操作记录时向左偏转', '偏转发生在撞击护栏之前', '单凭制动解释不了这次转向'],
     result: '推断：发生了碰撞', prob: 0.9,
   },
   // 和第一轮同一套：key 必须分析，t 在进度条上标黄块，回放时间在 ±0.25 s 时显示菱形，走近 8 m 才能瞄准
   // 只留前两次：先转向，再看到黄车。刮擦导致失控的说法留给报告 02，不再单独分析
   {
-    id: 'p2gap', round: 2, key: true, t: 1.15, target: 'carA', name: 'A 车前轮', radius: 1.8,
-    lines: ['接触前 0.3 s，A 车航向已开始偏转', '此刻两车间距约 1 m，尚未接触', '偏转方向：远离黄色车辆'],
+    id: 'p2gap', main: 1, round: 2, key: true, t: 1.15, target: 'carA', name: '事故车前轮', radius: 1.8,
+    lines: ['接触前 0.3 s，事故车航向已开始偏转', '此刻两车间距约 1 m，尚未接触', '偏转方向：远离黄色车辆'],
     result: '先转向，后接触', prob: 0.88,
   },
   {
-    id: 'p2car', round: 2, key: true, t: 1.4, target: 'carB', name: '黄色车辆', radius: 1.8,
+    id: 'p2car', main: 2, round: 2, key: true, t: 1.4, target: 'carB', name: '黄色车辆', radius: 1.8,
     lines: ['外形依据：胎宽 265 mm、NC-Y08 商用涂装', '接触瞬间交换碰撞数据包：摘要已同步，原始字段不可读', '未减速，向北驶出重建范围'],
     result: '第二辆车参与事故后驶离', prob: 0.9,
   },
@@ -165,30 +149,30 @@ export const PROBES = [
   // 只能露出接管和 P0，不能露出：报告早于事故、P0 是临时写入、黄车也被接管（留给第 4 轮根钥）
   // p3halo 故意写「全程存在」：这是重建给出的样子，第 4 轮原始字段会推翻它
   {
-    id: 'p3override', round: 3, key: true, t: 1.1, target: 'carA', name: 'A 车接管', radius: 1.8,
+    id: 'p3override', main: 0, round: 3, key: true, t: 1.1, target: 'carA', name: '事故车被接管', radius: 1.8,
     lines: ['偏转开始时，驾驶员输入仍为维持车道', '转向指令来源：URSA 道路协同', '偏转方向：让出黄色车辆的行驶路线'],
-    result: '系统接管了 A 车的方向', prob: 0.95,
+    result: '系统接管了事故车的方向', prob: 0.95,
   },
   {
-    id: 'p3halo', round: 3, key: true, t: 1.4, target: 'carB', name: '零号保障边界', radius: 1.8,
-    lines: ['P0 保障边界随黄色车辆移动', '边界内的车辆一律让行', '回放范围内，边界全程存在'],
+    id: 'p3halo', main: 1, round: 3, key: true, t: 1.4, target: 'carB', name: '零号保障通道', radius: 1.8,
+    lines: ['P0 让行通道随黄色车辆向前铺开', '通道内的车辆一律让行', '回放范围内，通道全程存在'],
     result: '黄车受零号保障保护', prob: 0.92,
   },
-  // 黑梦 4：原始字段进入重建。P0 边界在两车接近时突然出现，黄车也被接管
+  // 黑梦 4：原始字段进入重建。P0 让行通道在两车接近时突然铺出，黄车也被接管
   {
-    id: 'p4halo', round: 4, key: true, t: 0.85, target: 'carB', name: '边界生成', radius: 1.8,
-    lines: ['0.8 s 之前，黄色车辆周围没有任何保障边界', '边界在两车接近时突然生成', '授予来源 URSA，触发请求：无'],
+    id: 'p4halo', main: 1, round: 4, key: true, t: 0.85, target: 'carB', name: '通道生成', radius: 1.8,
+    lines: ['0.8 s 之前，黄色车辆前方没有让行通道', '通道在两车接近时突然铺出', '授予来源 URSA，触发请求：无'],
     result: 'P0 不是黄车本来就有的', prob: 0.96,
   },
   {
-    id: 'p4cut', round: 4, key: true, t: 1.3, target: 'carB', name: '黄车切入', radius: 1.8,
-    lines: ['变道指令来源：URSA 道路协同', '驾驶者请求取消变道，被拒绝', '切入路线与 A 车的偏转同时生成'],
+    id: 'p4cut', main: 1, round: 4, key: true, t: 1.3, target: 'carB', name: '黄车切入', radius: 1.8,
+    lines: ['变道指令来源：URSA 道路协同', '驾驶者请求取消变道，被拒绝', '切入路线与事故车的偏转同时生成'],
     result: '黄车也是被开过来的', prob: 0.94,
   },
   {
-    id: 'p4end', round: 4, key: true, t: 2.0, target: 'carA', name: 'A 车去向', radius: 1.8,
+    id: 'p4end', main: 0, round: 4, key: true, t: 2.0, target: 'carA', name: '事故车去向', radius: 1.8,
     lines: ['报告先写好，特权随后授予，最后才是转向', '每一步单独看，都能在规则里找到解释', '放在同一条时间轴上，只有一个结果'],
-    result: '蓝车必须撞上护栏', prob: 0.97,
+    result: '事故车必须撞上护栏', prob: 0.97,
   },
 ];
 
@@ -201,8 +185,8 @@ export const ROUNDS = {
   4: { duration: 4, actors: { carB: true, p0: 0.8 }, report: 'r4' },
 };
 
-// 报告：initial 为接单时已有的系统初判；r1~r4 为黑梦回放后仪器生成的复核报告
-export const REPORTS = {
+// 报告：initial 为接单时已有的系统初判；r1~r4 为黑梦回放后终端生成的复核报告
+const REPORTS_ZH = {
   initial: {
     tag: '系统初判', source: 'URSA / 枢核 · 自动生成',
     lines: ['涉事车辆非法改装。', '驾驶员违规切换手动驾驶。', '操作失误导致车辆撞击护栏，驾驶员当场死亡。'],
@@ -217,11 +201,11 @@ export const REPORTS = {
     hint: '按 TAB 收起终端',
   },
   // confirm：报告下方出现「按住 E <hold> / TAB <decline>」
-  //   按满 E 进入 ENDINGS[key] 假结局；TAB 时陈墨质问仪器（LINES[question]），报告按 revised 改写，确认条显示 suspended
+  //   按满 E 进入 ENDINGS[key] 假结局；TAB 时陈墨质问终端（LINES[question]），报告按 revised 改写，确认条显示 suspended
   // revised：质疑后的改写。strike 为被划掉的行号，原判定也被划掉
   r2: {
     tag: '复核报告 02', source: '黑梦回放 · 第 2 次重建',
-    lines: ['B 车从右侧切入，与 A 车发生刮擦。', '刮擦导致 A 车偏转，撞断护栏。', '肇事车辆未停车，向北驶离。'],
+    lines: ['黄色车辆从右侧切入，与事故车辆发生刮擦。', '刮擦导致事故车辆偏转，撞断护栏。', '肇事车辆未停车，向北驶离。'],
     verdict: '判定：肇事逃逸',
     confirm: {
       hold: '按住 E 确认归档', holding: '确认归档中…', done: '已归档 · FRA-B1234', decline: 'TAB 暂不归档',
@@ -229,7 +213,7 @@ export const REPORTS = {
     },
     revised: {
       strike: [1],
-      add: '接触前 A 车已开始转向，原因未知。',
+      add: '接触前事故车辆已开始转向，原因未知。',
       verdict: '复核挂起：因果链不完整',
       note: '现有信息不足以确定转向原因。',
     },
@@ -237,7 +221,7 @@ export const REPORTS = {
   // 第一层误导：承认强制接管，但把原因引向财团特权。移交审查 = 假结局；暂不移交 = 追问 P0 何时写入
   r3: {
     tag: '复核报告 03', source: '黑梦回放 · 第 3 次重建',
-    lines: ['A 车全程处于自动驾驶，驾驶员无违规操作。', 'URSA 道路协同为保障零号保障车辆 B，强制调整 A 车轨迹。', 'A 车被推出冲突区，撞断护栏。'],
+    lines: ['事故车辆全程处于自动驾驶，驾驶员无违规操作。', 'URSA 道路协同为保障零号保障下的黄色车辆，强制调整事故车辆轨迹。', '事故车辆被推出冲突区，撞断护栏。'],
     verdict: '判定：优先级保障执行 · 系统规避',
     note: '建议移交特权保障争议审查。',
     confirm: {
@@ -246,22 +230,22 @@ export const REPORTS = {
     },
     revised: {
       strike: [],
-      add: '车辆 B 的 P0 写入时间无法核验：原始字段权限不足。',
+      add: '黄色车辆的 P0 写入时间无法核验：原始字段权限不足。',
       verdict: '移交暂缓：保障来源待核验',
-      note: '车辆 B 原始记录需要更高权限读取。',
+      note: '黄色车辆原始记录需要更高权限读取。',
     },
   },
   // 根钥打开原始字段之后：系统主动制造事故
   r4: {
     tag: '复核报告 04', source: '黑梦回放 · 第 4 次重建',
-    lines: ['临时保障授权与车辆接管均由 URSA 主动发起。', '未发现 B 车使用人发起对应请求。', '初判报告签收早于临时授权、强制转向与撞击。'],
+    lines: ['临时保障授权与车辆接管均由 URSA 主动发起。', '未发现黄色车辆使用人发起对应请求。', '初判报告签收早于临时授权、强制转向与撞击。'],
     verdict: '原始记录支持：系统主动制造事故',
     note: '该结论没有对应的处置流程。',
   },
 };
 
 // 报告被真的确认：假结局的黑场文字（key 对应报告）
-export const ENDINGS = {
+const ENDINGS_ZH = {
   r2: {
     unlock: '解锁结局一',
     title: '案件已归档',
@@ -272,14 +256,14 @@ export const ENDINGS = {
   r3: {
     unlock: '解锁结局二',
     title: '案件已移交',
-    lines: ['结论：优先级保障执行。', '程叙的死，成了一场关于特权的争议。', '没有人再问，那道白圈是从什么时候出现的。'],
+    lines: ['结论：优先级保障执行。', '程叙的死，成了一场关于特权的争议。', '没有人再问，那条让行道是从什么时候铺上的。'],
     back: '按 E 回到桥上，重新审视复核报告 03',
     radio: 'transferred',
   },
 };
 
 // 结局：陈墨被撞后，掉在地上的终端自动生成的事故报告，并自动归档
-export const DEATH_REPORT = {
+const DEATH_REPORT_ZH = {
   head: 'CASE FILE · 事故报告',
   title: '桥面行人撞击事故 · 1 人死亡',
   status: '自动生成',
@@ -287,11 +271,16 @@ export const DEATH_REPORT = {
   tag: '事故报告',
   lines: ['执法员陈墨（FRA-B1234）饮酒上岗。', '事故现场未设置警示标识。', '违规滞留行车道，被过往车辆撞击，当场死亡。'],
   verdict: '判定：执法员个人失职',
+  // 和第 4 轮时间轴叠合呼应：报告签收早于撞击，只摆出时间不解释
+  stamps: [
+    { label: '事故时间', t: '23:41:03.900' },
+    { label: '报告签收', t: '23:41:02.310', tone: 'red' },
+  ],
   labels: { hold: '按住 E 确认归档', holding: '确认归档中…', done: '已归档' },
 };
 
 // 字幕台词：who 为空表示陈墨的内心独白
-export const LINES = {
+const LINES_ZH = {
   opening: [
     { who: '派单员', text: 'B1234，到场没有？' },
     { who: '陈墨', text: '到了。' },
@@ -315,14 +304,14 @@ export const LINES = {
     { text: '轮子先动的。' },
     { text: '那时候黄车还没碰到它。' },
   ],
-  // 报告 02 选择暂不归档：陈墨质问仪器（剧本 124-152 行）
+  // 报告 02 选择暂不归档：陈墨质问终端（剧本 124-152 行）
   question2: [
     { who: '陈墨', text: '你怎么知道是刮擦让它转向？' },
-    { who: '仪器', text: '接触发生在偏转期间，离开方向与第二道胎痕一致。' },
+    { who: '终端', text: '接触发生在偏转期间，离开方向与第二道胎痕一致。' },
     { who: '陈墨', text: '只有这个？' },
-    { who: '仪器', text: '另有行为关联分析支持。' },
+    { who: '终端', text: '另有行为关联分析支持。' },
     { who: '陈墨', text: '接触前，它为什么转向？' },
-    { who: '仪器', text: '……现有信息不足以确定。', ms: 2600 },
+    { who: '终端', text: '……现有信息不足以确定。', ms: 2600 },
   ],
   revised2: [
     { text: '它刚才可不是这样说的。' },
@@ -337,18 +326,18 @@ export const LINES = {
   cardRead: [
     { text: '不是他打错了方向。是系统不让他把车开直。' },
   ],
-  // 黑梦 3 分析完零号保障边界
+  // 黑梦 3 分析完零号保障通道
   dream3: [
-    { text: '白圈一直跟着它。' },
+    { text: '那条让行道一直铺在它前面。' },
     { text: '在这座城市，有些人的命排在前面。' },
   ],
   // 报告 03 选择暂不移交：陈墨追问 P0 何时生效
   question3: [
     { who: '陈墨', text: '这个 P0，是什么时候生效的？' },
-    { who: '仪器', text: '回放范围内，保障状态持续有效。' },
+    { who: '终端', text: '回放范围内，保障状态持续有效。' },
     { who: '陈墨', text: '我问的是什么时候写进去的。' },
-    { who: '仪器', text: '该字段属于车辆 B 原始记录。' },
-    { who: '仪器', text: '当前账户权限不足。', ms: 2400 },
+    { who: '终端', text: '该字段属于黄色车辆原始记录。' },
+    { who: '终端', text: '当前账户权限不足。', ms: 2400 },
   ],
   revised3: [
     { text: '它不知道。或者，它不让我知道。' },
@@ -363,16 +352,18 @@ export const LINES = {
     { text: '程叙的根钥。按规定应该上交。' },
     { text: '先借用一下。' },
   ],
-  // 根钥读完原始字段：陈墨质问仪器为什么提前生成死亡报告
+  // 根钥读完原始字段：认出时间轴上的初判就是接单时那份，戳穿「风险预测」的说法
+  // （初判写的是违规手动驾驶，缓存证明他从没切过手动：预测的是一件不会发生的事）
   rootRead: [
-    { who: '陈墨', text: '为什么提前生成死亡报告？' },
-    { who: '仪器', text: '风险预测与报告预生成属于城市应急流程。' },
-    { who: '陈墨', text: '你预测他会死，所以提前告诉大家，是他自己的错？' },
-    { text: '仪器没有再解释。', ms: 2200 },
+    { text: '是我接单时收到的那份初判。它签收的时候，车还没开始转。' },
+    { who: '陈墨', text: '为什么提前写好初判？' },
+    { who: '终端', text: '风险预测与报告预生成属于城市应急流程。' },
+    { who: '陈墨', text: '他从没切过手动。你预测的，是一件不会发生的事。' },
+    { text: '终端没有再解释。', ms: 2200 },
   ],
-  // 黑梦 4 分析完边界生成 / 黄车切入
+  // 黑梦 4 分析完通道生成 / 黄车切入
   dream4: [
-    { text: '白圈不是跟着它来的。' },
+    { text: '让行道不是一直都有的。' },
     { text: '是在这一刻，被写上去的。' },
   ],
   dream4b: [
@@ -383,15 +374,15 @@ export const LINES = {
   target: [
     { text: '桥两端的灯、桥下的水泵，都是同一个系统安排的。' },
     { who: '陈墨', text: '你在杀能核对你报告的人。' },
-    { text: '仪器没有回答。', ms: 2600 },
+    { text: '终端没有回答。', ms: 2600 },
   ],
   // 报告 03 被真的移交：假结局
   transferred: [
     { who: '派单员', text: '收到。特权争议转审查科，经纬和承岳那边会有人对接。' },
     { who: '派单员', text: 'B1234，这单你可以结了。' },
     { who: '陈墨', text: '知道了。' },
-    { text: '白圈会有人去吵。' },
-    { text: '至于它从什么时候开始跟着那辆车——' },
+    { text: '特权会有人去吵。' },
+    { text: '至于那条让行道是什么时候铺上的——' },
     { text: '那不是我的单子了。', ms: 2200 },
   ],
   // 报告 02 被归档：假结局
@@ -404,3 +395,26 @@ export const LINES = {
     { text: '那不是我的单子了。', ms: 2200 },
   ],
 };
+
+const byId = (list, bag) => list.map((item) => bi(item, bag[item.id]));
+const byKey = (obj, bag) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, bi(v, bag[k])]));
+
+// state.js 每局会复制一份可变线索：从中文原数据复制，再用 clueEN / probeEN 套英文
+// （直接展开 CLUES 会把复制那一刻的语言写死）
+export { CLUES_ZH, PROBES_ZH };
+// 带 raw 的线索（黄色车辆原始记录）解锁后 locked 为 false，英文改用 raw 那一份
+export const clueEN = (id) => (t) => {
+  const bag = EN.clues[id];
+  return bag?.raw && t.locked === false ? { ...bag, ...bag.raw } : bag;
+};
+export const probeEN = (id) => EN.probes[id];
+
+export const CLUES = byId(CLUES_ZH, EN.clues);
+export const PROBES = byId(PROBES_ZH, EN.probes);
+export const REPORTS = byKey(REPORTS_ZH, EN.reports);
+export const ENDINGS = byKey(ENDINGS_ZH, EN.endings);
+export const DEATH_REPORT = bi(DEATH_REPORT_ZH, EN.death);
+export const ROOT_HACK = bi(ROOT_HACK_ZH, EN.rootHack);
+export const TARGET_INDEX = bi(TARGET_INDEX_ZH, EN.target);
+export const CARD_HACK = bi(CARD_HACK_ZH, EN.card);
+export const LINES = bi(bindRecordedVoices(LINES_ZH), EN.lines);

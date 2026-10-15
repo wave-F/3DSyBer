@@ -26,13 +26,13 @@
 
 | 段 | 来源 |
 |----|------|
-| 0–85% | three.js 默认加载管理器（`THREE.DefaultLoadingManager`）。所有 GLTF、贴图、HDR、Draco 都走它。状态文字按文件名显示：事故车辆、警车、城市建筑、人物、环境光照、调查设备、模型解码器、材质贴图。另外 `loading.waitFor(promise, label)` 登记的任务（目前是「声音」：FMOD 全部 Bank 装入、采样解码、循环预备）也算在这一段，文件都到了还在等时显示「正在加载 · 声音」 |
+| 0–85% | three.js 默认加载管理器（`THREE.DefaultLoadingManager`）。所有 GLTF、贴图、HDR、Draco 都走它。状态文字按文件名显示：事故车辆、警车、城市建筑、人物、环境光照、调查设备、模型解码器、材质贴图。另外 `loading.waitFor(promise, label, en)` 登记的任务（目前是「声音 / AUDIO」：FMOD 全部 Bank 装入、采样解码、循环预备）也算在这一段，文件都到了还在等时显示「正在加载 · 声音」，英文为「LOADING · AUDIO」 |
 | 85–100% | 画面预热，状态文字「正在准备画面」。WebGPU 第一次渲染要编译管线，会卡。资源到齐后，等连续 15 帧都短于 50 ms 才算完成，最多等 10 秒 |
 
 - 加载数到齐后再等 600 ms 没有新文件，才算资源加载完（避免加载完一个文件再触发下一个时提前结束）。5 秒内一个文件都没开始加载，也视为加载完。
 - 进度只增不减：有新文件加入时 `loaded / total` 会回落，显示值不跟着回落。
 - 加载失败的文件只在控制台警告，也算加载完成，不卡住进度。
-- 常量在 `loading.js` 顶部：`ASSET_SHARE` `SETTLE_MS` `IDLE_MS` `WARM_FRAMES` `WARM_DT` `WARM_MAX_MS` `BLACK_MS` `FADE_MS`。
+- 常量在 `loading.js` 顶部：`ASSET_SHARE` `SETTLE_MS` `IDLE_MS` `WARM_FRAMES` `WARM_DT` `WARM_MAX_MS` `BLACK_MS` `HOLD_MS` `FADE_MS`。
 
 `loading.js` 用自己的 `requestAnimationFrame` 更新进度，准备就绪后就停止，不挂进 `main.js` 的每帧更新。
 
@@ -41,7 +41,7 @@
 ## 开始
 
 - 准备就绪前点击无效（播放无效点击音）；加载期间的第一次点击 / 按键会开始菜单音乐。
-- 点击后同步调用 `onStart`（锁定鼠标必须在点击事件里同步调用）。黑场 0.65 秒盖满，再整体淡出 1.1 秒，然后 `#loading` 加 `gone` 隐藏。
+- 点击后同步调用 `onStart`（锁定鼠标必须在点击事件里同步调用）。黑场 0.7 秒盖满，再停 0.45 秒，整体淡出 3.6 秒，然后 `#loading` 加 `gone` 隐藏。开场镜头和派单通话等黑场开始淡出后才推进。
 - 原来的 `#overlay` 一开始隐藏，只当 Esc 暂停层用：「已暂停 / 点击继续」加操作说明。
 - 测试按钮（`z-index: 10`）被加载界面（`z-index: 1000`）盖住。
 

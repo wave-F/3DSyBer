@@ -1,18 +1,7 @@
 // 调查界面：全部为 HTML 叠加层（细线、编号、等宽数字，接近底特律的界面风格）
 import { sound } from '../audio/sound.js';
-import { recordedVoiceId } from '../audio/dialogue.en.js';
 import { createDialoguePlayer } from '../audio/dialoguePlayer.js';
-import { LINES } from './clues.js';
-
-// 只把逐字未改的句子绑到已录配音。改写过的字幕、以及 dreamGuide 这种现造的句子，不套旧录音。
-const voiceIds = new WeakMap();
-for (const [group, lines] of Object.entries(LINES)) {
-  if (!Array.isArray(lines)) continue;
-  for (const line of lines) {
-    const id = recordedVoiceId(group, line.text);
-    if (id) voiceIds.set(line, id);
-  }
-}
+import { isPlayer, onLang, tx } from '../i18n.js';
 
 const CSS = `
 .inv { position: fixed; pointer-events: none; font-family: "PingFang SC", "Helvetica Neue", sans-serif; color: #dff2ff; user-select: none; }
@@ -103,7 +92,7 @@ const CSS = `
 #inv-panel h2 { margin: 6px 0 14px; font-size: 22px; font-weight: 500; letter-spacing: .08em; }
 #inv-panel .ln { font-size: 14px; line-height: 1.75; opacity: 0; transform: translateX(-6px); animation: inv-in .35s forwards; }
 #inv-panel .ln::before { content: '— '; color: #6cc8ff; }
-#inv-panel .res { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(108,200,255,.3); font-size: 15px; color: #ffd27a; opacity: 0; animation: inv-in .35s forwards; }
+#inv-panel .res { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(108,200,255,.3); font-size: 15px; color: #ffd27a; opacity: 0; animation: inv-in .35s forwards; }
 #inv-panel .prob { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; opacity: 0; animation: inv-in .35s forwards; }
 #inv-panel .prob .pb { flex: 1; height: 3px; background: rgba(255,210,122,.2); }
 #inv-panel .prob .pb i { display: block; height: 100%; background: #ffd27a; width: 0; transition: width 1s ease-out; }
@@ -188,7 +177,7 @@ const CSS = `
 `;
 
 // 证据图（Gemini 生成），启动时预加载，避免面板弹出时图片还没到
-const clueImage = (c) => `/assets/gen/clue_${c.id}.jpg`;
+const clueImage = (c) => `${import.meta.env.BASE_URL}assets/gen/clue_${c.id}.jpg`;
 export function preloadClueImages(clues) {
   clues.forEach((c) => { const i = new Image(); i.src = clueImage(c); });
 }
@@ -207,15 +196,15 @@ export function createUI() {
   style.textContent = CSS;
   document.head.appendChild(style);
 
-  const hud = el('inv-hud', '', `<div class="mode"><span>分析模式</span></div><div class="count inv-mono">0 / 0<small>线索</small></div><div class="bar"><i></i></div><div class="scan">按 <b>Q</b> 可以进行扫描</div>`);
+  const hud = el('inv-hud', '', `<div class="mode"><span>分析模式</span></div><div class="count inv-mono">0 / 0<small>线索</small></div><div class="bar"><i></i></div><div class="scan"></div>`);
   const hint = el('inv-hint');
-  const skip = el('inv-skip', '', '<i class="fill"></i><span class="txt">按住<b>TAB</b>跳过</span>');
+  const skip = el('inv-skip', '', '<i class="fill"></i><span class="txt"></span>');
   const skipFill = skip.querySelector('.fill');
   const markers = el('inv-markers');
   const prompt = el('inv-prompt');
   const analysis = el('inv-analysis', '', `<div class="target"><i class="corner a"></i><i class="corner b"></i><i class="corner c"></i><i class="corner d"></i></div>
     <div class="readout"><div class="heading"><div><div class="percent inv-mono"></div><div class="status"></div></div></div>
-    <div class="track" role="progressbar" aria-label="线索分析" aria-valuemin="0" aria-valuemax="100"><i class="fill"></i></div><div class="caption"></div></div>`);
+    <div class="track" role="progressbar" aria-label="${tx('线索分析', 'Clue analysis')}" aria-valuemin="0" aria-valuemax="100"><i class="fill"></i></div><div class="caption"></div></div>`);
   const analysisTarget = analysis.querySelector('.target');
   const readout = analysis.querySelector('.readout');
   const analysisPercent = analysis.querySelector('.percent');
@@ -244,42 +233,64 @@ export function createUI() {
   const dreamEye = dream.querySelector('.eye');
   const dreamPupil = dream.querySelector('.pupil');
   for (const e of [dreamEye, dreamPupil]) e.style.transformOrigin = '100px 100px';
-  const rite = el('inv-rite', '', '<div class="t1 inv-mono">BLACKDREAM</div><div class="t2">黑梦 · 现场重建</div><div class="t3 inv-mono"></div>');
+  const rite = el('inv-rite', '', '<div class="t1 inv-mono">BLACKDREAM</div><div class="t2"></div><div class="t3 inv-mono"></div>');
   const riteT1 = rite.querySelector('.t1');
   // 第一次黑梦：引导玩家滚滚轮倒回异常时刻的大号提示（带滚轮动画）
   const guide = el('inv-guide', '', `<svg viewBox="0 0 30 46"><rect class="mouse" x="2" y="2" width="26" height="42" rx="13"/><rect class="wheel" x="13" y="11" width="4" height="9" rx="2"/></svg><span></span>`);
   const guideText = guide.querySelector('span');
   // 第一次黑梦倒回异常时刻后弹出的操作说明
-  const tip = el('inv-tip', '', `<div class="tag inv-mono">BLACKDREAM · 操作</div><h3>在回放里找出异常</h3>
-    <div class="row"><b>滚轮</b><span>拖动回放时间</span></div>
-    <div class="row"><b>空格</b><span>播放 / 暂停</span></div>
-    <div class="row"><i></i><span>黄色时段：可以分析的异常时刻</span></div>
-    <div class="row"><b>E</b><span>按住分析</span></div>
-    <div class="row"><b>R</b><span>退出黑梦</span></div>`);
+  const tip = el('inv-tip', '', `<div class="tag inv-mono"></div><h3></h3>
+    <div class="row"><b></b><span></span></div>
+    <div class="row"><b></b><span></span></div>
+    <div class="row"><i></i><span></span></div>
+    <div class="row"><b>E</b><span></span></div>
+    <div class="row"><b>R</b><span></span></div>`);
   const cine = el('inv-cine');
   const black = el('inv-black');
-  const fin = el('inv-fin', '', '<div class="t1">序章</div><div class="t2">完</div>');
+  const fin = el('inv-fin', '', '<div class="t1"></div><div class="t2"></div>');
   const ending = el('inv-ending');
   let panelTimer = 0, toastTimer = 0, toastHold = null;
   const dialogue = createDialoguePlayer({
     show(l, radio) {
       const lift = cine.classList.contains('on') ? ' lift' : '';
-      sub.className = `inv on${l.who ? (radio && l.who !== '陈墨' ? ' radio' : '') : ' inner'}${lift}`;
+      sub.className = `inv on${l.who ? (radio && !isPlayer(l.who) ? ' radio' : '') : ' inner'}${lift}`;
       sub.innerHTML = l.who ? `<span class="who">${l.who}</span>${l.text}` : l.text;
     },
     hide: () => sub.classList.remove('on'),
     playVoice: (l) => {
-      const id = voiceIds.get(l);
+      const id = l.voiceId;
       return id ? sound.voice(id) : null;
     },
     radioOn: () => sound.play('ui/radio_on'),
     radioOff: () => sound.play('ui/radio_off'),
   });
 
-  const HINTS = {
-    explore: '<b>WASD</b>移动　<b>Shift</b>跑　<b>Q</b>扫描线索　<b>E</b>按住分析　<b>TAB</b>平板',
-    recon: '<b>滚轮</b>拖动时间　<b>空格</b>播放 / 暂停　<b>E</b>按住分析　<b>R</b>退出黑梦',
-  };
+  const hints = () => ({
+    explore: tx('<b>WASD</b>移动　<b>Shift</b>跑　<b>Q</b>扫描线索　<b>E</b>按住分析　<b>TAB</b>平板', '<b>WASD</b> move　<b>Shift</b> run　<b>Q</b> scan　<b>E</b> hold to analyze　<b>TAB</b> tablet'),
+    recon: tx('<b>滚轮</b>拖动时间　<b>空格</b>播放 / 暂停　<b>E</b>按住分析　<b>R</b>退出黑梦', '<b>Wheel</b> scrub　<b>Space</b> play / pause　<b>E</b> hold to analyze　<b>R</b> leave'),
+  });
+  function paintStatic() {
+    hud.querySelector('.scan').innerHTML = tx('按 <b>Q</b> 可以进行扫描', 'Press <b>Q</b> to scan');
+    dream.querySelector('.lb').textContent = tx('构建黑梦', 'BUILD DREAM');
+    skip.querySelector('.txt').innerHTML = tx('按住<b>TAB</b>跳过', 'Hold <b>TAB</b> to skip');
+    rite.querySelector('.t2').textContent = tx('黑梦 · 现场重建', 'BLACK DREAM · REBUILD');
+    fin.querySelector('.t1').textContent = tx('序章', 'PROLOGUE');
+    fin.querySelector('.t2').textContent = tx('完', 'END');
+    const rows = tip.querySelectorAll('.row span');
+    tip.querySelector('.tag').textContent = tx('BLACKDREAM · 操作', 'BLACKDREAM · CONTROLS');
+    tip.querySelector('h3').textContent = tx('在回放里找出异常', 'Find what does not fit');
+    tip.querySelectorAll('.row b')[0].textContent = tx('滚轮', 'Wheel');
+    tip.querySelectorAll('.row b')[1].textContent = tx('空格', 'Space');
+    rows[0].textContent = tx('拖动回放时间', 'Scrub the replay');
+    rows[1].textContent = tx('播放 / 暂停', 'Play / pause');
+    rows[2].textContent = tx('黄色时段：可以分析的异常时刻', 'Yellow span: a moment you can analyze');
+    rows[3].textContent = tx('按住分析', 'Hold to analyze');
+    rows[4].textContent = tx('退出黑梦', 'Leave the dream');
+    if (thisMode) hint.innerHTML = hints()[thisMode] ?? '';
+  }
+  let thisMode = '';
+  paintStatic();
+  onLang(() => paintStatic());
 
   const markerEls = new Map();
   const markPos = new Map();
@@ -303,7 +314,8 @@ export function createUI() {
       this._mode = mode;
       hud.classList.toggle('on', mode === 'explore' || mode === 'recon');
       hud.querySelector('.mode span').textContent = label;
-      hint.innerHTML = HINTS[mode] ?? '';
+      thisMode = mode;
+      hint.innerHTML = hints()[mode] ?? '';
       hint.classList.toggle('recon', mode === 'recon');
       if (mode !== 'explore' && mode !== 'recon') { markers.style.opacity = 0; this.setAnalysis(null); this.hidePanel(); }
       else markers.style.opacity = 1;
@@ -311,6 +323,8 @@ export function createUI() {
       sub.style.bottom = mode === 'recon' ? '250px' : '';   // 黑梦里避开时间轴
       tl.classList.toggle('on', mode === 'recon');
     },
+    relabel(label) { hud.querySelector('.mode span').textContent = label; },
+    stampReset() { this._countStamp = ''; },
     // 平板举起时隐藏屏幕上的常驻界面
     setTabletOpen(on) {
       for (const e of [hud, hint, markers]) e.style.visibility = on ? 'hidden' : '';
@@ -362,11 +376,13 @@ export function createUI() {
       hud.classList.add('in');
       setTimeout(() => hud.classList.remove('in'), 460);
     },
-    setCounter(done, total, label = '线索') {
+    setCounter(done, total, kind = 'field') {
+      const label = kind === 'probe' ? tx('异常已分析', 'ANOMALIES') : tx('线索', 'CLUES');
+      const hold = tx('按住 <b>R</b> 构建<small>黑梦</small>', 'Hold <b>R</b> to build<small>the dream</small>');
       const count = hud.querySelector('.count');
       const bar = hud.querySelector('.bar i');
-      const taskDone = this._mode === 'explore' && label === '线索' && total > 0 && done >= total;
-      const stamp = `${this._mode}:${label}:${done}/${total}:${taskDone}`;
+      const taskDone = this._mode === 'explore' && kind !== 'probe' && total > 0 && done >= total;
+      const stamp = `${this._mode}:${label}:${done}/${total}:${taskDone}:${tx('zh', 'en')}`;
       if (stamp === this._countStamp) return;
       this._countStamp = stamp;
       clearTimeout(this._taskTimer);
@@ -381,12 +397,12 @@ export function createUI() {
         this._taskReady = true;
         hud.classList.remove('in', 'out', 'ready', 'search');
         hud.classList.add('done');
-        show(`${done} / ${total}<small>${label}完成</small>`, '100%', false);
+        show(`${done} / ${total}<small>${tx('完成', 'DONE')}</small>`, '100%', false);
         this._taskTimer = setTimeout(() => {
           hud.classList.add('out');
           this._taskTimer2 = setTimeout(() => {
             hud.classList.remove('done', 'out');
-            show('按住 <b>R</b> 构建<small>黑梦</small>', '100%', true);
+            show(hold, '100%', true);
             hud.classList.add('in');
             setTimeout(() => hud.classList.remove('in'), 460);
           }, 340);
@@ -395,8 +411,8 @@ export function createUI() {
       }
       this._taskReady = taskDone;
       hud.classList.remove('done', 'out', 'in');
-      hud.classList.toggle('search', !taskDone && label === '线索' && total > 0);
-      show(taskDone ? '按住 <b>R</b> 构建<small>黑梦</small>' : `${done} / ${total}<small>${label}</small>`, `${total ? (done / total) * 100 : 0}%`, taskDone);
+      hud.classList.toggle('search', !taskDone && kind !== 'probe' && total > 0);
+      show(taskDone ? hold : `${done} / ${total}<small>${label}</small>`, `${total ? (done / total) * 100 : 0}%`, taskDone);
     },
     // list: [{ id, x, y, show, done, aim, label }]
     updateMarkers(list) {
@@ -453,10 +469,10 @@ export function createUI() {
       const progress = Math.max(0, Math.min(1, p));
       const percent = phase === 'complete' ? 100 : Math.min(99, Math.floor(progress * 100));
       analysisPercent.textContent = `${percent}%`;
-      analysisStatus.innerHTML = phase === 'complete' ? '分析完成' : phase === 'working'
-        ? progress < 0.3 ? '探头接通' : progress < 0.85 ? '读取表面特征' : '证据比对'
-        : phase === 'tap' ? '<b>E</b>单按'
-        : '<b>E</b>按住分析';
+      analysisStatus.innerHTML = phase === 'complete' ? tx('分析完成', 'ANALYSIS DONE') : phase === 'working'
+        ? progress < 0.3 ? tx('探头接通', 'PROBE LIVE') : progress < 0.85 ? tx('读取表面特征', 'READING SURFACE') : tx('证据比对', 'MATCHING')
+        : phase === 'tap' ? tx('<b>E</b>单按', '<b>E</b> TAP')
+        : tx('<b>E</b>按住分析', '<b>E</b> HOLD');
       analysisCaption.textContent = phase === 'ready' ? '' : (target.name || '');
       analysisFill.style.transform = `scaleX(${progress})`;
       analysisTrack.setAttribute('aria-valuenow', String(percent));
@@ -464,23 +480,25 @@ export function createUI() {
     showClue(c, index) {
       clearTimeout(panelTimer);
       clueId = c.id;
-      const lines = c.lines.map((l, i) => `<div class="ln" style="animation-delay:${0.15 + i * 0.35}s">${l}</div>`).join('');
-      const dl = 0.15 + c.lines.length * 0.35;
+      // 弹出面板只给最关键的一行细节（clues.js 的 main）+ 结论；完整三行留在平板的线索详情里
+      const line = c.lines[c.main ?? 0];
+      const lines = line ? `<div class="ln" style="animation-delay:0.15s">${line}</div>` : '';
+      const dl = line ? 0.5 : 0.3;
       const no = String(index + 1).padStart(2, '0');
-      const tag = c.probe ? '黑梦分析 · 全息重建' : `证据 #${no} · 已分析`;
+      const tag = c.probe ? tx('黑梦分析 · 全息重建', 'BLACK DREAM · REBUILD') : tx(`证据 #${no} · 已分析`, `EVIDENCE #${no} · DONE`);
       const pic = c.probe ? '' : `<div class="pic"><div class="img" style="background-image:url(${clueImage(c)})"></div><div class="scan"></div>
         <div class="box"></div><i class="cn a"></i><i class="cn b"></i><i class="cn c"></i><i class="cn d"></i>
-        <div class="cap inv-mono">影像记录 · EV-${no}</div></div>`;
+        <div class="cap inv-mono">${tx('影像记录', 'STILL')} · EV-${no}</div></div>`;
       panel.innerHTML = `<div class="txt"><div class="tag inv-mono">${tag}</div><h2>${c.name}</h2>${lines}
         <div class="res" style="animation-delay:${dl}s">${c.result}</div>
-        <div class="prob inv-mono" style="animation-delay:${dl + 0.2}s"><span>概率</span><div class="pb"><i></i></div><span>${Math.round(c.prob * 100)}%</span></div></div>
+        <div class="prob inv-mono" style="animation-delay:${dl + 0.2}s"><span>${tx('概率', 'PROB')}</span><div class="pb"><i></i></div><span>${Math.round(c.prob * 100)}%</span></div></div>
         ${pic}`;
       if (!panel.classList.contains('on')) sound.play('ui/panel_open');
       panel.classList.add('on');
       const m = markPos.get(c.id);
       if (m) placePanel(m.x, m.y, m.front);
       setTimeout(() => { const i = panel.querySelector('.pb i'); if (i) i.style.width = `${c.prob * 100}%`; }, (dl + 0.3) * 1000);
-      panelTimer = setTimeout(() => this.hidePanel(), 4000);
+      panelTimer = setTimeout(() => this.hidePanel(), 5000);
     },
     // 线索卡正显示时收起才响消失音
     hidePanel() {
@@ -509,7 +527,7 @@ export function createUI() {
       toast.classList.remove('on', 'big');
     },
     // marks：[{ t0, t1 }] 进度条上的黄块（秒）；frac 把秒换成 0~1
-    buildTimeline(marks, frac, title = 'BLACKDREAM · 黑梦回放') {
+    buildTimeline(marks, frac, title = tx('BLACKDREAM · 黑梦回放', 'BLACKDREAM · REPLAY')) {
       const CELLS = 72;
       this._frac = frac;
       this._cells = CELLS;
@@ -562,7 +580,7 @@ export function createUI() {
         e.style.width = `${Math.max(2, right - left)}px`;
       });
     },
-    // 保留原中文字幕；有配音时等 FMOD 真正播完，无音频时用原阅读时长。
+    // 字幕随语言切换；有配音时等 FMOD 真正播完，无音频时用原阅读时长。
     say(lines, options) { return dialogue.say(lines, options); },
     updateDialogue(dt) { if (!document.hidden) dialogue.update(dt); },
     setCinema(on) { cine.classList.toggle('on', on); sub.classList.toggle('lift', on); },
@@ -574,7 +592,7 @@ export function createUI() {
     // 结局黑场文字：{ title, lines, back }；传 null 隐藏
     ending(d) {
       if (!d) { ending.classList.remove('on'); return; }
-      ending.innerHTML = `<h1>${d.unlock ? `<span>${d.unlock}</span>：` : ''}${d.title}</h1>`
+      ending.innerHTML = `<h1>${d.unlock ? `<span>${d.unlock}</span>${tx('：', ': ')}` : ''}${d.title}</h1>`
         + d.lines.map((l, i) => `<div class="ln" style="animation-delay:${0.8 + i * 1.1}s">${l}</div>`).join('')
         + `<div class="back" style="animation-delay:${1.2 + d.lines.length * 1.1}s">${d.back}</div>`;
       ending.classList.add('on');

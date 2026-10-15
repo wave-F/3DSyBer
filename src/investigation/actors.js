@@ -6,7 +6,7 @@ import { hologramMaterial } from './hologram.js';
 // 全息人偶：Quaternius Universal Animation Library（CC0）的人偶 + 动作
 // 动作不随时间自动播放，而是按重建时间轴"采样"：拖动、倒放、暂停都能得到确定的姿势
 
-const URL = '/assets/mannequin.glb';
+const URL = `${import.meta.env.BASE_URL}assets/mannequin.glb`;
 const BLEND = 0.25; // 相邻动作之间的混合过渡秒数
 
 let loading = null;

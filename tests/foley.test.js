@@ -8,6 +8,7 @@ import * as tsl from 'three/tsl';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import * as events from '../src/audio/events.js';
 import * as voiceEvents from '../src/audio/voiceEvents.js';
+import { tx } from '../src/i18n.js';
 
 // 运行真实游戏模块，仅替换浏览器 / 音频输出依赖，不需要 WebGPU 或声卡。
 async function load(path, imports, globals = {}) {
@@ -15,7 +16,7 @@ async function load(path, imports, globals = {}) {
   const context = createContext({ console, performance, ...globals });
   const module = new SourceTextModule(await readFile(url, 'utf8'), {
     context, identifier: url.href,
-    initializeImportMeta(meta) { meta.env = { DEV: false }; },
+    initializeImportMeta(meta) { meta.env = { DEV: false, BASE_URL: '/' }; },
   });
   await module.link((name) => {
     const values = imports[name] ?? (name === './voiceEvents.js' ? voiceEvents : undefined);
@@ -477,6 +478,7 @@ test('平板拿出 / 收起各触发一次，重复设置状态不会重播', as
     'three/webgpu': THREE, 'three/tsl': tsl,
     'three/addons/geometries/RoundedBoxGeometry.js': { RoundedBoxGeometry },
     './clock.js': { uiTime: tsl.uniform(0) },
+    '../i18n.js': { tx },
     '../audio/sound.js': { sound: { cloth: () => calls.push('cloth') } },
   }, {
     document: { createElement: () => ({ getContext: () => ({ fillText() {} }) }), body: { style: {} } },
@@ -489,6 +491,74 @@ test('平板拿出 / 收起各触发一次，重复设置状态不会重播', as
   tablet.toggle(false);
   tablet.toggle(false);
   assert.deepEqual(calls, ['cloth', 'cloth']);
+});
+
+test('加载界面中英切换仍等待声音预加载，保留菜单手势、无效点击和慢淡入', async () => {
+  function element() {
+    const classes = new Set(), listeners = new Map(), children = new Map();
+    return {
+      style: {}, dataset: {}, textContent: '',
+      classList: { add: (...names) => names.forEach((name) => classes.add(name)), contains: (name) => classes.has(name) },
+      querySelector(name) { if (!children.has(name)) children.set(name, element()); return children.get(name); },
+      addEventListener(name, fn) { listeners.set(name, fn); },
+      fire(name, event = {}) { listeners.get(name)?.(event); },
+    };
+  }
+  const root = element(), overlay = element(), langButton = element();
+  const manager = {}, timers = [], keys = new Map(), calls = [];
+  const langListeners = [];
+  let lang = 'zh', frame, now = 0;
+  const { loading } = await load('src/loading.js', {
+    'three/webgpu': { DefaultLoadingManager: manager },
+    './i18n.js': {
+      getLang: () => lang,
+      setLang(next) { lang = next; langListeners.forEach((fn) => fn(next)); },
+      onLang: (fn) => langListeners.push(fn),
+      tx: (zh, en) => lang === 'en' ? en : zh,
+    },
+  }, {
+    document: { getElementById: (id) => ({ loading: root, overlay, 'lang-btn': langButton })[id] },
+    performance: { now: () => now },
+    requestAnimationFrame: (fn) => { frame = fn; },
+    setTimeout: (fn, ms) => { timers.push({ fn, ms }); },
+    addEventListener: (name, fn) => keys.set(name, fn),
+  });
+  loading.onWake(() => calls.push('wake'));
+  loading.onDeny(() => calls.push('deny'));
+  loading.onStart(() => calls.push('start'));
+  let finishAudio;
+  loading.waitFor(new Promise((resolve) => { finishAudio = resolve; }), '声音', 'AUDIO');
+  manager.onProgress('/assets/supercar.glb', 1, 1);
+  now = 1000; frame(now);
+  assert.equal(root.querySelector('.ld-bar .st').textContent, '正在加载 · 声音');
+  assert.ok(parseFloat(root.querySelector('.ld-bar .fill').style.width) < 85);
+  root.fire('pointerdown'); root.fire('click');
+  assert.deepEqual(calls, ['wake', 'deny']);
+  let stopped = false, prevented = false;
+  root.querySelector('.ld-lang').fire('click', {
+    stopPropagation() { stopped = true; }, preventDefault() { prevented = true; },
+  });
+  assert.ok(stopped && prevented);
+  assert.equal(root.querySelector('.ld-bar .st').textContent, 'LOADING · AUDIO');
+  assert.equal(overlay.querySelector('h1').textContent, 'PAUSED');
+  now = 20000; frame(now);
+  assert.equal(root.querySelector('.ld-bar .st').textContent, 'LOADING · AUDIO');
+  assert.equal(timers.length, 0); // 即使超过预热上限，也不能越过没加载完的声音
+  finishAudio(); await new Promise((resolve) => setImmediate(resolve));
+  now += 1000; frame(now);
+  assert.equal(root.querySelector('.ld-bar .st').textContent, 'PREPARING');
+  for (let i = 0; i < 200 && !timers.length; i++) { now += 16; frame(now); }
+  assert.equal(root.querySelector('.ld-bar .st').textContent, 'READY');
+  assert.deepEqual(timers.map((t) => t.ms), [400, 1050]);
+  timers.splice(0).forEach((t) => t.fn());
+  calls.length = 0;
+  root.fire('pointerdown'); root.fire('click');
+  assert.deepEqual(calls, ['start']);
+  assert.deepEqual(timers.map((t) => t.ms), [1150, 4750]);
+  root.fire('click'); keys.get('keydown')();
+  assert.deepEqual(calls, ['start']);
+  timers.splice(0).forEach((t) => t.fn());
+  assert.equal(loading.done, true);
 });
 
 test('踩在水洼上用水脚步代替普通脚步，衣物声照常', async () => {

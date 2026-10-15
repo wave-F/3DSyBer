@@ -60,7 +60,7 @@ export function createViewmodel(overlayScene, camera, gait = { phase: 0, amplitu
   const cardHolder = new THREE.Group();
   cardHolder.visible = false;
   rig.add(cardHolder);
-  new GLTFLoader().load('/assets/card-arm.glb', (gltf) => {
+  new GLTFLoader().load(`${import.meta.env.BASE_URL}assets/card-arm.glb`, (gltf) => {
     const model = gltf.scene;
     // 卡头朝 -Z；模型平移到卡头位于原点（卡头在模型中约为 (0.035, 0.492, 0.496)）
     const S = 0.45;
@@ -277,7 +277,7 @@ function buildDevice() {
   emitter.add(glow, ring, spill);
   g.add(emitter);
   let ready = false;
-  new GLTFLoader().load('/assets/scanner-arm.glb?v=3', (gltf) => {
+  new GLTFLoader().load(`${import.meta.env.BASE_URL}assets/scanner-arm.glb?v=3`, (gltf) => {
     const model = gltf.scene;
     // Align this asset's diagonal barrel with -Z, pivoting about its grip.
     model.rotation.set(-0.19, -2.61, 0);

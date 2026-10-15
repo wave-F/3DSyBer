@@ -15,7 +15,7 @@ export function createPryArm(carRoot) {
   group.visible = false;
   carRoot.add(group);
   let mixer = null, camNode = null, ready = false;
-  new GLTFLoader().load('/assets/pry-arm.glb', (gltf) => {
+  new GLTFLoader().load(`${import.meta.env.BASE_URL}assets/pry-arm.glb`, (gltf) => {
     group.add(gltf.scene);
     camNode = gltf.scene.getObjectByName('PryCamRest');
     gltf.scene.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });

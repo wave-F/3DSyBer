@@ -225,7 +225,7 @@ export function idTexture(text, color) {
 // 加载 public/assets 下的贴图
 const loader = new THREE.TextureLoader();
 export function loadTexture(name, srgb = true) {
-  const t = loader.load(`/assets/${name}`);
+  const t = loader.load(`${import.meta.env.BASE_URL}assets/${name}`);
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.anisotropy = 8;

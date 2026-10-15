@@ -33,7 +33,7 @@ import { sound } from './audio/sound.js';
 import { AD_DWELL } from './ads.js';
 
 // 网页一打开就装入全部 Bank 并预备好所有循环；加载界面等声音就绪后才允许点击开始
-loading.waitFor(sound.preload(), '声音');
+loading.waitFor(sound.preload(), '声音', 'AUDIO');
 // 加载期间第一次点击 / 按键开始菜单音乐；还没就绪时的点击是无效点击
 loading.onWake(() => sound.unlock());
 loading.onDeny(() => sound.play('ui/deny'));
@@ -72,7 +72,7 @@ addLightGroup('环境反射', (on) => {
 });
 
 // 夜景 HDRI 只用作反射环境（车漆、水面），不作背景
-new HDRLoader().load('/assets/shanghai_bund_1k.hdr', (hdr) => {
+new HDRLoader().load(`${import.meta.env.BASE_URL}assets/shanghai_bund_1k.hdr`, (hdr) => {
   hdr.mapping = THREE.EquirectangularReflectionMapping;
   scene.environment = hdr;
   inv.tablet.uiScene.environment = hdr;   // 手和设备的金属反射

@@ -215,6 +215,18 @@ export function recordedVoiceId(group, text) {
   return hits.length === 1 ? hits[0] : null;
 }
 
+// 在中文原稿上绑定录音，再交给 bi() 翻译。不能用 WeakMap 记本地化对象：
+// 英文模式每次读取都会生成新 Proxy，切语言后会丢失配音绑定。
+export function bindRecordedVoices(groups) {
+  return Object.fromEntries(Object.entries(groups).map(([group, lines]) => [
+    group,
+    Array.isArray(lines) ? lines.map((line) => {
+      const voiceId = recordedVoiceId(group, line.text);
+      return voiceId ? { ...line, voiceId } : line;
+    }) : lines,
+  ]));
+}
+
 export function spokenText(text) {
   return PRONUNCIATIONS.reduce((result, [word, pronunciation]) => result.replaceAll(word, pronunciation), text);
 }

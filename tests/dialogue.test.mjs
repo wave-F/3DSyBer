@@ -1,11 +1,82 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import { createDialoguePlayer } from '../src/audio/dialoguePlayer.js';
 import { VOICE_LINES } from '../src/audio/voiceEvents.js';
-import { dialogueLines } from '../src/audio/dialogue.en.js';
+import { bindRecordedVoices, dialogueLines, recordedVoiceId } from '../src/audio/dialogue.en.js';
+import { LINES } from '../src/investigation/clues.js';
+import { getLang, isPlayer, setLang } from '../src/i18n.js';
 
 const flush = () => Promise.resolve();
+
+test('配音按未改写的中文绑定，不修改原稿，保留动态引导和静默', () => {
+  const source = {
+    opening: [{ text: '到了。' }, { text: '改写过的新台词' }],
+    rootRead: [{ text: '终端没有再解释。', ms: 2200 }],
+    archived: [{ text: '知道了。' }],
+    transferred: [{ text: '知道了。' }],
+    dreamGuide: (time) => [{ text: `倒回 ${time}` }],
+  };
+  const bound = bindRecordedVoices(source);
+  assert.equal(bound.opening[0].voiceId, 'opening_02');
+  assert.equal(source.opening[0].voiceId, undefined);
+  assert.equal(bound.opening[1].voiceId, undefined);
+  assert.equal(bound.rootRead[0].voiceId, undefined);
+  assert.equal(bound.rootRead[0].ms, 2200);
+  assert.equal(bound.archived[0].voiceId, 'archived_03');
+  assert.equal(bound.transferred[0].voiceId, 'transferred_03');
+  assert.equal(bound.dreamGuide, source.dreamGuide);
+});
+
+test('中英字幕切换和重复读取 Proxy 不会丢配音，改写句不套旧录音', () => {
+  const previousDocument = globalThis.document;
+  const previousLang = getLang();
+  globalThis.document = { documentElement: { dataset: {} } };
+  try {
+    setLang('zh');
+    const ids = Object.fromEntries(Object.entries(LINES)
+      .filter(([, lines]) => Array.isArray(lines))
+      .map(([group, lines]) => [group, lines.map((l) => {
+        assert.equal(l.voiceId ?? null, recordedVoiceId(group, l.text));
+        return l.voiceId;
+      })]));
+    for (const lang of ['en', 'zh', 'en']) {
+      setLang(lang);
+      for (let read = 0; read < 2; read++) {
+        for (const [group, expected] of Object.entries(ids)) {
+          assert.deepEqual(LINES[group].map((l) => l.voiceId), expected);
+        }
+      }
+      assert.equal(LINES.opening[1].text, lang === 'en' ? 'I’m here.' : '到了。');
+      assert.equal(LINES.opening[1].voiceId, 'opening_02');
+      assert.equal(LINES.dream1[0].voiceId, undefined);
+      assert.equal(LINES.rootRead.at(-1).voiceId, undefined);
+      assert.equal(LINES.target.at(-1).voiceId, undefined);
+      assert.ok(LINES.dreamGuide('00:01.4').every((l) => !l.voiceId));
+      assert.ok(isPlayer(LINES.opening[1].who));
+      assert.equal(isPlayer(LINES.opening[0].who), false);
+    }
+  } finally {
+    setLang(previousLang);
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  }
+});
+
+test('启动时已保存英文语言也能正确绑定配音', () => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import assert from 'node:assert/strict';
+    globalThis.localStorage = { getItem: () => 'en' };
+    globalThis.document = { documentElement: { dataset: {} } };
+    const { LINES } = await import(${JSON.stringify(new URL('../src/investigation/clues.js', import.meta.url).href)});
+    assert.equal(LINES.opening[1].text, 'I’m here.');
+    assert.equal(LINES.opening[1].voiceId, 'opening_02');
+    assert.equal(LINES.cardRead[0].voiceId, 'cardRead_02');
+    assert.equal(LINES.dream1[0].voiceId, undefined);
+  `], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+});
 
 function setup() {
   const calls = [], voices = [];

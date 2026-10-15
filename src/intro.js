@@ -176,6 +176,9 @@ export function createIntro({ camera, police, controls, inv }) {
       if (inv.debug.mode !== 'explore') { finish(); return; }
       if (phase !== 'brief' && !controls.isLocked) return;
       if (phase === 'brief') return;
+      // 黑场还没开始淡出时停在开场第一帧，避免画面露出来时车已经开过一段
+      const loadingEl = document.getElementById('loading');
+      if (loadingEl && !loadingEl.classList.contains('fading') && !loadingEl.classList.contains('gone')) return;
       t += dt;
       if (phase === 'chase') {
         inv.beginOpening();

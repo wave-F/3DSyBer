@@ -5,6 +5,7 @@ import {
 import { DECK_Y, HALF_W } from './bridge.js';
 import { gameTime } from './investigation/clock.js';
 import { sound } from './audio/sound.js';
+import { onLang, tx } from './i18n.js';
 
 // 调查区域边界：两个龙门路牌（z = -48 / 70）往里缩 2 m，立全息封锁屏障
 export const CORDON = { z0: -46, z1: 68 };
@@ -19,11 +20,17 @@ function bannerTexture() {
   const c = document.createElement('canvas');
   c.width = 2048; c.height = 128;
   const g = c.getContext('2d');
-  g.fillStyle = '#fff';
-  g.textBaseline = 'middle';
-  g.font = 'bold 54px "Menlo", "PingFang SC", monospace';
-  g.fillText('// RESTRICTED AREA  调查封锁区  NCPD-7731  禁止越过  ', 30, 66);
   const t = new THREE.CanvasTexture(c);
+  const paint = () => {
+    g.clearRect(0, 0, c.width, c.height);
+    g.fillStyle = '#fff';
+    g.textBaseline = 'middle';
+    g.font = 'bold 54px "Menlo", "PingFang SC", monospace';
+    g.fillText(tx('// RESTRICTED AREA  调查封锁区  NCPD-7731  禁止越过  ', '// RESTRICTED AREA  CRIME SCENE  NCPD-7731  DO NOT CROSS  '), 30, 66);
+    t.needsUpdate = true;
+  };
+  paint();
+  onLang(paint);
   t.wrapS = THREE.RepeatWrapping;
   t.anisotropy = 8;
   return t;
@@ -116,7 +123,9 @@ export function buildCordon(scene) {
 
   // 靠近边界时的提示
   const hint = document.createElement('div');
-  hint.textContent = '// 调查封锁区 · 请返回事故现场';
+  const paintHint = () => { hint.textContent = tx('// 调查封锁区 · 请返回事故现场', '// RESTRICTED AREA · RETURN TO THE SCENE'); };
+  paintHint();
+  onLang(paintHint);
   hint.style.cssText = 'position:fixed;left:50%;top:62%;transform:translateX(-50%);padding:6px 16px;'
     + 'border-left:2px solid #ff2236;background:rgba(24,0,4,0.5);color:#ff5a66;'
     + 'font:13px Menlo,"PingFang SC",monospace;letter-spacing:2px;pointer-events:none;opacity:0;transition:opacity 0.3s';
