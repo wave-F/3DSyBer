@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import {
   pass, mrt, output, normalView, metalness, roughness, vec2, vec3, float, sample, uniform,
   packNormalToRGB, unpackRGBToNormal, renderOutput, screenUV, mix, smoothstep, luminance, vec4,
-  fog, color, exp, positionView, positionWorld, builtinAOContext, rtt,
+  builtinAOContext, rtt,
 } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { ssr } from 'three/addons/tsl/display/SSRNode.js';
@@ -21,16 +21,19 @@ import { buildCity } from './city.js';
 import { buildCrash } from './crash.js';
 import { buildPoliceCar } from './policeCar.js';
 import { buildRain } from './rain.js';
+import { buildSmoke } from './smoke.js';
 import { buildCordon, CORDON } from './cordon.js';
 import { createPlayer } from './player.js';
 import { createIntro } from './intro.js';
-import { buildSky, FOG_HEX } from './sky.js';
+import { buildSky } from './sky.js';
+import { distanceFog, createVolumetricFog } from './fog.js';
 import { clock, tick } from './investigation/clock.js';
 import { createInvestigation } from './investigation/state.js';
 import { addLightGroup } from './debugLights.js';
 import { HURT } from './investigation/finale.js';
 import { sound } from './audio/sound.js';
 import { AD_DWELL } from './ads.js';
+import { createStaticGI } from './globalIllumination.js';
 
 // 网页一打开就装入全部 Bank 并预备好所有循环；加载界面等声音就绪后才允许点击开始
 loading.waitFor(sound.preload(), '声音', 'AUDIO');
@@ -49,11 +52,8 @@ document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 
-// 两层雾：远景灰绿雨霾（上限 0.9，保留远处剪影和灯光）+ 贴地低雾
-const dist = positionView.z.negate();
-const haze = float(1).sub(exp(dist.mul(-0.0045))).mul(0.9);
-const low = float(1).sub(exp(dist.mul(-0.03))).mul(smoothstep(26, 6, positionWorld.y)).mul(0.85);
-scene.fogNode = fog(color(FOG_HEX), float(1).sub(float(1).sub(haze).mul(float(1).sub(low))));
+// 距离雾：远景灰绿雨霾（随高度变薄）+ 贴地低雾，参数在 fog.js
+scene.fogNode = distanceFog;
 
 const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.05, 3000);
 
@@ -80,8 +80,22 @@ new HDRLoader().load(`${import.meta.env.BASE_URL}assets/shanghai_bund_1k.hdr`, (
   scene.environmentIntensity = envOn ? 0.12 : 0;
 });
 
-buildBridge(scene);
-const updateCity = buildCity(scene);
+// 静态光照只采集桥和城市，不把演出车辆 / 警灯 / 雨 / 全息烘进去。
+const staticWorld = new THREE.Group();
+staticWorld.name = '桥与城市';
+scene.add(staticWorld);
+buildBridge(staticWorld);
+const updateCity = buildCity(staticWorld);
+const gi = createStaticGI({
+  scene, world: staticWorld, ambientLights: [hemi, moon], assetsReady: updateCity.ready,
+  volume: {
+    width: HALF_W * 2 + 6, height: 6, depth: CORDON.z1 - CORDON.z0 + 20,
+    position: [0, DECK_Y + 3.3, (CORDON.z0 + CORDON.z1) / 2],
+  },
+});
+loading.waitFor(gi.ready, '静态全局光照', 'STATIC GLOBAL ILLUMINATION');
+addLightGroup('全局光照（静态探针）', (on) => gi.setEnabled(on));
+if (import.meta.env.DEV) window.__gi = gi;
 const crash = buildCrash(scene);
 const police = buildPoliceCar(scene);
 const updateSky = buildSky(scene);
@@ -162,6 +176,18 @@ const ssrAmt = uniform(1);
 let hdr = sceneColor.add(ssrPass.rgb.mul(ssrAmt));
 addLightGroup('屏幕反射', (on) => { ssrAmt.value = on ? 1 : 0; });
 
+// 1.1 烟雾粒子：独立场景、半分辨率渲染，按 alpha 盖到场景上（在辉光和分析去饱和之前）
+const smoke = buildSmoke(camera, sceneDepth, scene.fogNode);
+const smokePass = pass(smoke.scene, camera);
+smokePass.setResolutionScale(0.5);
+const smokeTex = smokePass.getTextureNode('output');
+hdr = hdr.mul(float(1).sub(smokeTex.a)).add(smokeTex.rgb);
+if (import.meta.env.DEV) window.__smoke = smoke.scene;   // 开发时截图对比用
+
+// 1.2 体积雾：雾里的灯光散射（光晕、路灯光锥、底雾），在手和终端叠加之前
+const volFog = createVolumetricFog({ scene, camera, renderer, depthNode: sceneDepth });
+hdr = hdr.add(volFog.node);
+
 // 1.5 平板：举起时背景压暗虚化，叠加单独渲染的平板界面（独立场景，不会被场景遮挡）
 const tabletAmt = uniform(0);
 // 叠加场景（平板 + 第一人称手和扫描设备）：mask 通道标记不透明的手/设备，用来遮住背后的世界
@@ -234,12 +260,15 @@ renderer.setAnimationLoop(() => {
   crash.update(clock.dt, clock.elapsed);
   police.update(clock.dt, clock.elapsed);
   updateRain(clock.dt);
+  smoke.update();
   updateCordon(step, camera.position);
   updateSky(clock.dt, clock.elapsed);
   updateCity();
+  gi.update(renderer);
   inv.update(step);
   sound.updateBillboards(clock.elapsed);
   sound.update(dt, camera);
+  volFog.update(clock.dt);
   tabletAmt.value = Math.min(1, inv.tablet.amount * 1.4);
   pipeline.render();
 });

@@ -49,7 +49,7 @@ export function buildCity(scene) {
   const taken = modelFootprints();
   const blocked = (x, z, w, d) => (z > NEAR_Z[0] && z < NEAR_Z[1])
     || taken.some((f) => x + w / 2 > f.x0 && x - w / 2 < f.x1 && z + d / 2 > f.z0 && z - d / 2 < f.z1);
-  loadModelBuildings(scene);
+  const buildingsReady = loadModelBuildings(scene);
 
   for (const side of [-1, 1]) {
     // 第一排：紧邻高架，招牌最密
@@ -100,6 +100,7 @@ export function buildCity(scene) {
   }
   update.rainSpots = rainSpots;
   update.adScreens = signs.screens;
+  update.ready = buildingsReady;
   return update;
 
   function decorate(b, side, near) {

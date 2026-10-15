@@ -2,12 +2,13 @@ import * as THREE from 'three/webgpu';
 import { gameTime } from './investigation/clock.js';
 import {
   texture, uv, vec2, vec3, float, sin, smoothstep, mix, positionWorld, positionWorldDirection,
-  mx_fractal_noise_float, color, hash, instanceIndex,
+  mx_fractal_noise_float, color, hash, instanceIndex, equirectUV, luminance,
 } from 'three/tsl';
 import { loadTexture, farWindowTexture, idTexture } from './textures.js';
 import { addLightGroup } from './debugLights.js';
+import { FOG_HEX, fadeWithDistance } from './fog.js';
 
-export const FOG_HEX = 0x1b2726;
+export { FOG_HEX };
 
 export const MEGA = [
   { x: 60, z: -560, w: 150, d: 120, h: 460, id: 'H7', c: '#20e8ff' },
@@ -16,18 +17,31 @@ export const MEGA = [
 ];
 
 export function buildSky(scene) {
-  // 天空：地平线与雾同色，向上渐暗
+  // 天空盒：白天阴天全景（Poly Haven overcast_soil_puresky，只存上半球）压成夜色。
+  // 原图亮的地方当作被城市霓虹从下方照亮的云底，暗的地方是压下来的黑云；地平线与雾同色
   const dir = positionWorldDirection;
-  scene.backgroundNode = mix(color(FOG_HEX), color(0x040708), smoothstep(0.0, 0.45, dir.y));
+  const skyTex = loadTexture('sky_overcast.jpg', false);
+  skyTex.wrapT = THREE.ClampToEdgeWrapping;
+  const eq = equirectUV(dir);
+  // 横向缓慢转动 = 云层整体漂移；纵向只有上半球，地平线对应贴图底边
+  const skyUV = vec2(eq.x.add(gameTime.mul(0.0004)), eq.y.sub(0.5).mul(2).clamp(0.002, 0.998));
+  // 固定取第 0 级：经度在 ±180° 处跳变，自动选 mip 会在接缝处画出一道竖线
+  const raw = luminance(texture(skyTex, skyUV).level(0).rgb);
+  const dens = smoothstep(0.38, 0.85, raw).pow(1.6);
+  const cityGlow = mix(float(1.6), float(0.6), smoothstep(0.0, 0.6, dir.y));   // 越近地平线，城市光污染越强
+  const night = color(0x040708)
+    .add(color(0x3a2a38).mul(dens).mul(cityGlow).mul(2.2))
+    .add(vec3(0.02, 0.026, 0.026).mul(raw.mul(raw)));
+  scene.backgroundNode = mix(night, color(FOG_HEX), smoothstep(0.35, 0.0, dir.y).pow(2));
 
-  // 被城市灯光从下方照亮的低云
+  // 天空盒前面的低空碎云：比天空盒飘得快，造出前后层次
   const cloudMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
   cloudMat.fog = false;
-  const p = positionWorld.xz.mul(0.0025).add(vec2(gameTime.mul(0.004), gameTime.mul(0.0015)));
-  const n = mx_fractal_noise_float(vec3(p, gameTime.mul(0.003)), 4, 2.0, 0.5);
+  const p = positionWorld.xz.mul(0.004).add(vec2(gameTime.mul(0.012), gameTime.mul(0.005)));
+  const n = mx_fractal_noise_float(vec3(p, gameTime.mul(0.006)), 4, 2.0, 0.5);
   const dist = positionWorld.xz.length();
-  cloudMat.colorNode = mix(color(0x0b1212), color(0x3a2a38), smoothstep(-0.1, 0.5, n));
-  cloudMat.opacityNode = smoothstep(-0.25, 0.45, n).mul(smoothstep(2200, 600, dist)).mul(0.9);
+  cloudMat.colorNode = mix(color(0x070b0b), color(0x2a1e28), smoothstep(0.1, 0.55, n));
+  cloudMat.opacityNode = smoothstep(0.05, 0.5, n).mul(smoothstep(2200, 600, dist)).mul(0.4);
   const clouds = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), cloudMat);
   clouds.rotation.x = Math.PI / 2;
   clouds.position.y = 240;
@@ -65,6 +79,7 @@ function buildMegabuildings(scene) {
     const idMat = new THREE.MeshBasicMaterial({ map: idTexture(m.id, m.c), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
     idMat.color.setScalar(3);
     idMat.fog = false;
+    fadeWithDistance(idMat);
     const id = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), idMat);
     // 编号贴在朝向桥的那一面
     const useX = Math.abs(m.x) > Math.abs(m.z);
@@ -89,8 +104,8 @@ function holoMaterial(file, side = THREE.DoubleSide, { k = 1.6, lo = 0.05, hi = 
   // 压掉 JPG 底色噪点，避免出现方框
   const mask = smoothstep(lo, hi, img.r.max(img.g).max(img.b));
   m.colorNode = img.mul(mask).mul(scan).mul(flick).mul(k);
-  m.fog = false; // 加法混合的面片若参与雾计算，会叠加出雾色方框
-  return m;
+  m.fog = false; // 加法混合的面片若参与雾计算，会叠加出雾色方框；改为只按距离变暗
+  return fadeWithDistance(m);
 }
 function buildHolograms(scene) {
   const koi = new THREE.Mesh(new THREE.PlaneGeometry(46, 46), holoMaterial('gen/holo_koi.jpg'));
@@ -130,6 +145,7 @@ function buildHolograms(scene) {
   const ringMat = new THREE.MeshBasicMaterial({ color: 0xffb030, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
   ringMat.color.multiplyScalar(2.5);
   ringMat.fog = false;
+  fadeWithDistance(ringMat);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(9, 0.25, 6, 48), ringMat);
   ring.rotation.x = Math.PI / 2;
   ring.position.set(-83, 137.5, -56);

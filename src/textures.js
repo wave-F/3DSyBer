@@ -294,14 +294,31 @@ export function bloodTexture(seed) {
   return toTexture(c);
 }
 
-// 烟雾粒子
-export function smokeTexture() {
-  const [c, g] = canvas(128, 128);
-  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  grad.addColorStop(0, 'rgba(255,255,255,0.8)');
-  grad.addColorStop(0.5, 'rgba(255,255,255,0.3)');
-  grad.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 128, 128);
-  return toTexture(c);
+// 烟雾粒子：几十个软圆团叠成一朵边缘不规则的烟团，只用 alpha（白底，线性色彩）
+export function smokeTexture(seed = 31) {
+  const r = rng(seed);
+  const S = 256, H = S / 2;
+  const [c, g] = canvas(S, S);
+  for (let i = 0; i < 70; i++) {
+    const a = r() * Math.PI * 2;
+    const d = Math.pow(r(), 0.8) * H * 0.42;
+    const x = H + Math.cos(a) * d, y = H + Math.sin(a) * d;
+    const rad = H * (0.22 + r() * 0.3) * (1 - d / H * 0.6);
+    const grad = g.createRadialGradient(x, y, 0, x, y, rad);
+    grad.addColorStop(0, `rgba(255,255,255,${0.1 + r() * 0.12})`);
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.beginPath();
+    g.arc(x, y, rad, 0, Math.PI * 2);
+    g.fill();
+  }
+  // 整体径向收边，保证贴图边界完全透明
+  g.globalCompositeOperation = 'destination-in';
+  const edge = g.createRadialGradient(H, H, 0, H, H, H);
+  edge.addColorStop(0, 'rgba(255,255,255,1)');
+  edge.addColorStop(0.6, 'rgba(255,255,255,0.85)');
+  edge.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = edge;
+  g.fillRect(0, 0, S, S);
+  return toTexture(c, false);
 }

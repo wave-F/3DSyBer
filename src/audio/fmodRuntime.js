@@ -6,15 +6,20 @@ let modulePromise;
 
 function loadModule() {
   if (modulePromise) return modulePromise;
+  if (!window.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined') {
+    return Promise.reject(new Error('FMOD 多线程音频需要 HTTPS/localhost 和响应头 Cross-Origin-Opener-Policy: same-origin、Cross-Origin-Embedder-Policy: require-corp'));
+  }
   modulePromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = `${BASE}fmodstudioL.js`;
+    // 使用官方 pthread 日志版：真正创建 Studio 临界区和后台流线程，不过滤日志。
+    script.src = `${BASE}fmodstudioPL.js`;
     script.async = true;
     script.onerror = () => { script.remove(); reject(new Error(`无法加载 ${script.src}`)); };
     script.onload = () => {
       const module = {
         window,
         INITIAL_MEMORY: 128 * 1024 * 1024,
+        mainScriptUrlOrBlob: script.src,
         locateFile: (file) => new URL(BASE + file, document.baseURI).href,
         preRun: () => {},
         onRuntimeInitialized: () => resolve(module),
@@ -22,7 +27,7 @@ function loadModule() {
       };
       try {
         if (!window.FMODModule) throw new Error('FMODModule missing');
-        window.FMODModule(module);
+        window.FMODModule(module).catch(reject);
       } catch (error) { reject(error); }
     };
     document.head.appendChild(script);
@@ -38,7 +43,7 @@ export class FmodRuntime {
   descriptions = new Map();
   missing = new Set();
   loops = new Map();
-  prepared = new Set();   // 已开始但保持暂停的循环（流已打开），第一次真正播放时取消暂停
+  prepared = new Set();   // 预备循环：streamsLoaded 开流后恢复暂停，第一次真正播放时取消暂停
   snapshots = new Map();
   vcas = new Map();
   // 保留有效句柄直到 STOPPED 再 release，避免操作已释放的一次性实例。
@@ -85,7 +90,9 @@ export class FmodRuntime {
         this.check(this.core.setSoftwareFormat(rate.val, f.SPEAKERMODE_DEFAULT, 0), 'sample rate');
       }
       // 右手坐标系，与 three.js 一致：位置、朝向直接传世界坐标（米）
-      this.check(this.system.initialize(128, f.STUDIO_INIT_NORMAL, f.INIT_NORMAL | f.INIT_3D_RIGHTHANDED, null), 'initialize');
+      // Studio 命令仍在 update 中同步提交，保持 JS 的播放状态 / 配音结束查询顺序；
+      // pthread Core 的流读取、非阻塞加载及真实锁独立于渲染主线程。
+      this.check(this.system.initialize(128, f.STUDIO_INIT_SYNCHRONOUS_UPDATE, f.INIT_NORMAL | f.INIT_3D_RIGHTHANDED, null), 'initialize');
       this.attributes = f._3D_ATTRIBUTES();
       BOOT_BANKS.forEach((file, i) => this.loadBank(file, bootBytes[i]));
       const bus = {};
@@ -108,7 +115,7 @@ export class FmodRuntime {
     this.banks.push(bank.val);
   }
 
-  // 剩余 Bank 按顺序装入：每个 Bank 单独一个任务，避免一次长时间占住主线程（混音也跑在主线程）
+  // 剩余 Bank 按顺序装入：每个 Bank 单独一个任务，避免一次长时间占住主线程
   async loadRest() {
     for (const file of BANKS.filter((name) => !BOOT_BANKS.includes(name))) {
       const bytes = await this.fetches.get(file);
@@ -117,21 +124,96 @@ export class FmodRuntime {
       this.loadBank(file, bytes);
     }
     await this.samplesLoaded();
-    this.complete = true;
+    if (!this.disposed && this.ready) this.complete = true;
   }
 
-  // 等全部 Bank 的采样数据解码进内存；非线程版 FMOD 在 update 里推进异步加载
-  async samplesLoaded() {
-    const LOADING = this.module.STUDIO_LOADING_STATE_LOADING;
-    for (;;) {
+  // Bank 采样加载不包含流式素材；错误不能当作“加载完成”。
+  async samplesLoaded(timeout = 10000) {
+    const deadline = performance.now() + timeout;
+    while (this.ready && !this.disposed) {
       this.update();
-      const pending = this.banks.some((bank) => {
+      let pending = false;
+      for (const bank of this.banks) {
         const state = {};
-        return bank.getSampleLoadingState(state) === this.module.OK && state.val === LOADING;
-      });
-      if (!pending || this.disposed) return;
+        this.check(bank.getSampleLoadingState(state), 'sample loading state');
+        if (state.val === this.module.STUDIO_LOADING_STATE_ERROR) throw new Error('FMOD sample loading failed');
+        if (state.val !== this.module.STUDIO_LOADING_STATE_LOADED) pending = true;
+      }
+      if (!pending) return;
+      if (performance.now() >= deadline) throw new Error('FMOD sample loading timed out');
       await new Promise((resolve) => setTimeout(resolve, 30));
     }
+  }
+
+  // Studio 不会为“开始但暂停”的事件打开流。先静音底层 ChannelGroup，再短暂运行，
+  // 等流已打开后重新暂停并还原静音；不改事件增益 / Studio 混音，也不重置时间线（重置会关流）。
+  // 虚拟声源不占真实 Channel，无需等待它在听者范围外产生采样。
+  async streamsLoaded(instances, timeout = 10000) {
+    const deadline = performance.now() + timeout;
+    const pending = new Set(instances.filter(Boolean));
+    const warming = new Map();
+    const restore = (inst) => {
+      const warm = warming.get(inst);
+      if (!warm) return;
+      // 加载期间用户可能已点击播放菜单音乐，或已经停止该循环；不能覆盖新的播放意图。
+      if (warm.path && this.loops.get(warm.path) !== inst) { warming.delete(inst); return; }
+      this.check(inst.setPaused(!warm.path || this.prepared.has(warm.path)), 'pause warmed stream');
+      this.update(); // 暂停提交后才能解除静音，避免预热声音漏出来
+      this.check(warm.group.setMute(warm.muted), 'restore stream mute');
+      warming.delete(inst);
+    };
+    try {
+      while (this.ready && !this.disposed && pending.size) {
+        this.update();
+        for (const inst of pending) {
+          const virtual = {}, group = {}, paused = {};
+          this.check(inst.isVirtual(virtual), 'stream virtual state');
+          if (virtual.val) { restore(inst); pending.delete(inst); continue; }
+          const result = inst.getChannelGroup(group);
+          if (result === this.module.ERR_STUDIO_NOT_LOADED) continue;
+          this.check(result, 'stream channel group');
+          this.check(inst.getPaused(paused), 'stream paused state');
+          if (paused.val && !warming.has(inst)) {
+            const muted = {};
+            this.check(group.val.getMute(muted), 'stream mute state');
+            this.check(group.val.setMute(true), 'mute warming stream');
+            const path = [...this.loops].find(([, loop]) => loop === inst)?.[0];
+            warming.set(inst, { group: group.val, muted: muted.val, path });
+            this.check(inst.setPaused(false), 'warm stream');
+            continue;
+          }
+          if (this.streamGroupReady(group.val)) { restore(inst); pending.delete(inst); }
+        }
+        if (!pending.size) return;
+        if (performance.now() >= deadline) throw new Error(`FMOD stream loading timed out (${pending.size} instances)`);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    } finally {
+      // 超时 / 失败也不能留下正在运行或被静音的预备实例；dispose 已释放的句柄不能再访问。
+      if (this.ready && !this.disposed) for (const inst of warming.keys()) restore(inst);
+    }
+  }
+
+  streamGroupReady(group) {
+    const channels = {}, groups = {};
+    this.check(group.getNumChannels(channels), 'stream channels');
+    this.check(group.getNumGroups(groups), 'stream groups');
+    if (!channels.val && !groups.val) return false;
+    let ready = true;
+    for (let i = 0; i < channels.val; i++) {
+      const channel = {}, sound = {}, state = {}, starving = {};
+      this.check(group.getChannel(i, channel), 'stream channel');
+      this.check(channel.val.getCurrentSound(sound), 'stream sound');
+      this.check(sound.val.getOpenState(state, {}, starving, {}), 'stream open state');
+      if (state.val === this.module.OPENSTATE_ERROR) throw new Error('FMOD stream loading failed');
+      if (starving.val || (state.val !== this.module.OPENSTATE_READY && state.val !== this.module.OPENSTATE_PLAYING)) ready = false;
+    }
+    for (let i = 0; i < groups.val; i++) {
+      const child = {};
+      this.check(group.getGroup(i, child), 'stream child group');
+      if (!this.streamGroupReady(child.val)) ready = false;
+    }
+    return ready;
   }
 
   // 在用户手势里调用：恢复浏览器音频输出（FMOD 在页面打开时已初始化）；还没初始化完就等它
@@ -227,7 +309,7 @@ export class FmodRuntime {
     return inst;
   }
 
-  // 预先开始一个循环但保持暂停：流式素材在加载界面就打开，之后 startLoop / moveLoop 只取消暂停
+  // 预先开始一个循环但保持暂停；随后由 streamsLoaded 真正开流，startLoop / moveLoop 只取消暂停
   prepareLoop(path, position) {
     if (!this.ready || this.loops.has(path)) return this.loops.get(path);
     const inst = this.prepareInstance(path, position);

@@ -1,8 +1,8 @@
 import * as THREE from 'three/webgpu';
 import { gameTime } from './investigation/clock.js';
 import {
-  texture, uv, vec2, vec3, float, mix, smoothstep, max, normalMap, uniform,
-  triplanarTexture, positionWorld, normalWorld, normalView, positionViewDirection, color,
+  texture, uv, vec2, vec3, float, mix, smoothstep, max, normalMap,
+  triplanarTexture, positionWorld, normalWorld,
   positionView, sin, dot, step, fract, floor, min, abs, sign, select, hash, mod, mx_noise_float,
 } from 'three/tsl';
 import { mergeStatic } from './merge.js';
@@ -85,6 +85,7 @@ export function buildBridge(scene) {
       if (Math.abs(zz) <= 75) {
         const light = new THREE.PointLight(0xffd6a0, 48, 28, 2);
         light.position.set(hx, DECK_Y + 7.5, zz);
+        light.userData.fogCone = true;   // 体积雾里按向下的光锥散射
         streetLights.push(light);
         group.add(light);
       }
@@ -232,20 +233,6 @@ function rainRipples(p, time) {
     grad = grad.add(v.div(d).mul(amp));
   });
   return grad;
-}
-
-// 假体积光：加法混合的圆锥，边缘与底部渐隐
-export function lightConeMaterial(hex, strength = 0.07) {
-  const mat = new THREE.MeshBasicNodeMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-  });
-  const facing = normalView.dot(positionViewDirection).abs();
-  const amount = uniform(strength);
-  mat.userData.strength = amount;
-  mat.fog = false;
-  mat.colorNode = color(hex);
-  mat.opacityNode = uv().y.pow(1.6).mul(facing.pow(2)).mul(amount);
-  return mat;
 }
 
 // ---------------------------------------------------------------------------

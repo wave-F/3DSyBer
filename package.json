@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test:audio": "node --experimental-vm-modules --test tests/foley.test.js",
     "test:voice": "node --test tests/voice.test.mjs tests/dialogue.test.mjs",
+    "test:lighting": "node --test tests/globalIllumination.test.mjs",
     "voice:plan": "node scripts/voice.mjs plan",
     "voice:voices": "node scripts/voice.mjs voices",
     "voice:audition": "node scripts/voice.mjs audition",

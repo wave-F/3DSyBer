@@ -83,6 +83,7 @@ export function buildCrash(scene) {
     update, carGroup: car.group, onCarReady, hazardMat: car.hazardMat,
     skids, setHazardOverride(o) { hazardOverride = o; },
     get hazardLit() { return hazardLit; },
+    get fireOn() { return fireOn; },
   };
 }
 

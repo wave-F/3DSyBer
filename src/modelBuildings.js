@@ -247,5 +247,5 @@ export function loadModelBuildings(scene) {
       scene.add(root);
     }
   }));
-  Promise.all(jobs).finally(() => draco.dispose());
+  return Promise.all(jobs).finally(() => draco.dispose());
 }

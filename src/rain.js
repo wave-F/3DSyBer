@@ -6,7 +6,7 @@ const AREA = 40;      // 以玩家为中心的水平范围
 const TOP = 25;       // 玩家上方高度
 const SPEED = 22;
 const LEN = 0.45;
-const WIND = new THREE.Vector3(1.5, 0, 0.6);
+export const WIND = new THREE.Vector3(1.5, 0, 0.6);   // 烟、雾也按这个风向飘
 
 // 落地溅射：只在玩家附近的桥面上生成，雨线落到路面时抽样触发
 const SPLASH_MAX = 1200;      // 同时存在的飞溅水珠上限
