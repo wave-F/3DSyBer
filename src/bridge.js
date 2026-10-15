@@ -359,9 +359,9 @@ function wallMaterial() {
   m.colorNode = col;
   m.roughnessNode = mix(float(0.9), float(0.42), streak.mul(0.7).add(top.mul(0.45)).clamp(0, 1)).mul(groove.mul(-0.6).add(1));
   m.metalnessNode = groove.mul(0.6);
-  // 灯槽往下打在斜面上的青色溢光：系数 0，墙面不发光
+  // 灯槽往下打在斜面上的青色溢光：系数很低，只留一点点
   const spill = inner.mul(smoothstep(0.3, WALL.grooveH[0], h).pow(4)).mul(step(h, WALL.grooveH[0] - 0.003));
-  m.emissiveNode = CYAN.mul(spill.mul(segBright(seg, side)).mul(0));
+  m.emissiveNode = CYAN.mul(spill.mul(segBright(seg, side)).mul(0.008));
   return m;
 }
 

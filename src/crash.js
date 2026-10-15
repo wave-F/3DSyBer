@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { float, mx_noise_float, positionLocal, positionWorld, vec3 } from 'three/tsl';
+import { float, mx_noise_float, positionLocal, positionWorld, vec3, smoothstep } from 'three/tsl';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
@@ -280,9 +280,12 @@ function buildBrokenRail(scene) {
   const metal = markKeep(metalBase.clone());
   metal.roughness = 0.58;
   const concrete = markKeep(concreteBase.clone());
-  const fracture = markKeep(new THREE.MeshStandardNodeMaterial({ roughness: 0.94 }));
+  // 新断面：比风化墙面浅一点，但淋了雨，偏暗、略有反光
+  const fracture = markKeep(new THREE.MeshStandardNodeMaterial());
   const grain = mx_noise_float(positionWorld.mul(65));
-  fracture.colorNode = vec3(0.16, 0.165, 0.16).mul(grain.mul(0.65).add(0.85));
+  const wet = mx_noise_float(positionWorld.mul(9));
+  fracture.colorNode = vec3(0.15, 0.15, 0.145).mul(grain.mul(0.5).add(0.9)).mul(wet.mul(0.12).add(0.88));
+  fracture.roughnessNode = float(0.52).add(wet.mul(0.18)).add(grain.mul(0.08)).clamp(0.3, 0.8);
   const rebar = markKeep(new THREE.MeshStandardMaterial({ color: 0x493a2c, roughness: 0.83, metalness: 0.45 }));
   const r = rng(9);
 
@@ -361,18 +364,46 @@ function buildBrokenRail(scene) {
     }
   }
 
-  for (let i = 0; i < 125; i++) {
-    const large = i < 10;
-    const size = large ? 0.18 + r() * 0.36 : i < 40 ? 0.065 + r() * 0.15 : 0.015 + r() * 0.055;
+  // 碎块：车往桥外撞，大部分混凝土掉下桥，留在路面的少而小，贴着断口
+  // 每块有一面是原来的风化墙面，其余是新断面
+  for (let i = 0; i < 110; i++) {
+    const large = i < 7;
+    const size = large ? 0.16 + r() * 0.3 : i < 32 ? 0.06 + r() * 0.12 : 0.015 + r() * 0.045;
     const edge = i % 2 ? BREAK.z0 : BREAK.z1;
     const direction = i % 2 ? 1 : -1;
-    const spread = large ? 0.9 : 2.1;
-    const px = x - 0.12 - Math.pow(r(), 1.8) * spread;
-    const pz = edge + direction * r() * (large ? 1.25 : 2.5) + (r() - 0.5) * 0.7;
-    const chunk = new THREE.Mesh(fragmentGeometry(r, size, size * (0.35 + r() * 0.5), size * (0.7 + r() * 0.7)), fracture);
+    const spread = large ? 0.6 : 1.4;
+    const px = x - 0.12 - Math.pow(r(), 2.2) * spread;
+    const pz = edge + direction * r() * (large ? 1.0 : 1.9) + (r() - 0.5) * 0.6;
+    const chunk = new THREE.Mesh(chunkGeometry(r, size, size * (0.35 + r() * 0.5), size * (0.7 + r() * 0.7)), [fracture, concrete]);
     settleFragment(chunk, px, pz, r);
     group.add(chunk);
   }
+
+  // 细碎石屑：一层厘米级的渣，集中在断口脚下
+  const grit = new THREE.InstancedMesh(fragmentGeometry(r, 0.012, 0.006, 0.01), fracture, 650);
+  const gm = new THREE.Matrix4(), gq = new THREE.Quaternion(), ge = new THREE.Euler(), gs = new THREE.Vector3(), gv = new THREE.Vector3();
+  for (let i = 0; i < grit.count; i++) {
+    const edge = i % 2 ? BREAK.z0 : BREAK.z1;
+    const direction = i % 2 ? 1 : -1;
+    gv.set(x - 0.08 - Math.pow(r(), 1.6) * 1.3, DECK_Y + 0.011, edge + direction * (r() * 1.8 - 0.3) + (r() - 0.5) * 0.5);
+    gq.setFromEuler(ge.set((r() - 0.5) * 0.6, r() * 6.3, (r() - 0.5) * 0.6));
+    const k = 0.5 + r() * 1.2;
+    grit.setMatrixAt(i, gm.compose(gv, gq, gs.set(k, k * (0.7 + r() * 0.6), k)));
+  }
+  scene.add(grit);
+
+  // 混凝土粉尘被雨泡成的灰浆印：贴墙脚一片半透明的灰
+  const dust = markKeep(new THREE.MeshStandardNodeMaterial({ transparent: true, depthWrite: false, roughness: 0.65 }));
+  const dn = mx_noise_float(positionWorld.mul(vec3(2.6, 1, 2.6))).mul(0.5).add(mx_noise_float(positionWorld.mul(11)).mul(0.25));
+  const nearWall = smoothstep(WALL.inner - 1.6, WALL.inner - 0.15, positionWorld.x);
+  const nearGap = smoothstep(BREAK.z0 - 2.2, BREAK.z0 - 0.5, positionWorld.z).mul(smoothstep(BREAK.z1 + 2.2, BREAK.z1 + 0.5, positionWorld.z));
+  dust.colorNode = vec3(0.17, 0.17, 0.165);
+  dust.opacityNode = smoothstep(-0.15, 0.45, dn).mul(nearWall).mul(nearGap).mul(0.5);
+  const dustPlane = new THREE.Mesh(new THREE.PlaneGeometry(2, 9).rotateX(-Math.PI / 2), dust);
+  dustPlane.position.set(WALL.inner - 0.9, DECK_Y + 0.013, (BREAK.z0 + BREAK.z1) / 2);
+  dustPlane.renderOrder = 1;
+  scene.add(dustPlane);
+
   const sourceGeometries = new Set();
   group.traverse((o) => { if (o.isMesh) sourceGeometries.add(o.geometry); });
   mergeStatic(group);
@@ -382,36 +413,90 @@ function buildBrokenRail(scene) {
 
 // 车身碎片与玻璃渣
 function buildDebris(scene, r) {
-  const paint = carPaint;
-  const dark = markKeep(new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.6 }));
-  const glass = markKeep(new THREE.MeshPhysicalMaterial({ color: 0x8ca5a7, roughness: 0.18, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08 }));
+  // 薄板碎片要两面都能看到
+  const paint = markKeep(carPaint.clone());
+  paint.side = THREE.DoubleSide;
+  paint.roughnessNode = carPaint.roughnessNode;
+  paint.clearcoatRoughnessNode = carPaint.clearcoatRoughnessNode;
+  const dark = markKeep(new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.55, side: THREE.DoubleSide }));
+  // 侧窗、后窗的钢化玻璃：碎成 1~2 cm 的小颗粒，偏暗，只有零星反光
+  const glass = markKeep(new THREE.MeshPhysicalMaterial({ color: 0x5f7476, roughness: 0.14, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.1, envMapIntensity: 0.6 }));
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const e = new THREE.Euler();
   const s = new THREE.Vector3();
   const v = new THREE.Vector3();
 
-  const glassGeo = fragmentGeometry(r, 0.065, 0.008, 0.05);
-  const shards = new THREE.InstancedMesh(glassGeo, glass, 260);
+  const glassGeo = fragmentGeometry(r, 0.016, 0.008, 0.013);
+  const shards = new THREE.InstancedMesh(glassGeo, glass, 520);
   for (let i = 0; i < shards.count; i++) {
     const radius = Math.pow(r(), 1.6) * 3.3;
     const angle = r() * Math.PI * 2;
     v.set(4.8 + Math.cos(angle) * radius * 0.52, DECK_Y + 0.012, -0.8 + Math.sin(angle) * radius);
-    q.setFromEuler(e.set(0, r() * 6, 0));
-    s.set(0.4 + r() * 1.3, 0.6 + r() * 0.5, 0.4 + r() * 1.6);
+    q.setFromEuler(e.set((r() - 0.5) * 0.5, r() * 6.3, (r() - 0.5) * 0.5));
+    const k = 0.6 + r() * 0.9;
+    s.set(k, 0.8 + r() * 0.5, k * (0.8 + r() * 0.4));
     shards.setMatrixAt(i, m.compose(v, q, s));
   }
   scene.add(shards);
 
-  for (let i = 0; i < 18; i++) {
-    const piece = new THREE.Mesh(
-      fragmentGeometry(r, 0.12 + r() * 0.48, 0.015 + r() * 0.045, 0.1 + r() * 0.35),
-      r() < 0.6 ? paint : dark
-    );
+  // 车身碎片：撕下来的薄钣金和保险杠塑料，带弧度，边缘参差
+  for (let i = 0; i < 26; i++) {
+    const big = i < 6;
+    const w = big ? 0.16 + r() * 0.14 : 0.06 + r() * 0.12;
+    const piece = new THREE.Mesh(panelGeometry(r, w, w * (0.45 + r() * 0.5)), r() < 0.6 ? paint : dark);
     const travel = r();
     settleFragment(piece, 3.0 + travel * 3.1 + (r() - 0.5) * 0.7, -4.5 + travel * 6 + (r() - 0.5) * 2.5, r);
     scene.add(piece);
   }
+}
+
+// 弯曲的薄板：细分平面，边缘顶点随机内缩成撕裂边，整体弯一个弧度再加点褶皱
+function panelGeometry(r, w, d) {
+  const geo = new THREE.PlaneGeometry(w, d, 6, 4).rotateX(-Math.PI / 2);
+  const p = geo.attributes.position;
+  const bend = 0.25 + r() * 0.5;
+  // 撞击折出的一道折痕：折痕一侧翘起 25°~70°，碎片不会平贴在地上像纸片
+  const foldX = (r() - 0.2) * w * 0.4;
+  const foldA = 0.45 + r() * 0.8;
+  for (let i = 0; i < p.count; i++) {
+    let x = p.getX(i), z = p.getZ(i);
+    const edgeX = Math.abs(Math.abs(x) - w / 2) < 1e-5, edgeZ = Math.abs(Math.abs(z) - d / 2) < 1e-5;
+    if (edgeX) x *= 1 - r() * 0.35;
+    if (edgeZ) z *= 1 - r() * 0.4;
+    const v = (2 * z) / d;
+    let y = bend * v * v * d * 0.35 + (r() - 0.5) * 0.015 * w;
+    if (x > foldX) {
+      const t = x - foldX;
+      x = foldX + t * Math.cos(foldA);
+      y += t * Math.sin(foldA);
+    }
+    p.setXYZ(i, x, y, z);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// 混凝土碎块：凸多面体，朝某一方向的面算原墙面（材质 1），其余是断面（材质 0）
+function chunkGeometry(r, width, height, depth) {
+  const src = fragmentGeometry(r, width, height, depth);
+  const pos = src.attributes.position;
+  const dir = new THREE.Vector3(r() - 0.5, 0.3 + r(), r() - 0.5).normalize();
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
+  const tris = [[], []];
+  for (let t = 0; t < pos.count; t += 3) {
+    a.fromBufferAttribute(pos, t); b.fromBufferAttribute(pos, t + 1); c.fromBufferAttribute(pos, t + 2);
+    n.subVectors(c, b).cross(a.clone().sub(b)).normalize();
+    tris[n.dot(dir) > 0.7 ? 1 : 0].push(a.toArray(), b.toArray(), c.toArray());
+  }
+  src.dispose();
+  const verts = [...tris[0], ...tris[1]].flat();
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.addGroup(0, tris[0].length, 0);
+  geo.addGroup(tris[0].length, tris[1].length, 1);
+  geo.computeVertexNormals();
+  return geo;
 }
 
 // 刹车痕：从后方一路拐向护栏
