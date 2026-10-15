@@ -357,8 +357,9 @@ export function createFinale({ scene, camera, tablet, ui }) {
   let padPlaced = false, padOn = false;
   const typedAt = (t) => Math.max(0, Math.min(CHARS, Math.floor((t - T.type0) * CPS)));
   function bodyAt(t) {
+    // 尸体模型先不出现。位置仍按全景时段摆好，之后要露出来时把下面改回 show
     const show = t >= T.cut && t < T.end;
-    body.visible = show;
+    body.visible = false;
     if (!show) return;
     body.position.set(REST.x, DECK_Y, REST.z);
     body.rotation.set(0, BODY_YAW, 0);

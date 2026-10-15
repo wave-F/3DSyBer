@@ -7,6 +7,7 @@ import { buildTwistProps } from './props.js';
 import { createTablet } from './tablet.js';
 import { createViewmodel } from './viewmodel.js';
 import { createPryArm, PRY_INSERT, PRY_HIT } from './pryArm.js';
+import { createCardArm, CARD_HIT, CARD_INSERT_END, CARD_PULL0, CARD_PULL_END } from './cardArm.js';
 import { CLUES, CLUES_ZH, PROBES_ZH, clueEN, probeEN, ROUNDS, REPORTS, LINES, ENDINGS, CARD_HACK, ROOT_HACK, TARGET_INDEX } from './clues.js';
 import { buildCardSlot, buildRootKey } from './cardSlot.js';
 import { DOOR_AJAR, CAR_POS } from '../crash.js';
@@ -35,7 +36,7 @@ const CLUE_LINES = {
   front: 'clueFront', rail: 'clueRail', debris: 'clueDebris',
   scrape: 'clueScrape', skidB: 'clueSkidB', trim: 'clueTrim',
   p2car: 'clueP2car', p3override: 'clueP3override', p4end: 'clueP4end',
-  dMode: 'clueDMode', dReason: 'clueDReason', dRaw: 'clueDRaw', dRawOpen: 'clueDRawOpen', rTime: 'clueRTime',
+  dReason: 'clueDReason', dRaw: 'clueDRaw', dRawOpen: 'clueDRawOpen', rTime: 'clueRTime',
 };
 const READY_LINES = { 1: 'ready1', 2: 'ready2' };   // 第 1、2 轮现场线索标完、还没进黑梦
 const LINE_DELAY = 1.3;          // 分析完成到独白开口（秒）：结果面板 0.45 秒弹出，结论行再约 0.8 秒淡入
@@ -60,16 +61,15 @@ const TIP_TIME = 15;             // 操作说明最长显示时间
 // 第 3 轮：撬开右侧车门（门尾已被撞得外翻）→ 驾驶舱转向柱下方检修接口 → 按 E 插卡（镜头下蹲、扫描枪换成取证卡）→ 平板接入画面 → 车载数据线索
 //   → TAB 收起平板 → 倒放拔卡、换回扫描枪 → 按住 R 黑梦 3（A 车接管 / 零号保障通道）→ 复核报告 03（特权保护）
 //   按住 E 移交审查 → 假结局 → 按 E 回到报告 03
-//   TAB 暂不移交 → 追问 P0 何时写入（按住 TAB 跳过）→ 报告改写为「移交暂缓」→ 收起后独白（接口日志：根钥登录过）→ 第 4 轮
+//   TAB 暂不移交 → 追问零号保障何时写入（按住 TAB 跳过）→ 报告改写为「移交暂缓」→ 收起后独白（接口日志：根钥登录过）→ 第 4 轮
 // 第 4 轮：驾驶舱里拾取程叙的根钥（驾驶座与中控通道之间）→ 平板自动举起、根钥接入
-//   → 原始字段、P0 授予、时间轴叠合 → 陈墨质问仪器 → 按住 R 黑梦 4（通道生成 / 黄车切入 / A 车去向）→ 复核报告 04（系统主动制造事故）
+//   → 原始字段、零号保障授予、时间轴叠合 → 陈墨质问仪器 → 按住 R 黑梦 4（通道生成 / 黄车切入 / A 车去向）→ 复核报告 04（系统主动制造事故）
 //   → 报告页按 TAB：平板不收起，直接播对象索引（处置目标：注销）→ 再按 TAB 收起 → 独白 → 结局动画
 // 结局（src/investigation/finale.js）：跑车撞飞陈墨 → 地上的终端自动写报告并归档 → 黑屏
 export function createInvestigation(scene, camera, crash, controls, gait) {
   const props = buildTwistProps(scene, crash);
   const fx = createAnalysisFx(scene, camera);
   const ui = createUI();
-  ui.onFinale(() => loading.showTitle());
   preloadClueImages(CLUES);
   const recon = createRecon(scene, crash);
   const tablet = createTablet(camera);
@@ -81,9 +81,11 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   const DOOR_OPEN = 55 * Math.PI / 180;
   const door = { node: null, handle: new THREE.Vector3(), out: new THREE.Vector3() };
   let pryArm = null;   // 撬门的手和撬棍（挂在车模根节点下）
+  let cardArm = null;  // 插卡 / 拔卡的手和取证卡（挂在车模根节点下）
   crash.onCarReady(({ door: node }) => {
     door.node = node;
     pryArm = createPryArm(node.parent);
+    cardArm = createCardArm(node.parent);
     // 把手点：门尾上部外侧（车门本地坐标，原点在前铰链，车尾 -Z、外侧 -X）
     const box = new THREE.Box3().setFromBufferAttribute(node.geometry.attributes.position);
     door.box = box;
@@ -135,7 +137,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   let finale = null;           // 报告 04 之后：null | 'index'（对象索引已显示）| 'done'
   let endingT = 0;             // 假结局黑场文字出现后的计时，防止误按立刻返回
   // 第 3 轮插卡：phase 为 null | camIn | card | hack | data | out | pull | camOut
-  const ins = { phase: null, t: 0, done: false, camFrom: new THREE.Vector3(), quatFrom: new THREE.Quaternion(), camTo: new THREE.Vector3(), quatTo: new THREE.Quaternion() };
+  // animT：插卡动画的时间（-1 未开始），和 phase 分开走：卡插到底后进入 hack，松手收回的动画还要继续播
+  const ins = { phase: null, t: 0, animT: -1, hit: false, done: false, camFrom: new THREE.Vector3(), quatFrom: new THREE.Quaternion(), camTo: new THREE.Vector3(), quatTo: new THREE.Quaternion() };
   let portAimed = false;
 
   let mode = 'explore';        // explore | recon | report | ending | insert | death
@@ -147,7 +150,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   let started = false;
   let intro = false;   // 开场下车镜头播放中（src/intro.js 控制）
   let holdR = false, dreamHold = 0;   // 按住 R 构建黑梦的进度（0~1）
-  let firstDream = true;              // 第一次进入黑梦有完整过场
+  let firstDream = true;              // 第 1 轮黑梦还没走过引导。跳到后面的黑梦不消耗它，也不播引导
   // 进入黑梦的过场：on 期间锁定视角与操作，镜头从 (yaw0, pitch0) 转到 A 车起点
   // phase：turn | wait | watch | end | talk | scrub（后五个只在第一次黑梦的引导里出现）
   const enter = { on: false, phase: null, guide: false, t: 0, yaw0: 0, pitch0: 0, dYaw: 0, pitch1: 0, back1: 0 };
@@ -365,10 +368,11 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
 
   // 切到黑梦，镜头缓慢转向 A 车起点
   // 之后的黑梦：回放立即开始播放，转完交还操作
-  // 第一次黑梦（引导）：转向 → 稍等 → 播放，镜头全程跟车 → 播完陈墨说有问题 → 玩家滚滚轮倒回第一个异常时刻 → 暂停、弹出操作说明、交还操作
+  // 第 1 轮黑梦（引导）：转向 → 稍等 → 播放，镜头全程跟车 → 播完陈墨说有问题 → 玩家滚滚轮倒回第一个异常时刻 → 暂停、弹出操作说明、交还操作
+  // 测试跳到第 2 轮及以后再进黑梦：和正常后续黑梦一样，回放立刻播放，转完交还操作
   function enterDream() {
     setMode('recon');
-    const first = firstDream;
+    const first = firstDream && round === 1;
     rt = 0; playing = !first;
     recon.setTime(0);
     recon.startPos(_look).sub(camera.position).normalize();
@@ -389,7 +393,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       ui.setRite(0, 0, `RECONSTRUCTION ${String(round).padStart(2, '0')}`);
       fx.pulse(camera.position);
     }
-    firstDream = false;
+    if (first) firstDream = false;
   }
 
   function endEnter() {
@@ -694,7 +698,10 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       showTask();
       setTimeout(() => ui.say(LINES.target).then(() => {
         if (finale !== 'done' || mode !== 'explore') return;
-        startDeath();
+        setTimeout(() => {
+          if (finale !== 'done' || mode !== 'explore') return;
+          startDeath();
+        }, 1500);
       }), 600);
     }
   }
@@ -800,7 +807,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   function startRound3() {
     round = 3;
     storyTask = true;
-    ins.done = false; ins.phase = null;
+    ins.done = false; ins.phase = null; ins.animT = -1; cardArm?.hide();
     pry.done = false; pry.phase = null; setDoor(DOOR_AJAR); pryArm?.hide();
     slot.setState('idle');
     if (mode === 'explore') setMode('explore');
@@ -810,7 +817,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     storyTask = false;
     after3Said = false;
     roundDone[3] = false;
-    ins.done = false; ins.phase = null;
+    ins.done = false; ins.phase = null; ins.animT = -1; cardArm?.hide();
     pry.done = false; pry.phase = null; setDoor(DOOR_AJAR); pryArm?.hide();
     slot.setState('idle');
     clues.forEach((c) => { if (c.round === 3) { c.unlocked = false; c.done = false; } });
@@ -879,7 +886,11 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     tablet.showClue('rTime');
     keySaid.then((completed) => {
       if (completed === false) return;
-      if (round === 4 && mode !== 'death') ui.say(LINES.rootRead);
+      if (round !== 4 || mode === 'death') return;
+      // 先说原始记录和时间差，再说质问。这两句不再在翻看详情时重复。
+      dataSaid.add('dRawOpen');
+      dataSaid.add('rTime');
+      ui.say([...LINES.clueDRawOpen, ...LINES.clueRTime, ...LINES.rootRead]);
     });
   }
 
@@ -932,17 +943,22 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     ui.setPrompt(null);
     ui.clearToast();
     ins.phase = 'camIn'; ins.t = 0;
+    ins.animT = -1; ins.hit = false;
     ins.camFrom.copy(camera.position);
     ins.quatFrom.copy(camera.quaternion);
     ins.saved = camera.position.clone();
     ins.savedQuat = camera.quaternion.clone();
     // 从副驾一侧探身进驾驶舱：镜头在接口外侧偏后、略高，右手从画面右侧伸进来
+    // 插卡动画加载好后，终点机位用 Blender 里摆好的 CardCam（与下面算法的结果一致，保证手和卡槽对齐）
     const back = new THREE.Vector3(-1, 0, 0).transformDirection(crash.carGroup.matrixWorld).setY(0).normalize();
     ins.camTo.copy(slot.world).addScaledVector(slot.normal, 0.42).addScaledVector(back, 0.18);
     ins.camTo.y += 0.16;
+    if (cardArm?.ready) cardArm.camPose(ins.camTo, ins.quatTo);
     ins.path = cabinPath(ins.saved, ins.camTo);
-    _m.lookAt(ins.camTo, slot.world, camera.up);
-    ins.quatTo.setFromRotationMatrix(_m);
+    if (!cardArm?.ready) {
+      _m.lookAt(ins.camTo, slot.world, camera.up);
+      ins.quatTo.setFromRotationMatrix(_m);
+    }
   }
   // 卡插到底：指示灯开始闪，停一下让玩家看到卡插好了，再举起平板
   function onCardInserted() {
@@ -960,9 +976,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     ins.done = true;
     syncTablet();
     tablet.showClue('dMode');
-    ui.say(LINES.cardRead);
   }
-  // 收起平板。合上之后立刻起身，拔卡和起身同时进行
+  // 收起平板。合上之后先拔卡（镜头停在车里），拔完再起身
   function finishInsert(relock) {
     ins.phase = 'out';
     sound.play('ui/panel_close');
@@ -972,12 +987,28 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   }
   // 锁定期间相机由这里控制（玩家更新仍会把高度拉回站姿，所以每帧覆盖）
   const _q = new THREE.Quaternion();
+  const PULL_OUT = 0.4 + 0.15 + 0.15;   // 拔卡段里卡离开卡槽的时刻（指示灯回到待机）
   function updateInsert(dt) {
     ins.t += dt;
-    vm.setCardHidden(tablet.amount > 0.35);
-    if (ins.phase === 'out' && tablet.amount <= 0) {
-      ins.phase = 'camOut'; ins.t = 0;
-      vm.removeCard(() => slot.setState('idle'));
+    // 插卡动画：推到底时读卡；之后松手、手收出画面，卡留在槽里（不管 phase 走到哪一步都播完）
+    if (ins.animT >= 0 && ins.animT < CARD_INSERT_END) {
+      ins.animT = Math.min(CARD_INSERT_END, ins.animT + dt);
+      cardArm.set(ins.animT);
+      if (!ins.hit && ins.animT >= CARD_HIT) { ins.hit = true; onCardInserted(); }
+    }
+    // 平板合上：先拔卡，拔完再起身（插卡动画没播完就等它播完）
+    if (ins.phase === 'out' && tablet.amount <= 0 && (ins.animT < 0 || ins.animT >= CARD_INSERT_END)) {
+      if (cardArm?.ready && ins.animT >= 0) { ins.phase = 'pull'; ins.t = 0; ins.pulled = false; }
+      else { ins.phase = 'camOut'; ins.t = 0; slot.setState('idle'); }
+    }
+    if (ins.phase === 'pull') {
+      cardArm.set(CARD_PULL0 + ins.t);
+      if (ins.t >= PULL_OUT && !ins.pulled) { ins.pulled = true; slot.setState('idle'); }
+      if (ins.t >= CARD_PULL_END - CARD_PULL0) {
+        cardArm.hide();
+        slot.setState('idle');
+        ins.phase = 'camOut'; ins.t = 0;
+      }
     }
     if (ins.phase === 'camIn' || ins.phase === 'camOut') {
       const out = ins.phase === 'camOut';
@@ -989,13 +1020,10 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
           setMode('explore');
           return;
         }
+        // 镜头到位：开始插卡动画（模型没加载好就直接读卡）
         ins.phase = 'card';
-        camera.updateMatrixWorld();
-        _m.copy(camera.matrixWorld).invert();
-        const target = slot.world.clone().applyMatrix4(_m);
-        const dir = slot.normal.clone().negate().transformDirection(_m);
-        const up = new THREE.Vector3(0, 1, 0).transformDirection(_m);
-        vm.insertCard(target, dir, up, onCardInserted);
+        if (cardArm?.ready) { ins.animT = 0; ins.hit = false; cardArm.set(0); }
+        else onCardInserted();
       }
     } else {
       camera.position.copy(ins.camTo);
@@ -1212,7 +1240,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       // 游戏结束：停在黑屏，释放鼠标但不弹暂停层
       controls.keepOverlayHidden = true;
       controls.unlock();
-      // 黑屏停一会儿，再淡入「序章 · 完」。点任意处后淡出，回到标题界面
+      // 黑屏停一会儿，再淡入「序章 · 完」，停在这一屏
       setTimeout(() => ui.fin(true), 1200);
     });
   }
@@ -1298,6 +1326,15 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     if (p.t > 0) return;
     pendingSay = null;
     ui.say(p.lines).then(p.resolve);
+  }
+
+  // 接管记录的结论打出之后才说。接入画面结束时先停在这一页，不提前开口。
+  let cardReadSaid = false;
+  function tickCardRead() {
+    if (cardReadSaid || ui.talking) return;
+    if (tablet.viewing?.id !== 'dMode') return;
+    cardReadSaid = true;
+    ui.say(LINES.cardRead);
   }
 
   // 车载数据没有按住 E 的分析：平板上第一次看完某条详情（结论已打出）时播独白。
@@ -1555,7 +1592,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     update(realDt) {
       ui.updateDialogue(realDt);
       tablet.update(realDt);
-      if (!intro) { updateRootHold(realDt); tickDataLine(); tickPendingSay(realDt); }
+      if (!intro) { updateRootHold(realDt); tickCardRead(); tickDataLine(); tickPendingSay(realDt); }
       ui.setTabletOpen(tablet.amount > 0.05);
       ui.updateHud(realDt);
       sound.setTablet(tablet.open);

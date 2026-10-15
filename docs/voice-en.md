@@ -36,7 +36,7 @@ node -e "Promise.all([import('./src/investigation/clues.js'),import('./src/audio
 
 中性美式英语。陈墨：成熟、稍沙哑、疲惫克制，怀疑逐渐变成压住恐惧的质问；内心与外部对白共用同一音色，内心更轻、更近。派单员：干练成熟女声，催工单而非威胁玩家。仪器：独立的中性服务声线，始终平静，不提前暴露反派意味。三者都录干声；无线电与设备质感留给 Studio。
 
-正式名称：Chen Mo / Cheng Xu / Lu Shicheng / Meridian / Chengyue / Rootkey / Blackdream / Zero Priority。`B1016` 按 B + 单个数字读，`P0` 按 P zero 读。中文姓名在合成输入中使用英语近似读音，正式英文稿不改拼写；这些读音必须实听验收。
+正式名称：Chen Mo / Cheng Xu / Lu Shicheng / Meridian / Chengyue / Rootkey / Blackdream / Zero Priority。`B1016` 按 B + 单个数字读。剧情里不再出现 P0，保障一律说 Zero Priority。中文姓名在合成输入中使用英语近似读音，正式英文稿不改拼写；这些读音必须实听验收。
 
 ## 本机配置
 

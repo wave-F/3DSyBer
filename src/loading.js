@@ -19,7 +19,7 @@ const FADE_MS = 3600;        // 黑场淡出（与 index.html 的 .fading 一致
 // 文件名 → 状态文字
 const LABELS = [
   [/supercar/, '事故车辆', 'VEHICLE'], [/police/, '警车', 'POLICE CAR'], [/bldg|building/, '城市建筑', 'BUILDINGS'], [/mannequin/, '人物', 'FIGURE'],
-  [/\.hdr/, '环境光照', 'LIGHTING'], [/scanner|card-arm/, '调查设备', 'TOOLS'], [/draco/, '模型解码器', 'DECODER'], [/\.(jpe?g|png|webp)/, '材质贴图', 'TEXTURES'],
+  [/\.hdr/, '环境光照', 'LIGHTING'], [/scanner|fps-arm|card-insert|pry-arm/, '调查设备', 'TOOLS'], [/draco/, '模型解码器', 'DECODER'], [/\.(jpe?g|png|webp)/, '材质贴图', 'TEXTURES'],
 ];
 const COPY = {
   zh: { init: '正在载入程序', load: '正在加载', prep: '正在准备画面', ready: '准备就绪', fallback: '场景资源' },
@@ -52,7 +52,6 @@ let assetsDone = false, warmStart = 0, good = 0, lastFrame = 0;
 let shown = 0, ready = false, started = false;
 let startFn = null, wakeFn = null, denyFn = null;
 let fadeAt = 0;
-let replay = false;
 let phase = 'init';
 let lastUrl = '';
 
@@ -151,15 +150,6 @@ function beginGame() {
 
 root.addEventListener('click', () => {
   if (!ready) { if (!started) denyFn?.(); return; }   // 还没就绪：无效点击
-  // 结局回到标题后再点「开始」：先盖黑，再整页重开，调查进度不带着进下一轮
-  if (replay) {
-    ready = false;
-    replay = false;
-    root.style.pointerEvents = 'none';
-    root.classList.add('closing');
-    setTimeout(() => location.reload(), BLACK_MS);
-    return;
-  }
   beginGame();
 });
 
@@ -173,20 +163,6 @@ export const loading = {
     extraLabel = label;
     extraLabelEN = en;
     Promise.resolve(promise).finally(() => { extraDone++; lastChange = performance.now(); });
-  },
-  // 序章结束后：标题页从黑里淡入，进度条保持收起，等再次点击开始
-  showTitle() {
-    replay = true;
-    ready = true;
-    root.style.pointerEvents = '';
-    root.classList.remove('gone', 'fading', 'closing');
-    root.classList.add('ready', 'hide-bar');
-    root.style.transition = 'none';
-    root.style.opacity = '0';
-    void root.offsetWidth;
-    root.style.transition = 'opacity 1.4s ease-in-out';
-    root.style.opacity = '1';
-    setTimeout(() => { root.style.transition = ''; root.style.opacity = ''; }, 1500);
   },
   get done() { return root.classList.contains('gone'); },
   // 距离黑幕完全揭开还剩多少毫秒；还没开始淡出时为 null

@@ -56,9 +56,9 @@ test('中英字幕切换和重复读取 Proxy 不会丢配音，改写句不套�
       assert.equal(LINES.opening[1].text, lang === 'en' ? 'I’m here.' : '到了。');
       assert.equal(voiceOf(LINES.opening[1]), 'opening_02');
       assert.equal(voiceOf(LINES.opening[0]), undefined); // 呼号已改为 B1016，不套 B1234 的录音
-      assert.equal(voiceOf(LINES.cardRead[0]), 'cardRead_02');
+      assert.equal(voiceOf(LINES.cardRead[0]), undefined);
       assert.equal(voiceOf(LINES.keyFound[1]), 'keyFound_03');
-      assert.equal(voiceOf(LINES.rootRead[1]), 'rootRead_03');
+      assert.equal(voiceOf(LINES.rootRead[0]), undefined);
       assert.equal(voiceOf(LINES.dream1[0]), undefined);
       assert.equal(voiceOf(LINES.rootRead.at(-1)), undefined);
       assert.equal(voiceOf(LINES.target.at(-1)), undefined);
@@ -84,7 +84,7 @@ test('启动时已保存英文语言也能正确绑定配音', () => {
     const voiceOf = createVoiceMap(LINES, VOICE_LINES);
     assert.equal(LINES.opening[1].text, 'I’m here.');
     assert.equal(voiceOf(LINES.opening[1]), 'opening_02');
-    assert.equal(voiceOf(LINES.cardRead[0]), 'cardRead_02');
+    assert.equal(voiceOf(LINES.cardRead[0]), undefined);
     assert.equal(voiceOf(LINES.opening[0]), undefined);
     assert.equal(voiceOf(LINES.dream1[0]), undefined);
   `], { encoding: 'utf8' });

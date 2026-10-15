@@ -211,10 +211,10 @@ function buildP0(arc) {
     g.fillStyle = '#ffffff';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.font = '600 92px "SF Mono", Menlo, monospace';
-    g.fillText('P0', 256, 62);
+    g.font = '600 64px "PingFang SC", "Helvetica Neue", sans-serif';
+    g.fillText(tx('零号保障', 'ZERO PRIORITY'), 256, 62, 490);
     g.font = '500 38px "PingFang SC", sans-serif';
-    g.fillText(tx('零号保障 · 让行区', 'ZERO PRIORITY · YIELD'), 256, 150, 490);
+    g.fillText(tx('让行区', 'YIELD'), 256, 150, 490);
     map.needsUpdate = true;
   };
   paintLane();
