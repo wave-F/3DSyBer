@@ -4,6 +4,7 @@ import {
 } from 'three/tsl';
 import { gameTime } from './investigation/clock.js';
 import { loadTexture } from './textures.js';
+import { fadeWithDistance } from './fog.js';
 import ADS from './data/ads.json';
 
 // 广告轮播：所有大屏共用一张图集（tools/make_ad_atlas.py 生成）和一个材质
@@ -114,6 +115,7 @@ export function adHoloMaterial() {
   holoMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
   holoMat.colorNode = img.mul(tint).mul(mask).mul(scan).mul(sin(t.mul(2.3)).mul(0.08).add(0.92)).mul(1.5);
   holoMat.fog = false;
+  fadeWithDistance(holoMat);
   return holoMat;
 }
 

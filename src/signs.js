@@ -5,6 +5,7 @@ import { neonSignTexture, lightboxTexture, tickerTexture, logoTexture } from './
 import { mergeStatic } from './merge.js';
 import { addLightGroup } from './debugLights.js';
 import { adSlot, adGeometry, adScreenMaterial, adHoloMaterial } from './ads.js';
+import { fadeWithDistance } from './fog.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -66,6 +67,7 @@ export function createSignKit(scene, r) {
     const tex = logoTexture(text, color, sub);
     m.colorNode = texture(tex, uv()).rgb.mul(blink.mul(off).add(step(off, 0.5))).mul(2.6);
     m.fog = false;
+    fadeWithDistance(m);
     return { m, color, aspect: tex.image.width / tex.image.height };
   });
 

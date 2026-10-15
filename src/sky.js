@@ -6,8 +6,9 @@ import {
 } from 'three/tsl';
 import { loadTexture, farWindowTexture, idTexture } from './textures.js';
 import { addLightGroup } from './debugLights.js';
+import { FOG_HEX, fadeWithDistance } from './fog.js';
 
-export const FOG_HEX = 0x1b2726;
+export { FOG_HEX };
 
 export const MEGA = [
   { x: 60, z: -560, w: 150, d: 120, h: 460, id: 'H7', c: '#20e8ff' },
@@ -78,6 +79,7 @@ function buildMegabuildings(scene) {
     const idMat = new THREE.MeshBasicMaterial({ map: idTexture(m.id, m.c), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
     idMat.color.setScalar(3);
     idMat.fog = false;
+    fadeWithDistance(idMat);
     const id = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), idMat);
     // 编号贴在朝向桥的那一面
     const useX = Math.abs(m.x) > Math.abs(m.z);
@@ -102,8 +104,8 @@ function holoMaterial(file, side = THREE.DoubleSide, { k = 1.6, lo = 0.05, hi = 
   // 压掉 JPG 底色噪点，避免出现方框
   const mask = smoothstep(lo, hi, img.r.max(img.g).max(img.b));
   m.colorNode = img.mul(mask).mul(scan).mul(flick).mul(k);
-  m.fog = false; // 加法混合的面片若参与雾计算，会叠加出雾色方框
-  return m;
+  m.fog = false; // 加法混合的面片若参与雾计算，会叠加出雾色方框；改为只按距离变暗
+  return fadeWithDistance(m);
 }
 function buildHolograms(scene) {
   const koi = new THREE.Mesh(new THREE.PlaneGeometry(46, 46), holoMaterial('gen/holo_koi.jpg'));
@@ -143,6 +145,7 @@ function buildHolograms(scene) {
   const ringMat = new THREE.MeshBasicMaterial({ color: 0xffb030, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
   ringMat.color.multiplyScalar(2.5);
   ringMat.fog = false;
+  fadeWithDistance(ringMat);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(9, 0.25, 6, 48), ringMat);
   ring.rotation.x = Math.PI / 2;
   ring.position.set(-83, 137.5, -56);
