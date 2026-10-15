@@ -20,7 +20,7 @@
 | `src/player.js` | 指针锁定、WASD、护栏与封锁夹紧、事故车碰撞 |
 | `src/crash.js` | 事故超跑、脱落轮、`CAR_POS`、碰撞盒 |
 | `src/rain.js` | 跟随相机的雨线 |
-| `src/sky.js` | 雾色、远景巨楼、全息广告、飞行器光点 |
+| `src/sky.js` | 雾色、夜空天空盒（`public/assets/sky_overcast.jpg`）与低空碎云、远景巨楼、全息广告、飞行器光点 |
 | `src/city.js` | 程序化街区与近处屏幕点光 |
 | `src/buildings.js` | 程序楼样式套件 |
 | `src/modelBuildings.js` | 四栋 GLB 摆放、脚印、招牌霓虹覆盖 |

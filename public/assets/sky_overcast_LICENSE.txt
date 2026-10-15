@@ -1,0 +1,8 @@
+sky_overcast.jpg
+
+"Overcast Soil (Pure Sky)" by Poly Haven
+https://polyhaven.com/a/overcast_soil_puresky
+Licensed under CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)
+
+Changes: official tonemapped JPG (8192x4096), upper hemisphere only, resized to 4096x1024.
+Night grading is done in src/sky.js.
