@@ -44,7 +44,9 @@ loading.onDeny(() => sound.play('ui/deny'));
 const renderer = new THREE.WebGPURenderer();
 // Forward+ 分簇光照：每个像素只计算真正照到它的点光源（灯一盏不少，开销按覆盖范围算）
 renderer.lighting = new ClusteredLighting(64, 32, 24, 16);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+// 画质：像素比、体积雾、屏幕反射（原版 1.5 / 雾 0.5·6 步·24 灯 / 反射 80·0.5，帧率对比后定为下面这套）
+const QUALITY = { pixelRatio: 1.25, fog: { res: 0.33, lightSteps: 4, maxLights: 12 }, ssr: { maxDistance: 50, quality: 0.3 } };
+renderer.setPixelRatio(Math.min(devicePixelRatio, QUALITY.pixelRatio));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
@@ -86,16 +88,45 @@ staticWorld.name = '桥与城市';
 scene.add(staticWorld);
 buildBridge(staticWorld);
 const updateCity = buildCity(staticWorld);
-const gi = createStaticGI({
+// 静态探针先停用：不创建、不采集、不等待。实现仍在 globalIllumination.js，改回 true 即恢复。
+const USE_STATIC_GI = false;
+const gi = USE_STATIC_GI ? createStaticGI({
   scene, world: staticWorld, ambientLights: [hemi, moon], assetsReady: updateCity.ready,
   volume: {
     width: HALF_W * 2 + 6, height: 6, depth: CORDON.z1 - CORDON.z0 + 20,
     position: [0, DECK_Y + 3.3, (CORDON.z0 + CORDON.z1) / 2],
   },
-});
-loading.waitFor(gi.ready, '静态全局光照', 'STATIC GLOBAL ILLUMINATION');
-addLightGroup('全局光照（静态探针）', (on) => gi.setEnabled(on));
-if (import.meta.env.DEV) window.__gi = gi;
+}) : null;
+if (gi) {
+  loading.waitFor(gi.ready, '静态全局光照', 'STATIC GLOBAL ILLUMINATION');
+  if (import.meta.env.DEV) window.__gi = gi;
+  // 暂停时右上角直接切换，方便和关灯后的画面对比。正式构建没有这个按钮。
+  let giOn = true;
+  let giButton = null;
+  addLightGroup('全局光照（静态探针）', (on) => {
+    giOn = on;
+    gi.setEnabled(on);
+    if (giButton) giButton.textContent = `测试 · 静态光照：${on ? '开' : '关'}`;
+  });
+  if (import.meta.env.DEV) {
+    giButton = document.createElement('button');
+    giButton.textContent = '测试 · 静态光照：开';
+    giButton.style.cssText = 'position:fixed;right:24px;top:364px;transform:scale(1.5);transform-origin:right top;z-index:12;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#9ad7ff;background:rgba(5,12,20,.7);border:1px solid rgba(154,215,255,.6);cursor:pointer;';
+    document.body.appendChild(giButton);
+    giButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      giOn = !giOn;
+      gi.setEnabled(giOn);
+      giButton.textContent = `测试 · 静态光照：${giOn ? '开' : '关'}`;
+      const box = document.querySelector('[data-label="全局光照（静态探针）"] input');
+      if (box) box.checked = giOn;
+      giButton.blur();
+    });
+    const syncGiButton = () => { giButton.style.display = document.pointerLockElement ? 'none' : ''; };
+    document.addEventListener('pointerlockchange', syncGiButton);
+    syncGiButton();
+  }
+}
 const crash = buildCrash(scene);
 const police = buildPoliceCar(scene);
 const updateSky = buildSky(scene);
@@ -169,9 +200,9 @@ const ssrPass = ssr(sceneColor, sceneDepth, sceneNormal, {
   roughnessNode: sceneMR.g,
 });
 ssrPass.resolutionScale = 0.5;
-ssrPass.maxDistance.value = 80;
+ssrPass.maxDistance.value = QUALITY.ssr.maxDistance;
 ssrPass.thickness.value = 0.6;
-ssrPass.quality.value = 0.5;
+ssrPass.quality.value = QUALITY.ssr.quality;
 const ssrAmt = uniform(1);
 let hdr = sceneColor.add(ssrPass.rgb.mul(ssrAmt));
 addLightGroup('屏幕反射', (on) => { ssrAmt.value = on ? 1 : 0; });
@@ -186,6 +217,7 @@ if (import.meta.env.DEV) window.__smoke = smoke.scene;   // 开发时截图对�
 
 // 1.2 体积雾：雾里的灯光散射（光晕、路灯光锥、底雾），在手和终端叠加之前
 const volFog = createVolumetricFog({ scene, camera, renderer, depthNode: sceneDepth });
+volFog.setQuality(QUALITY.fog);
 hdr = hdr.add(volFog.node);
 
 // 1.5 平板：举起时背景压暗虚化，叠加单独渲染的平板界面（独立场景，不会被场景遮挡）
@@ -265,7 +297,7 @@ renderer.setAnimationLoop(() => {
   updateCordon(step, camera.position);
   updateSky(clock.dt, clock.elapsed);
   updateCity();
-  gi.update(renderer);
+  gi?.update(renderer);
   inv.setFps(frame);
   inv.update(step);
   sound.updateBillboards(clock.elapsed);

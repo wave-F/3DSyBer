@@ -40,11 +40,11 @@ export const FOG = {
   coneOmni: 0.12,        // 路灯光锥外还剩多少光（灯头本身的光晕）
   maxDist: 90,           // 底雾算到多远（米），再远交给距离雾
 };
-// 画质与性能（改了要刷新页面）
-const RES = 0.5;          // 体积雾计算分辨率（相对画面）
+// 画质与性能：res / lightSteps / maxLights 可运行时切换（main.js 的画质档位），下面是上限
 const AMB_STEPS = 12;     // 底雾沿视线采样次数
-const LIGHT_STEPS = 6;    // 每盏灯沿视线采样次数
-const MAX_LIGHTS = 24;    // 同时参与散射的灯数上限
+const LIGHT_STEPS = 6;    // 每盏灯沿视线采样次数上限（着色器按这个展开）
+const MAX_LIGHTS = 24;    // 同时参与散射的灯数上限（uniform 数组长度）
+export const FOG_QUALITY = { res: 0.33, lightSteps: 4, maxLights: 12 };
 const WIND = new THREE.Vector3(1.2, -0.5, 0.5);   // 雾团飘动方向（米 / 秒），和雨的风向一致
 
 const U = {};
@@ -145,6 +145,7 @@ export function createVolumetricFog({ scene, camera, renderer, depthNode }) {
   const lightPos = uniformArray(Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4()), 'vec4');
   const lightCol = uniformArray(Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4()), 'vec4');
   const lightCount = uniform(0, 'int');
+  const lightSteps = uniform(FOG_QUALITY.lightSteps, 'int');
   const camWorld = uniform(new THREE.Matrix4());
   const camPos = uniform(new THREE.Vector3());
   const projInv = uniform(camera.projectionMatrixInverse);
@@ -192,18 +193,21 @@ export function createVolumetricFog({ scene, camera, renderer, depthNode }) {
         const a1 = atan(t1.sub(tc).div(D)).toVar();
         const j0 = jitter.add(float(i).mul(0.618)).fract();
         const sum = float(0).toVar();
+        const steps = float(lightSteps);
         for (let k = 0; k < LIGHT_STEPS; k++) {
-          const t = tc.add(D.mul(tan(mix(a0, a1, j0.add(k).div(LIGHT_STEPS)))));
-          const p = ro.add(rd.mul(t));
-          const v = p.sub(lp.xyz);
-          const d = v.length().max(0.05);
-          const dir = v.div(d);
-          const win = d.div(range).pow(4).oneMinus().clamp(0, 1).pow(2);
-          const cone = mix(float(1), mix(U.coneOmni, float(1), smoothstep(coneOuter, coneInner, dir.y.negate())), lc.w);
-          sum.addAssign(density(p).mul(phase(dot(dir, rd.negate()))).mul(win).mul(cone).mul(exp(t.mul(U.extinction).negate())));
+          If(int(k).lessThan(lightSteps), () => {
+            const t = tc.add(D.mul(tan(mix(a0, a1, j0.add(k).div(steps)))));
+            const p = ro.add(rd.mul(t));
+            const v = p.sub(lp.xyz);
+            const d = v.length().max(0.05);
+            const dir = v.div(d);
+            const win = d.div(range).pow(4).oneMinus().clamp(0, 1).pow(2);
+            const cone = mix(float(1), mix(U.coneOmni, float(1), smoothstep(coneOuter, coneInner, dir.y.negate())), lc.w);
+            sum.addAssign(density(p).mul(phase(dot(dir, rd.negate()))).mul(win).mul(cone).mul(exp(t.mul(U.extinction).negate())));
+          });
         }
         // f / pdf：1/d² 与角度均分的概率密度相消，只剩 (a1 - a0) / D
-        lit.addAssign(lc.xyz.mul(sum.mul(a1.sub(a0)).div(D.mul(LIGHT_STEPS))));
+        lit.addAssign(lc.xyz.mul(sum.mul(a1.sub(a0)).div(D.mul(steps))));
       });
     });
 
@@ -211,7 +215,7 @@ export function createVolumetricFog({ scene, camera, renderer, depthNode }) {
     return vec4(radiance, viewPos.z.negate());
   });
 
-  const volTex = rtt(march(), null, null, { type: THREE.HalfFloatType }).setResolutionScale(RES);
+  const volTex = rtt(march(), null, null, { type: THREE.HalfFloatType }).setResolutionScale(FOG_QUALITY.res);
 
   // 联合双边上采样：3×3 低分辨率邻域，按深度差拒绝跨边缘的样本，同时抹平抖动
   const upsample = Fn(() => {
@@ -263,7 +267,8 @@ export function createVolumetricFog({ scene, camera, renderer, depthNode }) {
     camWorld.value.copy(camera.matrixWorld);
     camPos.value.setFromMatrixPosition(camera.matrixWorld);
     renderer.getDrawingBufferSize(_size);
-    lowSize.value.set(Math.max(1, Math.floor(_size.x * RES)), Math.max(1, Math.floor(_size.y * RES)));
+    const res = FOG_QUALITY.res;
+    lowSize.value.set(Math.max(1, Math.floor(_size.x * res)), Math.max(1, Math.floor(_size.y * res)));
 
     picked.length = 0;
     const reach = U.maxDist.value * 1.5;
@@ -278,7 +283,7 @@ export function createVolumetricFog({ scene, camera, renderer, depthNode }) {
       picked.push(e);
     }
     picked.sort((a, b) => a.key - b.key);
-    const n = Math.min(picked.length, MAX_LIGHTS);
+    const n = Math.min(picked.length, FOG_QUALITY.maxLights, MAX_LIGHTS);
     for (let i = 0; i < n; i++) {
       const { light, pos, range } = picked[i];
       lightPos.array[i].set(pos.x, pos.y, pos.z, range);
@@ -288,7 +293,14 @@ export function createVolumetricFog({ scene, camera, renderer, depthNode }) {
     lightCount.value = n;
   }
 
-  return { node, update };
+  // 画质档位：分辨率、每灯步数、灯数上限都能运行时改，不用重编译着色器
+  function setQuality(q) {
+    Object.assign(FOG_QUALITY, q);
+    volTex.setResolutionScale(FOG_QUALITY.res);
+    lightSteps.value = Math.min(FOG_QUALITY.lightSteps, LIGHT_STEPS);
+  }
+
+  return { node, update, setQuality };
 }
 
 // ---------- 开发态调参面板 ----------

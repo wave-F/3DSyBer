@@ -108,18 +108,6 @@ function holoMaterial(file, side = THREE.DoubleSide, { k = 1.6, lo = 0.05, hi = 
   return fadeWithDistance(m);
 }
 function buildHolograms(scene) {
-  const koi = new THREE.Mesh(new THREE.PlaneGeometry(46, 46), holoMaterial('gen/holo_koi.jpg'));
-  koi.position.set(6, 68, -125);
-  koi.rotation.y = 0.15;
-  scene.add(koi);
-  holos.push({ mesh: koi, base: koi.position.clone(), rot: koi.rotation.y, k: 0.6 });
-
-  const geisha = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), holoMaterial('gen/holo_geisha.jpg'));
-  geisha.position.set(-18, 100, 150);
-  geisha.rotation.y = Math.PI - 0.2;
-  scene.add(geisha);
-  holos.push({ mesh: geisha, base: geisha.position.clone(), rot: geisha.rotation.y, k: 0.4 });
-
   // 右前方：斜靠在楼顶上的巨型人像（右前03_tower02，楼顶约 62m），侧身朝向桥面的玩家
   const LW = 44, LH = LW * 732 / 916;
   const lady = new THREE.Mesh(new THREE.PlaneGeometry(LW, LH), holoMaterial('gen/holo_lady.jpg', THREE.DoubleSide, { k: 2.0, lo: 0.04, hi: 0.16 }));
@@ -130,25 +118,24 @@ function buildHolograms(scene) {
   // 这张斜靠的大面片从桥面看会变成一道不受灯光开关影响的白光柱，默认关掉
   addLightGroup('楼顶全息人像', (on) => { lady.visible = on; }, false);
 
-  // 左侧后排楼顶上方：缓慢旋转的企业标志（左后02_bldgLG，楼顶约 136m）
-  // 背靠背两片单面，转到背面时文字也是正的
+  // 原艺伎全息的位置再往桥的另一头推远一点。背靠背两片单面，转到背面时文字也是正的
   const logo = new THREE.Group();
   const lmat = holoMaterial('gen/holo_logo.jpg', THREE.FrontSide, { k: 2.2 });
   for (const ry of [0, Math.PI]) {
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(34, 34 * 611 / 573), lmat);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(27.2, 27.2 * 611 / 573), lmat);
     face.rotation.y = ry;
     logo.add(face);
   }
-  logo.position.set(-83, 136 + 6 + 18, -56);
+  logo.position.set(-18, 118, 200);
   scene.add(logo);
-  // 投影环
+  // 投影环跟着标志，仍在画面下沿
   const ringMat = new THREE.MeshBasicMaterial({ color: 0xffb030, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
   ringMat.color.multiplyScalar(2.5);
   ringMat.fog = false;
   fadeWithDistance(ringMat);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(9, 0.25, 6, 48), ringMat);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(7.2, 0.2, 6, 48), ringMat);
   ring.rotation.x = Math.PI / 2;
-  ring.position.set(-83, 137.5, -56);
+  ring.position.set(-18, 100, 200);
   scene.add(ring);
   holos.push({ mesh: logo, base: logo.position.clone(), rot: 0, k: 0.3, bob: 0.8, spin: 0.25 });
 }
