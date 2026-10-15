@@ -10,7 +10,7 @@ const URL = `${import.meta.env.BASE_URL}assets/mannequin.glb`;
 const BLEND = 0.25; // 相邻动作之间的混合过渡秒数
 
 let loading = null;
-function loadMannequin() {
+export function loadMannequin() {
   if (!loading) loading = new Promise((res, rej) => new GLTFLoader().load(URL, res, undefined, rej));
   return loading;
 }

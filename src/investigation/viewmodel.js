@@ -62,11 +62,11 @@ export function createViewmodel(overlayScene, camera, gait = { phase: 0, amplitu
   rig.add(cardHolder);
   new GLTFLoader().load(`${import.meta.env.BASE_URL}assets/card-arm.glb`, (gltf) => {
     const model = gltf.scene;
-    // 卡头朝 -Z；模型平移到卡头位于原点（卡头在模型中约为 (0.035, 0.492, 0.496)）
+    // 卡头朝 -Z；模型平移到卡头位于原点（卡头在模型中约为 (0.072, 0.526, 0.490)）
     const S = 0.45;
     model.rotation.y = Math.PI;
     model.scale.setScalar(S);
-    model.position.set(0.035, -0.492, 0.496).multiplyScalar(S);
+    model.position.set(0.072, -0.526, 0.490).multiplyScalar(S);
     // 贴图比扫描枪手套亮，压暗到同一档
     model.traverse((o) => { if (o.isMesh) o.material.color.multiplyScalar(CARD_TINT); });
     cardHolder.add(model);

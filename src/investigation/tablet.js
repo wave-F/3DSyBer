@@ -88,7 +88,7 @@ function buildBody() {
   lg.fillStyle = 'rgba(150,170,190,0.55)';
   lg.textAlign = 'center';
   lg.textBaseline = 'middle';
-  lg.fillText('CIVIC ORDER SERVICES  ·  FRA-B1234', 512, 25);
+  lg.fillText('CIVIC ORDER SERVICES  ·  FRA-B1016', 512, 25);
   const ltex = new THREE.CanvasTexture(lc);
   ltex.colorSpace = THREE.SRGBColorSpace;
   const label = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.0047), new THREE.MeshBasicMaterial({ map: ltex, transparent: true, depthWrite: false }));
@@ -259,6 +259,7 @@ export function createTablet(camera) {
   function draw() {
     const { clues } = state.data;
     state.regions = [];
+    state.actionOn = false;
     state.typing = false;
     g.clearRect(0, 0, CW, CH);
     g.fillStyle = 'rgba(40,110,160,0.07)';
@@ -547,16 +548,21 @@ export function createTablet(camera) {
     text(`${tx('影像记录', 'STILL')} · EV-${evNo(c)}`, ix, iy + is + 44, 20, C.dim, 400, 'left', true);
   }
 
-  // 线索详情下方的操作按钮（例如插入根钥）：点击或按 E
+  // 线索详情下方的操作（插入根钥）：按住 E 或按住按钮读条，走满才确认
   function drawAction(a, x, y) {
+    state.actionOn = true;
     const w = 560, h = 76;
     const hot = inside(x, y, w, h);
-    const pulse = 0.12 + 0.08 * Math.sin(performance.now() / 260);
-    g.fillStyle = hot ? 'rgba(255,207,106,0.28)' : `rgba(255,207,106,${pulse})`;
+    const p = Math.max(0, Math.min(1, a.p || 0));
+    g.fillStyle = hot ? 'rgba(255,207,106,0.16)' : 'rgba(255,207,106,0.08)';
     g.fillRect(x, y, w, h);
+    if (p > 0) {
+      g.fillStyle = 'rgba(255,207,106,0.32)';
+      g.fillRect(x, y, w * p, h);
+    }
     corners(x, y, w, h, 16, C.gold, 3);
-    text(`${a.label}  [E]`, x + w / 2, y + h / 2 + 11, 30, hot ? C.white : C.gold, 500, 'center');
-    region(x, y, w, h, () => a.fn());
+    text(p > 0 ? a.holding : a.label, x + w / 2, y + h / 2 + 11, 30, hot || p > 0 ? C.white : C.gold, 500, 'center');
+    region(x, y, w, h, null, { hold: true, cursor: 'pointer' });
   }
 
   // 时间轴：按真实间隔排开各时刻，p 为绘制进度（0~1）
@@ -738,6 +744,15 @@ export function createTablet(camera) {
     document.body.style.cursor = r ? (r.cursor ?? 'pointer') : '';
     state.dirty = true;
   });
+  let pointerHold = false;
+  addEventListener('pointerdown', (e) => {
+    if (!canPoint() || e.button !== 0) return;
+    const p = pick(e);
+    const r = p && hitTest(p);
+    if (r?.hold) pointerHold = true;
+  });
+  addEventListener('pointerup', () => { pointerHold = false; });
+  addEventListener('pointercancel', () => { pointerHold = false; });
   addEventListener('click', (e) => {
     if (!canPoint()) return;
     if (e.target.closest('button')) return;
@@ -745,6 +760,7 @@ export function createTablet(camera) {
     // 点到平板外：能收起就收起（收起音）；当前收不起（待确认、接入中、过场）就是无效点击
     if (!p) { if (onBlank?.() === false) sound.play('ui/deny'); return; }
     const r = hitTest(p);
+    if (r?.hold) return;
     // 点到可交互区域是确认音，点到平板空白是拒绝音
     sound.play(r ? 'ui/click' : 'ui/deny');
     if (r) r.fn(e);
@@ -787,7 +803,6 @@ export function createTablet(camera) {
     else if (code === 'KeyW' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + m - 1) % m; state.typeT = 0; }
     else if (code === 'KeyS' && state.tab === 1) { const m = state.data.reports.length; state.repSel = (state.repSel + 1) % m; state.typeT = 0; }
     else if (code === 'KeyE' && state.tab === 0 && list[state.sel]?.fold) { sound.play('ui/click'); toggleFold(); return true; }
-    else if (code === 'KeyE' && state.tab === 0 && list[state.sel]?.action) { sound.play('ui/click'); list[state.sel].action.fn(); return true; }
     else return false;
     sound.play('ui/hover');
     state.dirty = true;
@@ -803,6 +818,7 @@ export function createTablet(camera) {
       state.hover = null;
       state.hack = null;
       document.body.style.cursor = '';
+      pointerHold = false;
     }
   }
 
@@ -906,6 +922,15 @@ export function createTablet(camera) {
       state.tab = 0; state.sel = i; state.typeT = 0; state.dirty = true;
     },
     get hacking() { return !!state.hack && !state.hack.held; },
+    // 线索页正在显示、且结论已打出来的那条线索（没在看详情时为 null）
+    get viewing() {
+      if (!state.open || state.boot < 1 || state.hack || state.tab !== 0 || state.world) return null;
+      const c = rows()[state.sel];
+      if (!c || c.fold || state.typeT * 6 <= c.lines.length) return null;
+      return c;
+    },
+    get actionHeld() { return pointerHold; },
+    get actionVisible() { return !!state.actionOn; },
     // 屏幕点亮且有文字正在打出（开机扫描线期间不算）
     get typing() { return state.open && state.boot >= 1 && state.typing; },
     // 平板在世界里的位置（手持时在镜头前，结局时在地上）

@@ -3,6 +3,7 @@ import { gameTime } from './investigation/clock.js';
 import {
   texture, uv, vec2, vec3, float, mix, smoothstep, max, normalMap, uniform,
   triplanarTexture, positionWorld, normalWorld, normalView, positionViewDirection, color,
+  positionView, sin, dot, step,
 } from 'three/tsl';
 import { mergeStatic } from './merge.js';
 import { addLightGroup } from './debugLights.js';
@@ -185,8 +186,41 @@ function roadMaterial() {
   // 金属度压低（原 0.55/0.9），避免路面像镜子一样把所有霓虹再反射一遍
   mat.metalnessNode = mix(float(0.15), float(0.5), puddle).mul(lane.a.mul(-0.5).add(1));
   mat.envMapIntensity = 0.3;
-  mat.normalNode = normalMap(texture(nor, aUV), vec2(puddle.oneMinus().mul(0.8).add(0.05)));
+  // 雨滴涟漪：水洼里满强度，普通湿沥青只留一点；远处淡出避免闪烁。
+  // 法线同时写进 MRT，SSR 倒影会跟着涟漪一起晃
+  const viewDist = positionView.z.negate();
+  const rippleAmt = mix(float(0.15), float(1), puddle).mul(smoothstep(28, 6, viewDist)).mul(0.45);
+  const g = rainRipples(positionWorld.xz, gameTime).mul(rippleAmt);
+  // 路面平面 u 沿 +X、v 沿 -Z，所以切线空间 y 对应 -Z
+  const tn = texture(nor, aUV).xyz.mul(2).sub(1);
+  const bumped = vec3(tn.xy.mul(puddle.oneMinus().mul(0.8).add(0.05)).add(vec2(g.x.negate(), g.y)), tn.z).normalize();
+  mat.normalNode = normalMap(bumped.mul(0.5).add(0.5));
   return mat;
+}
+
+const hash2 = (p) => sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))).mul(43758.5453).fract();
+
+// 程序化雨滴涟漪：世界 XZ 上铺几层错开的格子，每格每个周期随机落一滴，
+// 圆环向外扩散并衰减。返回高度场梯度（世界 x、z），用来扰动法线
+function rainRipples(p, time) {
+  let grad = vec2(0, 0);
+  const layers = [[0.5, 0.0, 1.15], [0.43, 3.7, 1.35], [0.61, 7.1, 0.95], [0.37, 11.3, 1.6]];
+  layers.forEach(([cell, off, rate], i) => {
+    const q = p.div(cell).add(off);
+    const id = q.floor();
+    const f = q.fract().sub(0.5);
+    const phase = hash2(id.add(i * 17.3)).x;
+    const tt = time.mul(rate).add(phase);
+    const t = tt.fract();
+    const h = hash2(id.add(tt.floor().mul(vec2(13.1, 7.7))));   // 每个周期换落点
+    const v = f.sub(h.sub(0.5).mul(0.36));
+    const d = v.length().max(0.0001);
+    const s = d.sub(t.mul(0.32)).div(0.05).clamp(-1, 1);          // 环带内 -1..1
+    const fade = t.oneMinus().pow(2).mul(step(0.3, h.y));            // 约 30% 的格子本周期不落
+    const amp = sin(s.mul(Math.PI)).mul(s.mul(s).oneMinus()).mul(fade);
+    grad = grad.add(v.div(d).mul(amp));
+  });
+  return grad;
 }
 
 // 假体积光：加法混合的圆锥，边缘与底部渐隐

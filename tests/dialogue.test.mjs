@@ -2,11 +2,14 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createDialoguePlayer } from '../src/audio/dialoguePlayer.js';
 import { VOICE_LINES } from '../src/audio/voiceEvents.js';
-import { bindRecordedVoices, dialogueLines, recordedVoiceId } from '../src/audio/dialogue.en.js';
+import { createVoiceMap } from '../src/audio/voiceMap.js';
 import { LINES } from '../src/investigation/clues.js';
-import { getLang, isPlayer, setLang } from '../src/i18n.js';
+import { RAW, bi, getLang, isPlayer, setLang } from '../src/i18n.js';
+
+const script = JSON.parse(readFileSync(new URL('./fixtures/voice-source.zh.json', import.meta.url), 'utf8'));
 
 const flush = () => Promise.resolve();
 
@@ -18,15 +21,15 @@ test('配音按未改写的中文绑定，不修改原稿，保留动态引导�
     transferred: [{ text: '知道了。' }],
     dreamGuide: (time) => [{ text: `倒回 ${time}` }],
   };
-  const bound = bindRecordedVoices(source);
-  assert.equal(bound.opening[0].voiceId, 'opening_02');
-  assert.equal(source.opening[0].voiceId, undefined);
-  assert.equal(bound.opening[1].voiceId, undefined);
-  assert.equal(bound.rootRead[0].voiceId, undefined);
-  assert.equal(bound.rootRead[0].ms, 2200);
-  assert.equal(bound.archived[0].voiceId, 'archived_03');
-  assert.equal(bound.transferred[0].voiceId, 'transferred_03');
-  assert.equal(bound.dreamGuide, source.dreamGuide);
+  const before = JSON.stringify(source);
+  const voiceOf = createVoiceMap(source, VOICE_LINES);
+  assert.equal(voiceOf(source.opening[0]), 'opening_02');
+  assert.equal(voiceOf(source.opening[1]), undefined);
+  assert.equal(voiceOf(source.rootRead[0]), undefined);
+  assert.equal(voiceOf(source.archived[0]), 'archived_03');
+  assert.equal(voiceOf(source.transferred[0]), 'transferred_03');
+  assert.equal(voiceOf(source.dreamGuide('00:01.4')[0]), undefined);
+  assert.equal(JSON.stringify(source), before);
 });
 
 test('中英字幕切换和重复读取 Proxy 不会丢配音，改写句不套旧录音', () => {
@@ -35,25 +38,31 @@ test('中英字幕切换和重复读取 Proxy 不会丢配音，改写句不套�
   globalThis.document = { documentElement: { dataset: {} } };
   try {
     setLang('zh');
+    const voiceOf = createVoiceMap(LINES, VOICE_LINES);
     const ids = Object.fromEntries(Object.entries(LINES)
       .filter(([, lines]) => Array.isArray(lines))
       .map(([group, lines]) => [group, lines.map((l) => {
-        assert.equal(l.voiceId ?? null, recordedVoiceId(group, l.text));
-        return l.voiceId;
+        const id = voiceOf(l);
+        if (id) assert.equal(VOICE_LINES[id].source, l.text);
+        return id;
       })]));
     for (const lang of ['en', 'zh', 'en']) {
       setLang(lang);
       for (let read = 0; read < 2; read++) {
         for (const [group, expected] of Object.entries(ids)) {
-          assert.deepEqual(LINES[group].map((l) => l.voiceId), expected);
+          assert.deepEqual(LINES[group].map(voiceOf), expected);
         }
       }
       assert.equal(LINES.opening[1].text, lang === 'en' ? 'I’m here.' : '到了。');
-      assert.equal(LINES.opening[1].voiceId, 'opening_02');
-      assert.equal(LINES.dream1[0].voiceId, undefined);
-      assert.equal(LINES.rootRead.at(-1).voiceId, undefined);
-      assert.equal(LINES.target.at(-1).voiceId, undefined);
-      assert.ok(LINES.dreamGuide('00:01.4').every((l) => !l.voiceId));
+      assert.equal(voiceOf(LINES.opening[1]), 'opening_02');
+      assert.equal(voiceOf(LINES.opening[0]), undefined); // 呼号已改为 B1016，不套 B1234 的录音
+      assert.equal(voiceOf(LINES.cardRead[0]), 'cardRead_02');
+      assert.equal(voiceOf(LINES.keyFound[1]), 'keyFound_03');
+      assert.equal(voiceOf(LINES.rootRead[1]), 'rootRead_03');
+      assert.equal(voiceOf(LINES.dream1[0]), undefined);
+      assert.equal(voiceOf(LINES.rootRead.at(-1)), undefined);
+      assert.equal(voiceOf(LINES.target.at(-1)), undefined);
+      assert.ok(LINES.dreamGuide('00:01.4').every((l) => !voiceOf(l)));
       assert.ok(isPlayer(LINES.opening[1].who));
       assert.equal(isPlayer(LINES.opening[0].who), false);
     }
@@ -70,10 +79,14 @@ test('启动时已保存英文语言也能正确绑定配音', () => {
     globalThis.localStorage = { getItem: () => 'en' };
     globalThis.document = { documentElement: { dataset: {} } };
     const { LINES } = await import(${JSON.stringify(new URL('../src/investigation/clues.js', import.meta.url).href)});
+    const { VOICE_LINES } = await import(${JSON.stringify(new URL('../src/audio/voiceEvents.js', import.meta.url).href)});
+    const { createVoiceMap } = await import(${JSON.stringify(new URL('../src/audio/voiceMap.js', import.meta.url).href)});
+    const voiceOf = createVoiceMap(LINES, VOICE_LINES);
     assert.equal(LINES.opening[1].text, 'I’m here.');
-    assert.equal(LINES.opening[1].voiceId, 'opening_02');
-    assert.equal(LINES.cardRead[0].voiceId, 'cardRead_02');
-    assert.equal(LINES.dream1[0].voiceId, undefined);
+    assert.equal(voiceOf(LINES.opening[1]), 'opening_02');
+    assert.equal(voiceOf(LINES.cardRead[0]), 'cardRead_02');
+    assert.equal(voiceOf(LINES.opening[0]), undefined);
+    assert.equal(voiceOf(LINES.dream1[0]), undefined);
   `], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
 });
@@ -176,15 +189,22 @@ test('仪器沉默只显示原字幕；声音失败时仍能完成剧情', async
 });
 
 test('发布的 65 条映射完整、时长有效，来源明确标记内部非商用', async () => {
-  const lines = dialogueLines();
+  // 已发布录音独立于待补录的新英文稿：按 manifest 和录音时的中文快照核对。
+  const manifest = JSON.parse(await readFile(new URL('../Fmod/voice-en-manifest.json', import.meta.url), 'utf8'));
   assert.equal(Object.keys(VOICE_LINES).length, 65);
-  for (const l of lines) {
+  assert.equal(manifest.clips.length, 65);
+  assert.deepEqual(new Set(Object.keys(VOICE_LINES)), new Set(manifest.clips.map((l) => l.id)));
+  for (const l of manifest.clips) {
     const clip = VOICE_LINES[l.id];
     assert.equal(clip.path, `event:/voice/en/${l.id}`);
     assert.equal(clip.text, l.text);
+    assert.equal(clip.source, l.source);
+    assert.equal(clip.source, script[l.group][Number(l.id.match(/_(\d+)$/)[1]) - 1].text);
+    assert.equal(clip.speaker, l.speaker);
+    assert.equal(clip.channel, l.channel);
+    assert.equal(clip.duration, l.wavDuration);
     assert.ok(clip.duration > 0);
   }
-  const manifest = JSON.parse(await readFile(new URL('../Fmod/voice-en-manifest.json', import.meta.url), 'utf8'));
   assert.equal(manifest.usage, 'noncommercial-internal');
   assert.equal(manifest.clips.length, 65);
   assert.ok(manifest.clips.every((c) => c.accountTier === 'free' && c.usage === 'noncommercial'));
@@ -192,4 +212,47 @@ test('发布的 65 条映射完整、时长有效，来源明确标记内部非�
   assert.ok(opening.edits.some((e) => e.type === 'trim-tail'));
   assert.ok(opening.wavDuration < opening.duration);
   assert.equal(VOICE_LINES.opening_02.duration, opening.wavDuration);
+});
+
+test('只有中文原文和录音原文一致的台词才播配音，改写过的台词不错配声音', () => {
+  const voiceOf = createVoiceMap(LINES, VOICE_LINES);
+  const raw = LINES[RAW];
+  assert.equal(voiceOf(raw.opening[0]), undefined); // B1016 与已录的 B1234 不一致
+  assert.equal(voiceOf(raw.opening[1]), 'opening_02');
+  // 每个对上的 ID，原文都必须与当前台词一致
+  let matched = 0;
+  for (const [group, list] of Object.entries(raw)) {
+    if (!Array.isArray(list)) continue;
+    list.forEach((line) => {
+      const id = voiceOf(line);
+      if (!id) return;
+      matched++;
+      assert.equal(VOICE_LINES[id].source, line.text);
+    });
+  }
+  assert.ok(matched > 0 && matched <= Object.keys(VOICE_LINES).length);
+  // 录音原文和当前台词不同时不播
+  const changed = { g: [{ text: '改写后的台词' }] };
+  assert.equal(createVoiceMap(changed, { g_01: { source: '原来的台词' } })(changed.g[0]), undefined);
+});
+
+test('台词挪到别的组：全局唯一时仍播原录音，同组优先，多处相同时不播', () => {
+  const clips = { a_01: { source: '挪走的一句' }, a_02: { source: '重复的一句' }, b_01: { source: '重复的一句' }, c_01: { source: '重复的一句' } };
+  const script = { b: [{ text: '重复的一句' }], d: [{ text: '挪走的一句' }, { text: '重复的一句' }] };
+  const voiceOf = createVoiceMap(script, clips);
+  assert.equal(voiceOf(script.d[0]), 'a_01');      // 别组唯一
+  assert.equal(voiceOf(script.b[0]), 'b_01');      // 同组优先
+  assert.equal(voiceOf(script.d[1]), undefined);   // 全局三处相同，不猜
+});
+
+test('英文模式下 bi() 代理的台词也能找到同一条配音', () => {
+  const zh = { g: [{ who: '陈墨', text: '到了。' }], fn: () => [] };
+  const proxied = bi(zh, { g: [{ who: 'Chen Mo', text: "I'm here." }] });
+  const voiceOf = createVoiceMap(proxied, { g_01: { source: '到了。' } });
+  assert.equal(proxied[RAW], zh);
+  assert.equal(voiceOf(zh.g[0]), 'g_01');
+  // 模拟英文代理：取到的是包着原对象的新代理
+  const wrapped = bi(zh.g[0], { text: "I'm here." });
+  assert.notEqual(wrapped, zh.g[0]);
+  assert.equal(voiceOf(wrapped), 'g_01');
 });

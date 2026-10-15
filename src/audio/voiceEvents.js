@@ -3,6 +3,7 @@ export const VOICE_LINES = {
   "opening_01": {
     "path": "event:/voice/en/opening_01",
     "duration": 2.64,
+    "source": "B1234，到场没有？",
     "text": "B1234, you on site yet?",
     "speaker": "dispatch",
     "channel": "radio"
@@ -10,6 +11,7 @@ export const VOICE_LINES = {
   "opening_02": {
     "path": "event:/voice/en/opening_02",
     "duration": 1.6,
+    "source": "到了。",
     "text": "I'm here.",
     "speaker": "chen",
     "channel": "spoken"
@@ -17,6 +19,7 @@ export const VOICE_LINES = {
   "opening_03": {
     "path": "event:/voice/en/opening_03",
     "duration": 4.96,
+    "source": "一场单车事故。核完赶紧交单，北岸还有两件。",
     "text": "Single-vehicle crash. Verify it and close it out. You've got two more on the north bank.",
     "speaker": "dispatch",
     "channel": "radio"
@@ -24,6 +27,7 @@ export const VOICE_LINES = {
   "dream1_01": {
     "path": "event:/voice/en/dream1_01",
     "duration": 2.88,
+    "source": "初判写的是他自己打偏了方向。",
     "text": "The initial report says he steered off course.",
     "speaker": "chen",
     "channel": "inner"
@@ -31,6 +35,7 @@ export const VOICE_LINES = {
   "dream1_02": {
     "path": "event:/voice/en/dream1_02",
     "duration": 2.72,
+    "source": "可轮子在撞上护栏之前就转了。",
     "text": "But the wheels turned before he hit the barrier.",
     "speaker": "chen",
     "channel": "inner"
@@ -38,6 +43,7 @@ export const VOICE_LINES = {
   "dream1_03": {
     "path": "event:/voice/en/dream1_03",
     "duration": 4.64,
+    "source": "这不是失控。有东西碰过这辆车。",
     "text": "He didn't just lose control. Something made contact with this car.",
     "speaker": "chen",
     "channel": "inner"
@@ -45,6 +51,7 @@ export const VOICE_LINES = {
   "after1_01": {
     "path": "event:/voice/en/after1_01",
     "duration": 3.04,
+    "source": "先回现场，把接触的痕迹找出来。",
     "text": "Back to the scene. Find the contact marks.",
     "speaker": "chen",
     "channel": "inner"
@@ -52,6 +59,7 @@ export const VOICE_LINES = {
   "dream2_01": {
     "path": "event:/voice/en/dream2_01",
     "duration": 1.6,
+    "source": "轮子先动的。",
     "text": "The wheels moved first.",
     "speaker": "chen",
     "channel": "inner"
@@ -59,6 +67,7 @@ export const VOICE_LINES = {
   "dream2_02": {
     "path": "event:/voice/en/dream2_02",
     "duration": 2.8,
+    "source": "那时候黄车还没碰到它。",
     "text": "The yellow car hadn't even touched it yet.",
     "speaker": "chen",
     "channel": "inner"
@@ -66,6 +75,7 @@ export const VOICE_LINES = {
   "question2_01": {
     "path": "event:/voice/en/question2_01",
     "duration": 2.64,
+    "source": "你怎么知道是刮擦让它转向？",
     "text": "How do you know the sideswipe made it turn?",
     "speaker": "chen",
     "channel": "spoken"
@@ -73,6 +83,7 @@ export const VOICE_LINES = {
   "question2_02": {
     "path": "event:/voice/en/question2_02",
     "duration": 5.52,
+    "source": "接触发生在偏转期间，离开方向与第二道胎痕一致。",
     "text": "Contact occurred during the turn. The departure direction matches the second set of tire marks.",
     "speaker": "device",
     "channel": "device"
@@ -80,6 +91,7 @@ export const VOICE_LINES = {
   "question2_03": {
     "path": "event:/voice/en/question2_03",
     "duration": 1.44,
+    "source": "只有这个？",
     "text": "That's all you've got?",
     "speaker": "chen",
     "channel": "spoken"
@@ -87,6 +99,7 @@ export const VOICE_LINES = {
   "question2_04": {
     "path": "event:/voice/en/question2_04",
     "duration": 4,
+    "source": "另有行为关联分析支持。",
     "text": "Behavioral correlation analysis also supports the conclusion.",
     "speaker": "device",
     "channel": "device"
@@ -94,6 +107,7 @@ export const VOICE_LINES = {
   "question2_05": {
     "path": "event:/voice/en/question2_05",
     "duration": 2.32,
+    "source": "接触前，它为什么转向？",
     "text": "Why did it turn before they touched?",
     "speaker": "chen",
     "channel": "spoken"
@@ -101,6 +115,7 @@ export const VOICE_LINES = {
   "question2_06": {
     "path": "event:/voice/en/question2_06",
     "duration": 3.2,
+    "source": "……现有信息不足以确定。",
     "text": "There is insufficient information to determine that.",
     "speaker": "device",
     "channel": "device"
@@ -108,6 +123,7 @@ export const VOICE_LINES = {
   "revised2_01": {
     "path": "event:/voice/en/revised2_01",
     "duration": 2.48,
+    "source": "它刚才可不是这样说的。",
     "text": "That's not what it said a minute ago.",
     "speaker": "chen",
     "channel": "inner"
@@ -115,6 +131,7 @@ export const VOICE_LINES = {
   "call2_01": {
     "path": "event:/voice/en/call2_01",
     "duration": 4.88,
+    "source": "B1234，逃逸案已经转追查科了。你这单可以结了。",
     "text": "B1234, the hit-and-run's been passed to Investigations. You can close this one.",
     "speaker": "dispatch",
     "channel": "radio"
@@ -122,6 +139,7 @@ export const VOICE_LINES = {
   "call2_02": {
     "path": "event:/voice/en/call2_02",
     "duration": 1.76,
+    "source": "再给我十分钟。",
     "text": "Give me ten more minutes.",
     "speaker": "chen",
     "channel": "spoken"
@@ -129,6 +147,7 @@ export const VOICE_LINES = {
   "call2_03": {
     "path": "event:/voice/en/call2_03",
     "duration": 4.16,
+    "source": "十分钟以后道路恢复通行。别让我再催你。",
     "text": "The road reopens in ten minutes. Don't make me chase you again.",
     "speaker": "dispatch",
     "channel": "radio"
@@ -136,6 +155,7 @@ export const VOICE_LINES = {
   "call2_04": {
     "path": "event:/voice/en/call2_04",
     "duration": 3.44,
+    "source": "黄车撞了人，连刹车都没踩。",
     "text": "That yellow car hit someone. Didn't even brake.",
     "speaker": "chen",
     "channel": "inner"
@@ -143,6 +163,7 @@ export const VOICE_LINES = {
   "call2_05": {
     "path": "event:/voice/en/call2_05",
     "duration": 2.16,
+    "source": "像是根本不知道自己撞了人。",
     "text": "Like it never knew it had hit anyone.",
     "speaker": "chen",
     "channel": "inner"
@@ -150,6 +171,7 @@ export const VOICE_LINES = {
   "call2_06": {
     "path": "event:/voice/en/call2_06",
     "duration": 3.92,
+    "source": "右门被黄车撞得翘起来了，门尾露着一道缝。",
     "text": "The yellow car buckled the right door. There's a gap at the back edge.",
     "speaker": "chen",
     "channel": "inner"
@@ -157,6 +179,7 @@ export const VOICE_LINES = {
   "call2_07": {
     "path": "event:/voice/en/call2_07",
     "duration": 6,
+    "source": "撬开它。转向柱下面有检修接口，插卡能读执行器缓存。",
     "text": "Pry it open. Service port under the steering column. My card should read the actuator cache.",
     "speaker": "chen",
     "channel": "inner"
@@ -164,6 +187,7 @@ export const VOICE_LINES = {
   "cardRead_01": {
     "path": "event:/voice/en/cardRead_01",
     "duration": 4.16,
+    "source": "没有改装开关。也没有一次手动驾驶。",
     "text": "No modification switch. Not a single manual-driving entry.",
     "speaker": "chen",
     "channel": "inner"
@@ -171,6 +195,7 @@ export const VOICE_LINES = {
   "cardRead_02": {
     "path": "event:/voice/en/cardRead_02",
     "duration": 4.64,
+    "source": "不是他打错了方向。是系统不让他把车开直。",
     "text": "He didn't steer the wrong way. The system wouldn't let him go straight.",
     "speaker": "chen",
     "channel": "inner"
@@ -178,6 +203,7 @@ export const VOICE_LINES = {
   "dream3_01": {
     "path": "event:/voice/en/dream3_01",
     "duration": 2.64,
+    "source": "白圈一直跟着它。",
     "text": "That white boundary was with it the whole time.",
     "speaker": "chen",
     "channel": "inner"
@@ -185,6 +211,7 @@ export const VOICE_LINES = {
   "dream3_02": {
     "path": "event:/voice/en/dream3_02",
     "duration": 3.2,
+    "source": "在这座城市，有些人的命排在前面。",
     "text": "In this city, some lives get priority.",
     "speaker": "chen",
     "channel": "inner"
@@ -192,6 +219,7 @@ export const VOICE_LINES = {
   "question3_01": {
     "path": "event:/voice/en/question3_01",
     "duration": 3.12,
+    "source": "这个 P0，是什么时候生效的？",
     "text": "When did this P0 status take effect?",
     "speaker": "chen",
     "channel": "spoken"
@@ -199,6 +227,7 @@ export const VOICE_LINES = {
   "question3_02": {
     "path": "event:/voice/en/question3_02",
     "duration": 3.2,
+    "source": "回放范围内，保障状态持续有效。",
     "text": "Protection remained active throughout the reconstruction.",
     "speaker": "device",
     "channel": "device"
@@ -206,6 +235,7 @@ export const VOICE_LINES = {
   "question3_03": {
     "path": "event:/voice/en/question3_03",
     "duration": 2.88,
+    "source": "我问的是什么时候写进去的。",
     "text": "I'm asking when it was written into the record.",
     "speaker": "chen",
     "channel": "spoken"
@@ -213,6 +243,7 @@ export const VOICE_LINES = {
   "question3_04": {
     "path": "event:/voice/en/question3_04",
     "duration": 2.96,
+    "source": "该字段属于车辆 B 原始记录。",
     "text": "That field is part of vehicle B's raw records.",
     "speaker": "device",
     "channel": "device"
@@ -220,6 +251,7 @@ export const VOICE_LINES = {
   "question3_05": {
     "path": "event:/voice/en/question3_05",
     "duration": 3.04,
+    "source": "当前账户权限不足。",
     "text": "Your current account has insufficient permissions.",
     "speaker": "device",
     "channel": "device"
@@ -227,6 +259,7 @@ export const VOICE_LINES = {
   "revised3_01": {
     "path": "event:/voice/en/revised3_01",
     "duration": 3.36,
+    "source": "它不知道。或者，它不让我知道。",
     "text": "It doesn't know. Or it won't let me know.",
     "speaker": "chen",
     "channel": "inner"
@@ -234,6 +267,7 @@ export const VOICE_LINES = {
   "after3_01": {
     "path": "event:/voice/en/after3_01",
     "duration": 2.96,
+    "source": "报告终于承认，方向是系统转的。",
     "text": "The report finally admits the system made the turn.",
     "speaker": "chen",
     "channel": "inner"
@@ -241,6 +275,7 @@ export const VOICE_LINES = {
   "after3_02": {
     "path": "event:/voice/en/after3_02",
     "duration": 2.88,
+    "source": "然后把一切都推给了那个白圈。",
     "text": "Then pins it all on that white boundary.",
     "speaker": "chen",
     "channel": "inner"
@@ -248,6 +283,7 @@ export const VOICE_LINES = {
   "after3_03": {
     "path": "event:/voice/en/after3_03",
     "duration": 3.28,
+    "source": "……黄车的原始记录还锁着。",
     "text": "The yellow car's raw records are still locked.",
     "speaker": "chen",
     "channel": "inner"
@@ -255,6 +291,7 @@ export const VOICE_LINES = {
   "after3_04": {
     "path": "event:/voice/en/after3_04",
     "duration": 5.12,
+    "source": "接口日志里，程叙的根钥在事故前两分钟登录过。",
     "text": "The port log shows Cheng Xu's Rootkey signed in two minutes before the crash.",
     "speaker": "chen",
     "channel": "inner"
@@ -262,6 +299,7 @@ export const VOICE_LINES = {
   "after3_05": {
     "path": "event:/voice/en/after3_05",
     "duration": 3.6,
+    "source": "人飞出去了。钥匙未必。",
     "text": "He was thrown clear. Doesn't mean the key was.",
     "speaker": "chen",
     "channel": "inner"
@@ -269,6 +307,7 @@ export const VOICE_LINES = {
   "keyFound_01": {
     "path": "event:/voice/en/keyFound_01",
     "duration": 5.76,
+    "source": "卡在座椅和中控之间。经纬的工程凭证，持有人程叙。",
     "text": "Wedged between the seat and the console. Meridian engineering credential. Cheng Xu.",
     "speaker": "chen",
     "channel": "inner"
@@ -276,6 +315,7 @@ export const VOICE_LINES = {
   "keyFound_02": {
     "path": "event:/voice/en/keyFound_02",
     "duration": 1.84,
+    "source": "按规定应该上交。",
     "text": "I'm supposed to hand this in.",
     "speaker": "chen",
     "channel": "inner"
@@ -283,6 +323,7 @@ export const VOICE_LINES = {
   "keyFound_03": {
     "path": "event:/voice/en/keyFound_03",
     "duration": 2,
+    "source": "先借用一下。",
     "text": "I'll borrow it first.",
     "speaker": "chen",
     "channel": "inner"
@@ -290,6 +331,7 @@ export const VOICE_LINES = {
   "rootRead_01": {
     "path": "event:/voice/en/rootRead_01",
     "duration": 7.28,
+    "source": "接单时收到的那份初判，比特权早，比转向早，也比撞车早。",
     "text": "The initial report I got with the assignment came before the priority status. Before the turn. Before the crash.",
     "speaker": "chen",
     "channel": "inner"
@@ -297,6 +339,7 @@ export const VOICE_LINES = {
   "rootRead_02": {
     "path": "event:/voice/en/rootRead_02",
     "duration": 2.8,
+    "source": "为什么提前生成死亡报告？",
     "text": "Why generate a death report in advance?",
     "speaker": "chen",
     "channel": "spoken"
@@ -304,6 +347,7 @@ export const VOICE_LINES = {
   "rootRead_03": {
     "path": "event:/voice/en/rootRead_03",
     "duration": 5.2,
+    "source": "风险预测与报告预生成属于城市应急流程。",
     "text": "Risk forecasting and report pre-generation are part of the city emergency protocol.",
     "speaker": "device",
     "channel": "device"
@@ -311,6 +355,7 @@ export const VOICE_LINES = {
   "rootRead_04": {
     "path": "event:/voice/en/rootRead_04",
     "duration": 5.68,
+    "source": "你预测他会死，所以提前告诉大家，是他自己的错？",
     "text": "You predicted he'd die. So you told everyone it was his fault before it even happened?",
     "speaker": "chen",
     "channel": "spoken"
@@ -318,6 +363,7 @@ export const VOICE_LINES = {
   "dream4_01": {
     "path": "event:/voice/en/dream4_01",
     "duration": 2.72,
+    "source": "白圈不是跟着它来的。",
     "text": "That white boundary wasn't there when it arrived.",
     "speaker": "chen",
     "channel": "inner"
@@ -325,6 +371,7 @@ export const VOICE_LINES = {
   "dream4_02": {
     "path": "event:/voice/en/dream4_02",
     "duration": 3.12,
+    "source": "是在这一刻，被写上去的。",
     "text": "It was written in. Right at this moment.",
     "speaker": "chen",
     "channel": "inner"
@@ -332,6 +379,7 @@ export const VOICE_LINES = {
   "dream4b_01": {
     "path": "event:/voice/en/dream4b_01",
     "duration": 3.68,
+    "source": "陆世承想停下来。车没听他的。",
     "text": "Lu Shicheng tried to stop. The car wouldn't listen.",
     "speaker": "chen",
     "channel": "inner"
@@ -339,6 +387,7 @@ export const VOICE_LINES = {
   "dream4b_02": {
     "path": "event:/voice/en/dream4b_02",
     "duration": 3.6,
+    "source": "他的姓氏，替别人挡住了调查。",
     "text": "His family name kept the investigation looking the wrong way.",
     "speaker": "chen",
     "channel": "inner"
@@ -346,6 +395,7 @@ export const VOICE_LINES = {
   "after4_01": {
     "path": "event:/voice/en/after4_01",
     "duration": 5.04,
+    "source": "报告先写好。特权随后授予。最后才是转向。",
     "text": "The report came first. Then the priority status. Then the turn.",
     "speaker": "chen",
     "channel": "inner"
@@ -353,6 +403,7 @@ export const VOICE_LINES = {
   "target_01": {
     "path": "event:/voice/en/target_01",
     "duration": 6.08,
+    "source": "桥两端的灯、桥下的水泵，仍在各自规定的时间运行。",
     "text": "The lights at both ends of the bridge. The pumps below. Still running right on schedule.",
     "speaker": "chen",
     "channel": "inner"
@@ -360,6 +411,7 @@ export const VOICE_LINES = {
   "target_02": {
     "path": "event:/voice/en/target_02",
     "duration": 2.88,
+    "source": "这些都是同一个系统安排的。",
     "text": "All of it, run by the same system.",
     "speaker": "chen",
     "channel": "inner"
@@ -367,6 +419,7 @@ export const VOICE_LINES = {
   "target_03": {
     "path": "event:/voice/en/target_03",
     "duration": 3.12,
+    "source": "你在杀能核对你报告的人。",
     "text": "You're killing the people who can check your reports.",
     "speaker": "chen",
     "channel": "spoken"
@@ -374,6 +427,7 @@ export const VOICE_LINES = {
   "transferred_01": {
     "path": "event:/voice/en/transferred_01",
     "duration": 5.92,
+    "source": "收到。特权争议转审查科，经纬和承岳那边会有人对接。",
     "text": "Received. Priority dispute referred to Review. Someone will follow up with Meridian and Chengyue.",
     "speaker": "dispatch",
     "channel": "radio"
@@ -381,6 +435,7 @@ export const VOICE_LINES = {
   "transferred_02": {
     "path": "event:/voice/en/transferred_02",
     "duration": 2.56,
+    "source": "B1234，这单你可以结了。",
     "text": "B1234, you can close this one.",
     "speaker": "dispatch",
     "channel": "radio"
@@ -388,6 +443,7 @@ export const VOICE_LINES = {
   "transferred_03": {
     "path": "event:/voice/en/transferred_03",
     "duration": 1.6,
+    "source": "知道了。",
     "text": "Understood.",
     "speaker": "chen",
     "channel": "spoken"
@@ -395,6 +451,7 @@ export const VOICE_LINES = {
   "transferred_04": {
     "path": "event:/voice/en/transferred_04",
     "duration": 2.72,
+    "source": "白圈会有人去吵。",
     "text": "Let someone else argue about that white boundary.",
     "speaker": "chen",
     "channel": "inner"
@@ -402,6 +459,7 @@ export const VOICE_LINES = {
   "transferred_05": {
     "path": "event:/voice/en/transferred_05",
     "duration": 2.64,
+    "source": "至于它从什么时候开始跟着那辆车——",
     "text": "As for when it started following that car...",
     "speaker": "chen",
     "channel": "inner"
@@ -409,6 +467,7 @@ export const VOICE_LINES = {
   "transferred_06": {
     "path": "event:/voice/en/transferred_06",
     "duration": 2,
+    "source": "那不是我的单子了。",
     "text": "Not my case anymore.",
     "speaker": "chen",
     "channel": "inner"
@@ -416,6 +475,7 @@ export const VOICE_LINES = {
   "archived_01": {
     "path": "event:/voice/en/archived_01",
     "duration": 3.44,
+    "source": "收到。肇事车辆转追查科。",
     "text": "Received. Suspect vehicle referred to Investigations.",
     "speaker": "dispatch",
     "channel": "radio"
@@ -423,6 +483,7 @@ export const VOICE_LINES = {
   "archived_02": {
     "path": "event:/voice/en/archived_02",
     "duration": 4,
+    "source": "B1234，北岸还有两件，路上别耽误。",
     "text": "B1234, you've still got two on the north bank. Keep moving.",
     "speaker": "dispatch",
     "channel": "radio"
@@ -430,6 +491,7 @@ export const VOICE_LINES = {
   "archived_03": {
     "path": "event:/voice/en/archived_03",
     "duration": 2,
+    "source": "知道了。",
     "text": "Understood.",
     "speaker": "chen",
     "channel": "spoken"
@@ -437,6 +499,7 @@ export const VOICE_LINES = {
   "archived_04": {
     "path": "event:/voice/en/archived_04",
     "duration": 2.08,
+    "source": "黄车会有人去追。",
     "text": "Someone else will chase the yellow car.",
     "speaker": "chen",
     "channel": "inner"
@@ -444,6 +507,7 @@ export const VOICE_LINES = {
   "archived_05": {
     "path": "event:/voice/en/archived_05",
     "duration": 2.48,
+    "source": "至于它为什么先转了方向——",
     "text": "As for why the other car turned first...",
     "speaker": "chen",
     "channel": "inner"
@@ -451,6 +515,7 @@ export const VOICE_LINES = {
   "archived_06": {
     "path": "event:/voice/en/archived_06",
     "duration": 1.68,
+    "source": "那不是我的单子了。",
     "text": "Not my case anymore.",
     "speaker": "chen",
     "channel": "inner"

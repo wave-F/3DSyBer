@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createContext, SourceTextModule, SyntheticModule } from 'node:vm';
 import * as THREE from 'three/webgpu';
@@ -189,7 +190,7 @@ test('事件 / 混音重建必须显式授权，默认不会启动 Studio', () =
   const env = { ...process.env };
   delete env.FMOD_ALLOW_REAUTHOR;
   for (const mode of ['events', 'mix']) {
-    const result = spawnSync(process.execPath, [new URL('../scripts/fmod.mjs', import.meta.url).pathname, mode], { env, encoding: 'utf8' });
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL('../scripts/fmod.mjs', import.meta.url)), mode], { env, encoding: 'utf8' });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /FMOD_ALLOW_REAUTHOR=1/);
     assert.match(result.stderr, /npm run audio:build/);
@@ -493,12 +494,16 @@ test('平板拿出 / 收起各触发一次，重复设置状态不会重播', as
   assert.deepEqual(calls, ['cloth', 'cloth']);
 });
 
-test('加载界面中英切换仍等待声音预加载，保留菜单手势、无效点击和慢淡入', async () => {
+test('加载界面中英切换仍等待声音预加载，保留菜单手势、慢淡入和结局回标题重开', async () => {
   function element() {
     const classes = new Set(), listeners = new Map(), children = new Map();
     return {
       style: {}, dataset: {}, textContent: '',
-      classList: { add: (...names) => names.forEach((name) => classes.add(name)), contains: (name) => classes.has(name) },
+      classList: {
+        add: (...names) => names.forEach((name) => classes.add(name)),
+        remove: (...names) => names.forEach((name) => classes.delete(name)),
+        contains: (name) => classes.has(name),
+      },
       querySelector(name) { if (!children.has(name)) children.set(name, element()); return children.get(name); },
       addEventListener(name, fn) { listeners.set(name, fn); },
       fire(name, event = {}) { listeners.get(name)?.(event); },
@@ -522,10 +527,12 @@ test('加载界面中英切换仍等待声音预加载，保留菜单手势、�
     requestAnimationFrame: (fn) => { frame = fn; },
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); },
     addEventListener: (name, fn) => keys.set(name, fn),
+    location: { reload: () => calls.push('reload') },
   });
   loading.onWake(() => calls.push('wake'));
   loading.onDeny(() => calls.push('deny'));
   loading.onStart(() => calls.push('start'));
+  assert.equal(loading.fadeLeft, null);
   let finishAudio;
   loading.waitFor(new Promise((resolve) => { finishAudio = resolve; }), '声音', 'AUDIO');
   manager.onProgress('/assets/supercar.glb', 1, 1);
@@ -557,8 +564,30 @@ test('加载界面中英切换仍等待声音预加载，保留菜单手势、�
   assert.deepEqual(timers.map((t) => t.ms), [1150, 4750]);
   root.fire('click'); keys.get('keydown')();
   assert.deepEqual(calls, ['start']);
-  timers.splice(0).forEach((t) => t.fn());
+  const fadeTimers = timers.splice(0);
+  now += fadeTimers[0].ms;
+  fadeTimers[0].fn();
+  assert.equal(loading.fadeLeft, 3600);
+  now += 1600;
+  assert.equal(loading.fadeLeft, 2000);
+  now += 2000;
+  fadeTimers[1].fn();
   assert.equal(loading.done, true);
+  assert.equal(loading.fadeLeft, 0);
+  loading.showTitle();
+  assert.equal(loading.done, false);
+  assert.equal(root.classList.contains('fading'), false);
+  assert.equal(root.classList.contains('closing'), false);
+  assert.equal(root.classList.contains('ready'), true);
+  assert.deepEqual(timers.map((t) => t.ms), [1500]);
+  timers.splice(0).forEach((t) => t.fn());
+  calls.length = 0;
+  root.fire('pointerdown'); root.fire('click');
+  assert.deepEqual(calls, []); // 标题重开走整页 reload，不在旧调查进度上重新 start
+  assert.deepEqual(timers.map((t) => t.ms), [700]);
+  root.fire('click');
+  timers.splice(0).forEach((t) => t.fn());
+  assert.deepEqual(calls, ['reload']);
 });
 
 test('踩在水洼上用水脚步代替普通脚步，衣物声照常', async () => {

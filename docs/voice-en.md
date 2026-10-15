@@ -12,16 +12,31 @@
 - 游戏映射：`src/audio/voiceEvents.js`；试听：`npm run dev` 后打开 `/audio.html`。
 - 配音：陈墨 Roger、派单员 Matilda、仪器 River；账号可用 ID 与选角理由见 `Fmod/voice-cast.en.json`。
 
-- `src/audio/dialogue.en.js`：21 组、71 条英文对应稿，逐句表演指导、角色方向、读音与 12 条试听。
-- 默认生成 65 条：包括两个假结局；排除 4 条未接入的 `call` 备用通话与 2 条「仪器没有回答」类叙述性静默。
-- `--include-reserve` 可把备用通话一起制作，共 69 条口语；不会恢复游戏触发。
-- 英文稿绑定的是录音时的中文原句。改英文稿的 `source` 会停止生成。游戏字幕后来改写时，逐字相同的句子继续用原录音，改过的句子不套旧声音。
+- `src/audio/dialogue.en.js`：新版 36 组、60 条英文对应稿，逐句表演指导、角色方向、读音与 11 条试听，包含两个假结局和新增线索独白。原录音稿为 21 组、71 条，其中 65 条已发布。
+- 新版稿尚未补录；`dialogueLines()` 检查当前中文原稿的分组、句数和 `source`，不混用旧稿快照。当前没有备用 `call` 或叙述性静默，也不会恢复它们的游戏触发。
+- 游戏运行只按已发布的 `VOICE_LINES.source` 查录音，不按新版制作稿的编号套旧音频。字幕改写后，逐字相同的句子继续用原录音，改过的句子不套旧声音。
+
+## 待补配音（台词已改、配音未跟上）
+
+游戏运行不受影响：`voiceMap.js` 只在 `VOICE_LINES[id].source` 与当前中文原句完全一致时才播声音，其余只显示字幕，不会错配。下面三类在下次补录时一并处理（2026-10 统计，补录前用下方命令重新核对）。
+
+- **没有配音**：线索独白 `clueFront` `clueRail` `clueDebris` `clueScrape` `clueSkidB` `clueTrim` `clueP2car` `clueP3override` `clueP4end` `clueDMode` `clueDReason` `clueDRaw` `clueDRawOpen` `clueRTime`（各 1 句），`ready1_01`、`ready2_01`。
+- **中文改过、旧录音不再播放**：`dream1_01-02`、`call2_03`、`cardRead_01`、`dream3_01`、`question3_04`、`after3_01-02`、`keyFound_01-02`、`rootRead_01/02/04`、`dream4_01`、`target_01-03`、`transferred_04-05`。
+- **孤立录音（台词已删或句数减少）**：`dream1_03`、`call2_04-07`、`cardRead_02`、`after3_03-05`、`keyFound_03`、`after4_01`。补录后从 FMOD 和 `voiceEvents.js` 清掉。
+
+新版 `ENGLISH` 已与当前 `LINES` 同步：36 组、60 条，包含新增独白，已删掉 `call` 和 `after4`。`dialogueLines()` 仍要求两边分组的**名称和顺序**完全一致、句数一致、`source` 与中文原句一致，否则报错，阻止用旧稿生成。测试已拆开验证：新版稿检查当前中文台词及制作工具链；65 条旧录音按 `Fmod/voice-en-manifest.json` 和 `tests/fixtures/voice-source.zh.json` 验证来源、映射和时长，不再拿新稿与旧稿比较而整套失败。本次合并没有生成、发布或删除任何录音；上述待补清单是历史清单，补录前须按实际 `voiceMap` 结果重新核对（编号移动但原句未改的录音仍可复用）。
+
+核对命令（只读，不联网）：
+
+```sh
+node -e "Promise.all([import('./src/investigation/clues.js'),import('./src/audio/voiceEvents.js'),import('./src/i18n.js')]).then(([{LINES},{VOICE_LINES},{RAW}])=>{const n=[],s=[],u=new Set();for(const[g,l]of Object.entries(LINES[RAW])){if(!Array.isArray(l))continue;l.forEach((x,i)=>{const id=g+'_'+String(i+1).padStart(2,'0'),c=VOICE_LINES[id];if(!c)n.push(id);else{u.add(id);if(c.source!==x.text)s.push(id)}})}console.log('无配音',n.join(' '));console.log('已过期',s.join(' '));console.log('孤立',Object.keys(VOICE_LINES).filter(k=>!u.has(k)).join(' '))})"
+```
 
 ## 角色与术语
 
 中性美式英语。陈墨：成熟、稍沙哑、疲惫克制，怀疑逐渐变成压住恐惧的质问；内心与外部对白共用同一音色，内心更轻、更近。派单员：干练成熟女声，催工单而非威胁玩家。仪器：独立的中性服务声线，始终平静，不提前暴露反派意味。三者都录干声；无线电与设备质感留给 Studio。
 
-正式名称：Chen Mo / Cheng Xu / Lu Shicheng / Meridian / Chengyue / Rootkey / Blackdream / Zero Priority。`B1234` 按 B + 单个数字读，`P0` 按 P zero 读。中文姓名在合成输入中使用英语近似读音，正式英文稿不改拼写；这些读音必须实听验收。
+正式名称：Chen Mo / Cheng Xu / Lu Shicheng / Meridian / Chengyue / Rootkey / Blackdream / Zero Priority。`B1016` 按 B + 单个数字读，`P0` 按 P zero 读。中文姓名在合成输入中使用英语近似读音，正式英文稿不改拼写；这些读音必须实听验收。
 
 ## 本机配置
 

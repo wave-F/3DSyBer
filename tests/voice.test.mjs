@@ -5,11 +5,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { runInNewContext } from 'node:vm';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { LINES } from '../src/investigation/clues.js';
+import { RAW } from '../src/i18n.js';
 import { AUDITION_IDS, ENGLISH, VOICE_ROLES, dialogueLines, spokenText, synthesisText } from '../src/audio/dialogue.en.js';
 import { ElevenLabs, castFromEnv, validateCast, speechRequest, generateLine, digest, auditionHTML, fmimportScript } from '../scripts/lib/voice.mjs';
 
 const cast = { chen: 'test_chen_123456', dispatch: 'test_dispatch_123456', device: 'test_device_123456' };
+// 新版制作工具链用当前稿检查；已发布旧录音在 dialogue.test.mjs 按 manifest 和中文快照独立验证。
+const script = JSON.parse(readFileSync(new URL('./fixtures/voice-source.zh.json', import.meta.url), 'utf8'));
 const lines = dialogueLines();
 const options = { cast, model: 'eleven_v4', seed: 417, lines };
 
@@ -19,18 +24,22 @@ async function fixture(t) {
   return directory;
 }
 
-test('完整英文稿覆盖 71 条，默认只制作已接入的 65 条口语，保留中文原文', () => {
+test('新版英文稿覆盖当前 36 组、60 条台词，保留中文原文，不恢复已删除的句子', () => {
   const before = JSON.stringify(LINES);
   const all = dialogueLines({ includeReserve: true, includeSilent: true });
-  assert.equal(all.length, 71);
-  assert.equal(lines.length, 65);
-  assert.equal(new Set(all.map((l) => l.id)).size, 71);
-  assert.equal(all.filter((l) => l.reserve).length, 4);
-  assert.equal(all.filter((l) => l.silent).length, 2);
+  assert.equal(Object.keys(ENGLISH).length, 36);
+  assert.equal(all.length, 60);
+  assert.equal(lines.length, 60);
+  assert.equal(new Set(all.map((l) => l.id)).size, 60);
+  assert.ok(all.every((l) => !l.reserve && !l.silent));
   assert.ok(lines.some((l) => l.group === 'archived'));
   assert.ok(lines.some((l) => l.group === 'transferred'));
   assert.ok(lines.every((l) => l.text.length && l.direction.length && !/[\u3400-\u9fff]/u.test(l.text)));
   assert.ok(lines.every((l) => l.group !== 'call' && !l.silent));
+  for (const l of lines) {
+    assert.equal(l.source, LINES[RAW][l.group][l.index].text);
+    assert.equal(l.text, ENGLISH[l.group][l.index].text);
+  }
   assert.equal(JSON.stringify(LINES), before);
 });
 
@@ -42,10 +51,30 @@ test('源台词变化时阻止旧英文配音静默继续制作', () => {
   } finally { ENGLISH.opening[0].source = old; }
 });
 
-test('12 条试听涵盖三角色、内心独白和早晚情绪，陈墨始终是同一音色', () => {
-  assert.equal(AUDITION_IDS.length, 12);
+test('新英文稿不混用旧中文快照；组、句数和原文不一致时，生成配音会被拦下', () => {
+  const mismatch = /English dialogue groups no longer match LINES|Stale English voice script|line count changed/;
+  assert.throws(() => dialogueLines({ script }), mismatch);
+});
+
+test('新版稿校验拒绝缺组、句数变化和改写原文', () => {
+  // RAW 里包含动态引导函数，只复制数组型台词。
+  const copy = () => Object.fromEntries(Object.entries(LINES[RAW])
+    .filter(([, list]) => Array.isArray(list)).map(([group, list]) => [group, list.map((l) => ({ ...l }))]));
+  const missing = copy();
+  delete missing.ready1;
+  assert.throws(() => dialogueLines({ script: missing }), /groups no longer match/);
+  const count = copy();
+  count.opening.pop();
+  assert.throws(() => dialogueLines({ script: count }), /line count changed: opening/);
+  const changed = copy();
+  changed.opening[0].text = '改写后的台词';
+  assert.throws(() => dialogueLines({ script: changed }), /Stale English voice script: opening_01/);
+});
+
+test('新版 11 条试听涵盖三角色、内心独白和早晚情绪，陈墨始终是同一音色', () => {
+  assert.equal(AUDITION_IDS.length, 11);
   const samples = lines.filter((l) => AUDITION_IDS.includes(l.id));
-  assert.equal(samples.length, 12);
+  assert.equal(samples.length, 11);
   assert.deepEqual(new Set(samples.map((l) => l.speaker)), new Set(['chen', 'dispatch', 'device']));
   assert.ok(samples.some((l) => l.channel === 'inner'));
   assert.ok(samples.some((l) => l.group === 'target'));
@@ -55,8 +84,8 @@ test('12 条试听涵盖三角色、内心独白和早晚情绪，陈墨始终�
 
 test('API 只接收英文，表演标签不改显示稿，编号按字母数字念', () => {
   const l = lines[0];
-  assert.equal(spokenText('B1234 P0 Cheng Xu'), 'B one two three four P zero Chung Shyu');
-  assert.equal(l.text, 'B1234, you on site yet?');
+  assert.equal(spokenText('B1016 P0 Cheng Xu'), 'B one zero one six P zero Chung Shyu');
+  assert.equal(l.text, 'B1016, are you on scene?');
   for (const l of lines) {
     const { request } = speechRequest(l, options);
     assert.equal(request.language_code, 'en');
@@ -66,11 +95,11 @@ test('API 只接收英文，表演标签不改显示稿，编号按字母数字�
   }
   const inner = lines.find((l) => l.channel === 'inner');
   assert.match(synthesisText(inner), /internal monologue/);
-  assert.throws(() => synthesisText(dialogueLines({ includeSilent: true }).find((l) => l.silent)), /narrative silence/);
+  assert.throws(() => synthesisText({ id: 'silent-caption', silent: true }), /narrative silence/);
 });
 
 test('锁定的请求包含声音、上下文、语气及读音，改动会失效；不会跨角色拼接上下文', () => {
-  const l = lines.find((l) => l.id === 'dream1_02');
+  const l = lines.find((l) => l.id === 'archived_05');
   const a = speechRequest(l, options), b = speechRequest(l, options);
   assert.equal(a.fingerprint, b.fingerprint);
   assert.equal(a.request.seed, b.request.seed);
@@ -238,6 +267,16 @@ test('CLI 默认不收费；参数无效、未确认试听或未批准音频时�
     ...process.env, ELEVENLABS_API_KEY: 'test-not-real',
     ELEVENLABS_VOICE_CHEN: cast.chen, ELEVENLABS_VOICE_DISPATCH: cast.dispatch, ELEVENLABS_VOICE_DEVICE: cast.device,
   };
+  const run = (args) => spawnSync(process.execPath, [fileURLToPath(new URL('../scripts/voice.mjs', import.meta.url)), ...args], { env, encoding: 'utf8' });
+  // 游戏台词改过、配音稿还没跟上时，CLI 任何命令都先停下，不会花钱生成旧稿
+  let stale = false;
+  try { dialogueLines(); } catch { stale = true; }
+  if (stale) {
+    const result = run(['audition', '--confirm-cost']);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /no longer match LINES|Stale English voice script|line count changed/);
+    return;
+  }
   for (const [args, message] of [
     [['audition'], /confirm-cost/],
     [['generate', '--confirm-cost'], /approved-cast/],
@@ -246,7 +285,7 @@ test('CLI 默认不收费；参数无效、未确认试听或未批准音频时�
     [['plan', '--id', 'unknown'], /Unknown or excluded/],
     [['plan', '--model', 'eleven_multilingual_v2'], /requires eleven_v4 or eleven_v3/],
   ]) {
-    const result = spawnSync(process.execPath, [new URL('../scripts/voice.mjs', import.meta.url).pathname, ...args], { env, encoding: 'utf8' });
+    const result = run(args);
     assert.equal(result.status, 1);
     assert.match(result.stderr, message);
   }
