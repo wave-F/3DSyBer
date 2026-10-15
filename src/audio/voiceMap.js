@@ -16,12 +16,17 @@ export function createVoiceMap(lines, clips) {
 
   const ids = new WeakMap();
   for (const [group, list] of Object.entries(lines[RAW] ?? lines)) {
-    if (!Array.isArray(list)) continue;   // dreamGuide 等函数型台词没有配音
+    if (!Array.isArray(list)) continue;   // 动态台词在返回时显式校验 voiceId / voiceSource
     for (const line of list) {
       const hits = byText.get(line.text);
       const id = byGroup.get(group)?.get(line.text) ?? (hits?.length === 1 ? hits[0] : undefined);
       if (id) ids.set(line, id);
     }
   }
-  return (line) => (line ? ids.get(line[RAW] ?? line) : undefined);
+  return (line) => {
+    if (!line) return undefined;
+    const raw = line[RAW] ?? line;
+    if (raw.voiceId && clips[raw.voiceId]?.source === (raw.voiceSource ?? raw.text)) return raw.voiceId;
+    return ids.get(raw);
+  };
 }

@@ -3,8 +3,8 @@
   "model": "eleven_v4",
   "usage": "noncommercial-internal",
   "voices": {
-    "chen": { "id": "CwhRBWXzGAHq8TQ4Fs17", "name": "Roger", "reason": "American, mature, conversational and resonant; restrained rather than a villain or announcer." },
-    "dispatch": { "id": "XrExE9yKIg1WjnnlVkGX", "name": "Matilda", "reason": "American professional female alto; brisk workaday dispatch delivery." },
-    "device": { "id": "SAz9YHcvj6GT2YYXdXww", "name": "River", "reason": "American neutral service voice; even, clear and non-threatening." }
+    "chen": { "id": "pqHfZKP75CvOlQylNhV4", "name": "Bill", "reason": "Mature American male; directed as a weathered man around fifty, with escalating emotional stakes and a matching nonverbal impact cry." },
+    "dispatch": { "id": "EXAVITQu4vr4xnSDxMaL", "name": "Sarah", "reason": "Adult American female; directed around thirty, cold, clipped and impatient. Walkie-talkie processing in FMOD only." },
+    "device": { "id": "Xb7hH8MSUJpSbSDYk0k2", "name": "Alice", "reason": "Clearly female, precise British diction; clinical synthetic performance plus electronic doubling in FMOD, inspired by Portal 2 texture without cloning its character or actor." }
   }
 }

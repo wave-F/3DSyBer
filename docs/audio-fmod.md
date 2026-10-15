@@ -2,7 +2,7 @@
 
 目标是写实：雨夜高架上的环境、角色的 Foley、克制的 UI 音，以及只给扫描 / 分析用的高科技音色。
 
-65 条英文角色配音已通过 `event:/voice/en/...` 接入，独立 `VoiceEN` Bank 与 `DIALOGUE` 路由；当前素材按用户确认的内部非商用用途生成，来源与授权限制见 `Fmod/voice-en-manifest.json`，详细流程见 [voice-en.md](voice-en.md)。原有字幕文本与手工音效混音保留。
+59 条英文角色配音已按当前剧本全量重录，通过 `event:/voice/en/...` 接入，包含结局撞击痛呼；独立 `VoiceEN` Bank 与 `DIALOGUE` 路由。当前素材按用户确认的内部非商用用途生成，来源与授权限制见 `Fmod/voice-en-manifest.json`，详细流程见 [voice-en.md](voice-en.md)。原有双语字幕与其他手工音效混音保留。
 
 ## 流水线
 
@@ -70,7 +70,7 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
   - `Radar`（Q 发射瞬间）：AMB / FOLEY / WORLD / CABIN 低通 900 Hz；AHDSR 为 40 ms 起、保持 150 ms、900 ms 衰减到 0，自己恢复，游戏 2 秒后释放实例。雷达本身在 SCIFI，不被切。
 - VCA：`Ambience`（AMB）、`SFX`（FOLEY + SCIFI + WORLD + CABIN + CityVerb）、`UI`、`Dialogue`（DIALOGUE）、`Music`（MUSIC）。游戏不覆盖 VCA 音量；试听页首次启用读取当前值，只有手动拖动推子才改变该页的播放增益，不回写 Studio。
 - 多变体事件（脚步、衣物）用 Multi Instrument 随机播放，并加音高 / 音量随机器。
-- 接线员广播：8 条派单员台词统一走 `DIALOGUE/radio`，窄带 400–3400 Hz、中频存在感、4:1 压缩与轻饱和；全部在 Studio 处理，不烘焙进源配音，不影响陈墨和仪器。参数与创作脚本见 [voice-en.md](voice-en.md)。
+- 接线员对讲机：7 条派单员台词走 `DIALOGUE/radio`，窄带 400–3400 Hz、中频存在感、4:1 压缩与轻饱和。女 AI 的 2 条对白走 `DIALOGUE/device`，独立 EQ、Flanger/Chorus 轻微倍音与压缩。全部在 Studio 处理，不烘焙源 WAV、不影响男主；参数见 [voice-en.md](voice-en.md)。
 
 ## 场景混响 CityVerb
 

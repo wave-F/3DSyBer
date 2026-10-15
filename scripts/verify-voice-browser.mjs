@@ -109,6 +109,7 @@ try {
       const out = {};
       fmod.check(fmod.description(clip.path).getLength(out), 'length ' + id);
       if (!(out.val > 0)) throw new Error('Empty FMOD event ' + id);
+      if (Math.abs(out.val / 1000 - clip.duration) > 0.1) throw new Error('Stale FMOD instrument length ' + id);
       lengths.push({ id, milliseconds: out.val });
     }
     const cancelled = fmod.playVoice(VOICE_LINES.question2_01.path);
@@ -131,11 +132,13 @@ try {
     if (!finished) throw new Error('Voice failed');
     const dispatcher = fmod.playVoice(VOICE_LINES.opening_01.path);
     if (!await Promise.race([dispatcher.done, wait(10000).then(() => { throw new Error('Dispatcher radio voice did not finish'); })])) throw new Error('Dispatcher radio voice failed');
-    const device = fmod.playVoice(VOICE_LINES.question2_06.path);
+    const device = fmod.playVoice(VOICE_LINES.question2_02.path);
     if (!await Promise.race([device.done, wait(10000).then(() => { throw new Error('Device voice did not finish'); })])) throw new Error('Device voice failed');
+    const pain = fmod.playVoice(VOICE_LINES.fatalImpact_01.path);
+    if (!await Promise.race([pain.done, wait(10000).then(() => { throw new Error('Impact cry did not finish'); })])) throw new Error('Impact cry failed');
     return { ready: fmod.ready, crossOriginIsolated, warmedStreams: prepared.length, mainThreadBlockMs: 700,
       loadedVoiceEvents: entries.length, positiveLengths: lengths.length, cancel: true, pause: true,
-      resumeAndFinish: true, dispatcherRadioPlayback: true, remainingVoiceHandles: fmod.voices.size, lengths };
+      resumeAndFinish: true, dispatcherRadioPlayback: true, femaleAIPlayback: true, impactCryPlayback: true, remainingVoiceHandles: fmod.voices.size, lengths };
   })()` });
   if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
   const evidence = result.result.value;

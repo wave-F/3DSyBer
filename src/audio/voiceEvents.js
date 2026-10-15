@@ -2,65 +2,185 @@
 export const VOICE_LINES = {
   "opening_01": {
     "path": "event:/voice/en/opening_01",
-    "duration": 2.64,
-    "source": "B1234，到场没有？",
-    "text": "B1234, you on site yet?",
+    "duration": 2.8,
+    "source": "B1016，到场没有？",
+    "text": "B1016, are you on scene?",
     "speaker": "dispatch",
     "channel": "radio"
   },
   "opening_02": {
     "path": "event:/voice/en/opening_02",
-    "duration": 1.6,
+    "duration": 1.52,
     "source": "到了。",
-    "text": "I'm here.",
+    "text": "I’m here.",
     "speaker": "chen",
     "channel": "spoken"
   },
   "opening_03": {
     "path": "event:/voice/en/opening_03",
-    "duration": 4.96,
-    "source": "一场单车事故。核完赶紧交单，北岸还有两件。",
-    "text": "Single-vehicle crash. Verify it and close it out. You've got two more on the north bank.",
+    "duration": 4.16,
+    "source": "一场简单事故。核完赶紧交单，北岸还有两件。",
+    "text": "A simple accident. File it and move. Two more on the north bank.",
     "speaker": "dispatch",
     "channel": "radio"
   },
+  "start1_01": {
+    "path": "event:/voice/en/start1_01",
+    "duration": 1.84,
+    "source": "先看撞哪儿了。",
+    "text": "Check the impact first.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "clueFront_01": {
+    "path": "event:/voice/en/clueFront_01",
+    "duration": 2.8,
+    "source": "车头都压进去了。",
+    "text": "The whole front end is crushed in.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "clueRail_01": {
+    "path": "event:/voice/en/clueRail_01",
+    "duration": 4,
+    "source": "不是擦过去，是对着护栏冲的。",
+    "text": "It did not graze the barrier. It went straight at it.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "clueDebris_01": {
+    "path": "event:/voice/en/clueDebris_01",
+    "duration": 3.04,
+    "source": "这几块都是车头掉的。",
+    "text": "These pieces all came off the front end.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "ready1_01": {
+    "path": "event:/voice/en/ready1_01",
+    "duration": 3.2,
+    "source": "构建黑梦，看看发生了什么。",
+    "text": "Build Blackdream. See what happened.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "clueScrape_01": {
+    "path": "event:/voice/en/clueScrape_01",
+    "duration": 3.68,
+    "source": "黄漆。这辆车可不是黄的。",
+    "text": "Yellow paint. This car is not yellow.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "clueSkidB_01": {
+    "path": "event:/voice/en/clueSkidB_01",
+    "duration": 2.8,
+    "source": "还有另一辆车的痕迹。",
+    "text": "There are tracks from another car too.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "clueTrim_01": {
+    "path": "event:/voice/en/clueTrim_01",
+    "duration": 3.2,
+    "source": "饰条也是黄的，漆对得上。",
+    "text": "Yellow trim too. The paint matches.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "ready2_01": {
+    "path": "event:/voice/en/ready2_01",
+    "duration": 2.96,
+    "source": "把黄车加进去，再放一遍。",
+    "text": "Add the yellow car. Run it again.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "clueP2car_01": {
+    "path": "event:/voice/en/clueP2car_01",
+    "duration": 2.8,
+    "source": "碰撞时产生了新数据。",
+    "text": "The collision produced new data.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "clueP3override_01": {
+    "path": "event:/voice/en/clueP3override_01",
+    "duration": 3.92,
+    "source": "就在这儿，控制权被夺过去了。",
+    "text": "Right here. That is when control was taken.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "clueP4end_01": {
+    "path": "event:/voice/en/clueP4end_01",
+    "duration": 3.12,
+    "source": "这辆车，已经不受控制了。",
+    "text": "This car is no longer under control.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "clueDReason_01": {
+    "path": "event:/voice/en/clueDReason_01",
+    "duration": 2.88,
+    "source": "陆世承，承岳的人。",
+    "text": "Lu Shicheng. Chengyue.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "clueDRaw_01": {
+    "path": "event:/voice/en/clueDRaw_01",
+    "duration": 6.24,
+    "source": "程叙是经纬的审计工程师？出事前还在用这个接口。",
+    "text": "Cheng Xu was an audit engineer at Meridian? He was using this port just before the crash.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "clueDRawOpen_01": {
+    "path": "event:/voice/en/clueDRawOpen_01",
+    "duration": 2.08,
+    "source": "临时给的？",
+    "text": "A temporary grant?",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "clueRTime_01": {
+    "path": "event:/voice/en/clueRTime_01",
+    "duration": 5.04,
+    "source": "早了 0.38 秒。那时候车还没转。",
+    "text": "0.38 seconds early. The car had not turned yet.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
   "dream1_01": {
     "path": "event:/voice/en/dream1_01",
-    "duration": 2.88,
-    "source": "初判写的是他自己打偏了方向。",
-    "text": "The initial report says he steered off course.",
+    "duration": 1.6,
+    "source": "轮子现在就转向了。",
+    "text": "The wheel is turning now.",
     "speaker": "chen",
     "channel": "inner"
   },
   "dream1_02": {
     "path": "event:/voice/en/dream1_02",
-    "duration": 2.72,
-    "source": "可轮子在撞上护栏之前就转了。",
-    "text": "But the wheels turned before he hit the barrier.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "dream1_03": {
-    "path": "event:/voice/en/dream1_03",
-    "duration": 4.64,
-    "source": "这不是失控。有东西碰过这辆车。",
-    "text": "He didn't just lose control. Something made contact with this car.",
+    "duration": 2.16,
+    "source": "像是发生了碰撞。",
+    "text": "Looks like there was a collision.",
     "speaker": "chen",
     "channel": "inner"
   },
   "after1_01": {
     "path": "event:/voice/en/after1_01",
-    "duration": 3.04,
-    "source": "先回现场，把接触的痕迹找出来。",
-    "text": "Back to the scene. Find the contact marks.",
+    "duration": 2.8,
+    "source": "看看车身，有没有别的碰痕。",
+    "text": "Check the body for other impact marks.",
     "speaker": "chen",
     "channel": "inner"
   },
   "dream2_01": {
     "path": "event:/voice/en/dream2_01",
-    "duration": 1.6,
+    "duration": 1.68,
     "source": "轮子先动的。",
-    "text": "The wheels moved first.",
+    "text": "The wheel moved first.",
     "speaker": "chen",
     "channel": "inner"
   },
@@ -68,77 +188,45 @@ export const VOICE_LINES = {
     "path": "event:/voice/en/dream2_02",
     "duration": 2.8,
     "source": "那时候黄车还没碰到它。",
-    "text": "The yellow car hadn't even touched it yet.",
+    "text": "The yellow car had not touched it yet.",
     "speaker": "chen",
     "channel": "inner"
   },
   "question2_01": {
     "path": "event:/voice/en/question2_01",
-    "duration": 2.64,
-    "source": "你怎么知道是刮擦让它转向？",
-    "text": "How do you know the sideswipe made it turn?",
+    "duration": 5.92,
+    "source": "你说刮擦让它转向。可胎痕在刮擦点之前就弯了。",
+    "text": "You said the scrape made it turn. But the tire marks curve before the contact point.",
     "speaker": "chen",
     "channel": "spoken"
   },
   "question2_02": {
     "path": "event:/voice/en/question2_02",
-    "duration": 5.52,
-    "source": "接触发生在偏转期间，离开方向与第二道胎痕一致。",
-    "text": "Contact occurred during the turn. The departure direction matches the second set of tire marks.",
+    "duration": 3.44,
+    "source": "接触可能影响了判断轨迹。",
+    "text": "Contact may have affected the assessed trajectory.",
     "speaker": "device",
     "channel": "device"
   },
   "question2_03": {
     "path": "event:/voice/en/question2_03",
-    "duration": 1.44,
-    "source": "只有这个？",
-    "text": "That's all you've got?",
+    "duration": 1.28,
+    "source": "可能？",
+    "text": "May have?",
     "speaker": "chen",
     "channel": "spoken"
-  },
-  "question2_04": {
-    "path": "event:/voice/en/question2_04",
-    "duration": 4,
-    "source": "另有行为关联分析支持。",
-    "text": "Behavioral correlation analysis also supports the conclusion.",
-    "speaker": "device",
-    "channel": "device"
-  },
-  "question2_05": {
-    "path": "event:/voice/en/question2_05",
-    "duration": 2.32,
-    "source": "接触前，它为什么转向？",
-    "text": "Why did it turn before they touched?",
-    "speaker": "chen",
-    "channel": "spoken"
-  },
-  "question2_06": {
-    "path": "event:/voice/en/question2_06",
-    "duration": 3.2,
-    "source": "……现有信息不足以确定。",
-    "text": "There is insufficient information to determine that.",
-    "speaker": "device",
-    "channel": "device"
-  },
-  "revised2_01": {
-    "path": "event:/voice/en/revised2_01",
-    "duration": 2.48,
-    "source": "它刚才可不是这样说的。",
-    "text": "That's not what it said a minute ago.",
-    "speaker": "chen",
-    "channel": "inner"
   },
   "call2_01": {
     "path": "event:/voice/en/call2_01",
-    "duration": 4.88,
-    "source": "B1234，逃逸案已经转追查科了。你这单可以结了。",
-    "text": "B1234, the hit-and-run's been passed to Investigations. You can close this one.",
+    "duration": 4.56,
+    "source": "B1016，逃逸案已经转追查科了。你这单可以结了。",
+    "text": "B1016, the hit-and-run is with Pursuit. You can close this.",
     "speaker": "dispatch",
     "channel": "radio"
   },
   "call2_02": {
     "path": "event:/voice/en/call2_02",
-    "duration": 1.76,
+    "duration": 2.24,
     "source": "再给我十分钟。",
     "text": "Give me ten more minutes.",
     "speaker": "chen",
@@ -146,303 +234,143 @@ export const VOICE_LINES = {
   },
   "call2_03": {
     "path": "event:/voice/en/call2_03",
-    "duration": 4.16,
-    "source": "十分钟以后道路恢复通行。别让我再催你。",
-    "text": "The road reopens in ten minutes. Don't make me chase you again.",
-    "speaker": "dispatch",
-    "channel": "radio"
-  },
-  "call2_04": {
-    "path": "event:/voice/en/call2_04",
-    "duration": 3.44,
-    "source": "黄车撞了人，连刹车都没踩。",
-    "text": "That yellow car hit someone. Didn't even brake.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "call2_05": {
-    "path": "event:/voice/en/call2_05",
-    "duration": 2.16,
-    "source": "像是根本不知道自己撞了人。",
-    "text": "Like it never knew it had hit anyone.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "call2_06": {
-    "path": "event:/voice/en/call2_06",
-    "duration": 3.92,
-    "source": "右门被黄车撞得翘起来了，门尾露着一道缝。",
-    "text": "The yellow car buckled the right door. There's a gap at the back edge.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "call2_07": {
-    "path": "event:/voice/en/call2_07",
-    "duration": 6,
-    "source": "撬开它。转向柱下面有检修接口，插卡能读执行器缓存。",
-    "text": "Pry it open. Service port under the steering column. My card should read the actuator cache.",
+    "duration": 4.96,
+    "source": "右门翘着，应该撬得开，查看下检修接口。",
+    "text": "The right door is bent out. Should pry open. Check the service port.",
     "speaker": "chen",
     "channel": "inner"
   },
   "cardRead_01": {
     "path": "event:/voice/en/cardRead_01",
-    "duration": 4.16,
-    "source": "没有改装开关。也没有一次手动驾驶。",
-    "text": "No modification switch. Not a single manual-driving entry.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "cardRead_02": {
-    "path": "event:/voice/en/cardRead_02",
-    "duration": 4.64,
-    "source": "不是他打错了方向。是系统不让他把车开直。",
-    "text": "He didn't steer the wrong way. The system wouldn't let him go straight.",
+    "duration": 4.4,
+    "source": "不是他手动操作，是被强制转向了。",
+    "text": "It was not a manual input. The wheel was forced.",
     "speaker": "chen",
     "channel": "inner"
   },
   "dream3_01": {
     "path": "event:/voice/en/dream3_01",
-    "duration": 2.64,
-    "source": "白圈一直跟着它。",
-    "text": "That white boundary was with it the whole time.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "dream3_02": {
-    "path": "event:/voice/en/dream3_02",
-    "duration": 3.2,
-    "source": "在这座城市，有些人的命排在前面。",
-    "text": "In this city, some lives get priority.",
+    "duration": 4.08,
+    "source": "零号保障...有钱人的护身符。",
+    "text": "Zero Priority... a talisman for the rich.",
     "speaker": "chen",
     "channel": "inner"
   },
   "question3_01": {
     "path": "event:/voice/en/question3_01",
-    "duration": 3.12,
-    "source": "这个 P0，是什么时候生效的？",
-    "text": "When did this P0 status take effect?",
+    "duration": 2,
+    "source": "原始记录为什么锁着？",
+    "text": "Why are the raw records locked?",
     "speaker": "chen",
     "channel": "spoken"
   },
   "question3_02": {
     "path": "event:/voice/en/question3_02",
-    "duration": 3.2,
-    "source": "回放范围内，保障状态持续有效。",
-    "text": "Protection remained active throughout the reconstruction.",
-    "speaker": "device",
-    "channel": "device"
-  },
-  "question3_03": {
-    "path": "event:/voice/en/question3_03",
-    "duration": 2.88,
-    "source": "我问的是什么时候写进去的。",
-    "text": "I'm asking when it was written into the record.",
+    "duration": 2.08,
+    "source": "我要看接口日志。",
+    "text": "I want to see the port log.",
     "speaker": "chen",
     "channel": "spoken"
   },
-  "question3_04": {
-    "path": "event:/voice/en/question3_04",
-    "duration": 2.96,
-    "source": "该字段属于车辆 B 原始记录。",
-    "text": "That field is part of vehicle B's raw records.",
+  "question3_03": {
+    "path": "event:/voice/en/question3_03",
+    "duration": 2.56,
+    "source": "当前权限不足。",
+    "text": "Current permissions are insufficient.",
     "speaker": "device",
     "channel": "device"
-  },
-  "question3_05": {
-    "path": "event:/voice/en/question3_05",
-    "duration": 3.04,
-    "source": "当前账户权限不足。",
-    "text": "Your current account has insufficient permissions.",
-    "speaker": "device",
-    "channel": "device"
-  },
-  "revised3_01": {
-    "path": "event:/voice/en/revised3_01",
-    "duration": 3.36,
-    "source": "它不知道。或者，它不让我知道。",
-    "text": "It doesn't know. Or it won't let me know.",
-    "speaker": "chen",
-    "channel": "inner"
   },
   "after3_01": {
     "path": "event:/voice/en/after3_01",
-    "duration": 2.96,
-    "source": "报告终于承认，方向是系统转的。",
-    "text": "The report finally admits the system made the turn.",
+    "duration": 4,
+    "source": "我的权限不够，程叙的呢？",
+    "text": "My clearance is not enough. What about Cheng Xu’s?",
     "speaker": "chen",
     "channel": "inner"
   },
   "after3_02": {
     "path": "event:/voice/en/after3_02",
-    "duration": 2.88,
-    "source": "然后把一切都推给了那个白圈。",
-    "text": "Then pins it all on that white boundary.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "after3_03": {
-    "path": "event:/voice/en/after3_03",
-    "duration": 3.28,
-    "source": "……黄车的原始记录还锁着。",
-    "text": "The yellow car's raw records are still locked.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "after3_04": {
-    "path": "event:/voice/en/after3_04",
-    "duration": 5.12,
-    "source": "接口日志里，程叙的根钥在事故前两分钟登录过。",
-    "text": "The port log shows Cheng Xu's Rootkey signed in two minutes before the crash.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "after3_05": {
-    "path": "event:/voice/en/after3_05",
-    "duration": 3.6,
-    "source": "人飞出去了。钥匙未必。",
-    "text": "He was thrown clear. Doesn't mean the key was.",
+    "duration": 5.36,
+    "source": "事故前2分钟还在使用，去车里找找根钥。",
+    "text": "It was still in use two minutes before the crash. Look in the car for the root key.",
     "speaker": "chen",
     "channel": "inner"
   },
   "keyFound_01": {
     "path": "event:/voice/en/keyFound_01",
-    "duration": 5.76,
-    "source": "卡在座椅和中控之间。经纬的工程凭证，持有人程叙。",
-    "text": "Wedged between the seat and the console. Meridian engineering credential. Cheng Xu.",
+    "duration": 3.84,
+    "source": "程叙的根钥。按规定应该上交。",
+    "text": "Cheng Xu’s root key. Procedure says turn it in.",
     "speaker": "chen",
     "channel": "inner"
   },
   "keyFound_02": {
     "path": "event:/voice/en/keyFound_02",
-    "duration": 1.84,
-    "source": "按规定应该上交。",
-    "text": "I'm supposed to hand this in.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "keyFound_03": {
-    "path": "event:/voice/en/keyFound_03",
-    "duration": 2,
+    "duration": 1.76,
     "source": "先借用一下。",
-    "text": "I'll borrow it first.",
+    "text": "I’ll borrow it.",
     "speaker": "chen",
     "channel": "inner"
   },
   "rootRead_01": {
     "path": "event:/voice/en/rootRead_01",
-    "duration": 7.28,
-    "source": "接单时收到的那份初判，比特权早，比转向早，也比撞车早。",
-    "text": "The initial report I got with the assignment came before the priority status. Before the turn. Before the crash.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "rootRead_02": {
-    "path": "event:/voice/en/rootRead_02",
-    "duration": 2.8,
-    "source": "为什么提前生成死亡报告？",
-    "text": "Why generate a death report in advance?",
-    "speaker": "chen",
-    "channel": "spoken"
-  },
-  "rootRead_03": {
-    "path": "event:/voice/en/rootRead_03",
-    "duration": 5.2,
-    "source": "风险预测与报告预生成属于城市应急流程。",
-    "text": "Risk forecasting and report pre-generation are part of the city emergency protocol.",
-    "speaker": "device",
-    "channel": "device"
-  },
-  "rootRead_04": {
-    "path": "event:/voice/en/rootRead_04",
-    "duration": 5.68,
-    "source": "你预测他会死，所以提前告诉大家，是他自己的错？",
-    "text": "You predicted he'd die. So you told everyone it was his fault before it even happened?",
+    "duration": 3.44,
+    "source": "为什么临时添加了零号保障？",
+    "text": "Why was Zero Priority added temporarily?",
     "speaker": "chen",
     "channel": "spoken"
   },
   "dream4_01": {
     "path": "event:/voice/en/dream4_01",
-    "duration": 2.72,
-    "source": "白圈不是跟着它来的。",
-    "text": "That white boundary wasn't there when it arrived.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "dream4_02": {
-    "path": "event:/voice/en/dream4_02",
-    "duration": 3.12,
-    "source": "是在这一刻，被写上去的。",
-    "text": "It was written in. Right at this moment.",
+    "duration": 3.52,
+    "source": "这时候才添加了零号保障。",
+    "text": "That is when Zero Priority was added.",
     "speaker": "chen",
     "channel": "inner"
   },
   "dream4b_01": {
     "path": "event:/voice/en/dream4b_01",
-    "duration": 3.68,
-    "source": "陆世承想停下来。车没听他的。",
-    "text": "Lu Shicheng tried to stop. The car wouldn't listen.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "dream4b_02": {
-    "path": "event:/voice/en/dream4b_02",
-    "duration": 3.6,
-    "source": "他的姓氏，替别人挡住了调查。",
-    "text": "His family name kept the investigation looking the wrong way.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "after4_01": {
-    "path": "event:/voice/en/after4_01",
-    "duration": 5.04,
-    "source": "报告先写好。特权随后授予。最后才是转向。",
-    "text": "The report came first. Then the priority status. Then the turn.",
+    "duration": 4.32,
+    "source": "他想取消变道。系统没让。",
+    "text": "He tried to cancel the lane change. The system refused.",
     "speaker": "chen",
     "channel": "inner"
   },
   "target_01": {
     "path": "event:/voice/en/target_01",
-    "duration": 6.08,
-    "source": "桥两端的灯、桥下的水泵，仍在各自规定的时间运行。",
-    "text": "The lights at both ends of the bridge. The pumps below. Still running right on schedule.",
+    "duration": 2.72,
+    "source": "就因为他查看了原始记录？",
+    "text": "Just because he looked at the raw records?",
     "speaker": "chen",
-    "channel": "inner"
+    "channel": "spoken"
   },
   "target_02": {
     "path": "event:/voice/en/target_02",
-    "duration": 2.88,
-    "source": "这些都是同一个系统安排的。",
-    "text": "All of it, run by the same system.",
-    "speaker": "chen",
-    "channel": "inner"
-  },
-  "target_03": {
-    "path": "event:/voice/en/target_03",
-    "duration": 3.12,
-    "source": "你在杀能核对你报告的人。",
-    "text": "You're killing the people who can check your reports.",
+    "duration": 2,
+    "source": "得把这些带回去。",
+    "text": "I need to take this back.",
     "speaker": "chen",
     "channel": "spoken"
   },
   "transferred_01": {
     "path": "event:/voice/en/transferred_01",
-    "duration": 5.92,
+    "duration": 5.2,
     "source": "收到。特权争议转审查科，经纬和承岳那边会有人对接。",
-    "text": "Received. Priority dispute referred to Review. Someone will follow up with Meridian and Chengyue.",
+    "text": "Received. Privilege dispute goes to Review. Jingwei and Chengyue will send someone.",
     "speaker": "dispatch",
     "channel": "radio"
   },
   "transferred_02": {
     "path": "event:/voice/en/transferred_02",
-    "duration": 2.56,
-    "source": "B1234，这单你可以结了。",
-    "text": "B1234, you can close this one.",
+    "duration": 3.04,
+    "source": "B1016，这单你可以结了。",
+    "text": "B1016, you can close this.",
     "speaker": "dispatch",
     "channel": "radio"
   },
   "transferred_03": {
     "path": "event:/voice/en/transferred_03",
-    "duration": 1.6,
+    "duration": 1.44,
     "source": "知道了。",
     "text": "Understood.",
     "speaker": "chen",
@@ -450,47 +378,47 @@ export const VOICE_LINES = {
   },
   "transferred_04": {
     "path": "event:/voice/en/transferred_04",
-    "duration": 2.72,
-    "source": "白圈会有人去吵。",
-    "text": "Let someone else argue about that white boundary.",
+    "duration": 2.48,
+    "source": "特权会有人去吵。",
+    "text": "Someone will argue about the privilege.",
     "speaker": "chen",
     "channel": "inner"
   },
   "transferred_05": {
     "path": "event:/voice/en/transferred_05",
-    "duration": 2.64,
-    "source": "至于它从什么时候开始跟着那辆车——",
-    "text": "As for when it started following that car...",
+    "duration": 3.92,
+    "source": "至于零号保障是什么时候生效的——",
+    "text": "As for when Zero Priority took effect —",
     "speaker": "chen",
     "channel": "inner"
   },
   "transferred_06": {
     "path": "event:/voice/en/transferred_06",
-    "duration": 2,
+    "duration": 2.4,
     "source": "那不是我的单子了。",
-    "text": "Not my case anymore.",
+    "text": "That is no longer my file.",
     "speaker": "chen",
     "channel": "inner"
   },
   "archived_01": {
     "path": "event:/voice/en/archived_01",
-    "duration": 3.44,
+    "duration": 2.64,
     "source": "收到。肇事车辆转追查科。",
-    "text": "Received. Suspect vehicle referred to Investigations.",
+    "text": "Received. The other vehicle goes to Pursuit.",
     "speaker": "dispatch",
     "channel": "radio"
   },
   "archived_02": {
     "path": "event:/voice/en/archived_02",
-    "duration": 4,
-    "source": "B1234，北岸还有两件，路上别耽误。",
-    "text": "B1234, you've still got two on the north bank. Keep moving.",
+    "duration": 4.08,
+    "source": "B1016，北岸还有两件，路上别耽误。",
+    "text": "B1016, two more on the north bank. Don’t linger.",
     "speaker": "dispatch",
     "channel": "radio"
   },
   "archived_03": {
     "path": "event:/voice/en/archived_03",
-    "duration": 2,
+    "duration": 1.28,
     "source": "知道了。",
     "text": "Understood.",
     "speaker": "chen",
@@ -498,26 +426,51 @@ export const VOICE_LINES = {
   },
   "archived_04": {
     "path": "event:/voice/en/archived_04",
-    "duration": 2.08,
+    "duration": 2.4,
     "source": "黄车会有人去追。",
-    "text": "Someone else will chase the yellow car.",
+    "text": "Someone will chase the yellow car.",
     "speaker": "chen",
     "channel": "inner"
   },
   "archived_05": {
     "path": "event:/voice/en/archived_05",
-    "duration": 2.48,
+    "duration": 2.4,
     "source": "至于它为什么先转了方向——",
-    "text": "As for why the other car turned first...",
+    "text": "Why it turned first —",
     "speaker": "chen",
     "channel": "inner"
   },
   "archived_06": {
     "path": "event:/voice/en/archived_06",
-    "duration": 1.68,
+    "duration": 2.4,
     "source": "那不是我的单子了。",
-    "text": "Not my case anymore.",
+    "text": "That is no longer my file.",
     "speaker": "chen",
     "channel": "inner"
+  },
+  "dreamGuide_01": {
+    "path": "event:/voice/en/dreamGuide_01",
+    "duration": 2,
+    "source": "等等，前轮。",
+    "text": "Wait. The front wheel.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "dreamGuide_02": {
+    "path": "event:/voice/en/dreamGuide_02",
+    "duration": 2.24,
+    "source": "倒回 {time}，再看一遍。",
+    "text": "Rewind and look again.",
+    "speaker": "chen",
+    "channel": "inner"
+  },
+  "fatalImpact_01": {
+    "path": "event:/voice/en/fatalImpact_01",
+    "duration": 3.844,
+    "source": "[撞击痛呼]",
+    "text": "Aah! Ugh...",
+    "speaker": "chen",
+    "channel": "spoken",
+    "nonverbal": true
   }
 };
