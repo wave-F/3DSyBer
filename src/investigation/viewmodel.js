@@ -21,10 +21,11 @@ const glowMat = (hex, k = 1) => {
 const POSE = {
   // 待机：比扫描姿态更低，枪口朝下，不像一直端着
   // fps-arm.glb 是原始尺寸（比旧 Tripo 模型大），握点收近、往画面中间靠
-  idle: { pos: new THREE.Vector3(0.16, -0.19, -0.36), rot: new THREE.Euler(-0.2, 0.12, -0.08) },
-  scan: { pos: new THREE.Vector3(0.11, -0.13, -0.38), rot: new THREE.Euler(0.035, 0.05, -0.03) },
-  // 分析沿用扫描的举起，手再往前伸一截
-  reach: { pos: new THREE.Vector3(0.11, -0.13, -0.41), rot: new THREE.Euler(0.035, 0.05, -0.03) },
+  idle: { pos: new THREE.Vector3(0.16, -0.22, -0.36), rot: new THREE.Euler(-0.28, 0.12, -0.08) },
+  // 扫描：举起幅度收一点，不往画面中间和前方伸太多
+  scan: { pos: new THREE.Vector3(0.13, -0.16, -0.37), rot: new THREE.Euler(0.0, 0.07, -0.04) },
+  // 分析沿用扫描的举起，手只再往前伸一点点
+  reach: { pos: new THREE.Vector3(0.13, -0.16, -0.38), rot: new THREE.Euler(0.0, 0.07, -0.04) },
   hidden: { pos: new THREE.Vector3(0.24, -0.55, -0.3), rot: new THREE.Euler(-0.9, 0.2, 0.3) },
 };
 
