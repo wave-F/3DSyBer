@@ -2,6 +2,8 @@ import * as THREE from 'three/webgpu';
 import { CAR_POS } from './crash.js';
 import { DECK_Y } from './bridge.js';
 import { POLICE_POS, POLICE_YAW } from './policeCar.js';
+import { sound } from './audio/sound.js';
+import { PEAK } from './audio/events.js';
 
 // 开场：高角度跟车 → 正面看停车 → 回到车内 → 第一人称下车 → 打开终端
 // 坐着看向现场 → 转头伸手开门 → 侧身探出车门 → 起身退到门外 → 回身关门 → 转向事故车走两步，交还控制
@@ -55,6 +57,36 @@ export function createIntro({ camera, police, controls, inv }) {
   const local = new THREE.Vector3();
   const look = new THREE.Vector3();
   const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+  const carPoint = new THREE.Vector3(), doorPoint = new THREE.Vector3();
+  let doorOpened = false, doorClosed = false;
+
+  // 声音：跟车 / 停车放车外行驶声（3D 跟着车走）+ 刹车；切进驾驶座时硬切到车内声并高切车外；开门时车内声淡出
+  const car = () => carPoint.set(g.position.x, g.position.y + 0.6, g.position.z);
+  function cutToCabin() {
+    sound.follow('vehicle/drive_out', null, { immediate: true });
+    sound.follow('vehicle/brake', null);
+    sound.loop('vehicle/drive_in', true);
+    sound.setCarInterior(true);
+  }
+  function cabinSounds(time) {
+    if (!doorOpened && time >= DOOR.open[0]) {
+      doorOpened = true;
+      sound.play('vehicle/door_open', { position: police.doorWorld(doorPoint) });
+      sound.loop('vehicle/drive_in', false);
+      sound.setCarInterior(false);
+    }
+    // 关门素材峰值对齐门板合上的那一帧
+    if (!doorClosed && time >= DOOR.close[1] - PEAK.doorClose) {
+      doorClosed = true;
+      sound.play('vehicle/door_close', { position: police.doorWorld(doorPoint) });
+    }
+  }
+  function stopSounds() {
+    sound.follow('vehicle/drive_out', null, { immediate: true });
+    sound.follow('vehicle/brake', null);
+    sound.loop('vehicle/drive_in', false);
+    sound.setCarInterior(false);
+  }
 
   function placeCar(z) {
     g.position.set(POLICE_POS.x, POLICE_POS.y, z);
@@ -92,6 +124,7 @@ export function createIntro({ camera, police, controls, inv }) {
   function finish() {
     if (!playing) return;
     playing = false;
+    stopSounds();
     placeCar(POLICE_POS.z);
     if (phase === 'brief') inv.closeArrival();
     sample(END);
@@ -139,20 +172,28 @@ export function createIntro({ camera, police, controls, inv }) {
       if (phase === 'chase') {
         inv.beginOpening();
         frameChase();
+        sound.follow('vehicle/drive_out', car());
         if (t >= CHASE) { phase = 'park'; t = 0; }
       } else if (phase === 'park') {
         framePark();
+        sound.follow('vehicle/drive_out', car());
+        sound.follow('vehicle/brake', car());   // 停车阶段一开始踩刹车，声音跟着车滑进车位
         if (t >= PARK + 0.3) {
           placeCar(POLICE_POS.z);
           phase = 'exit';
           t = 0;
           sample(0);
+          cutToCabin();
         }
       } else if (t >= END) {
         sample(END);
+        cabinSounds(END);
         phase = 'brief';
         inv.openArrival();
-      } else sample(t);
+      } else {
+        sample(t);
+        cabinSounds(t);
+      }
     },
   };
 }

@@ -5,6 +5,8 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { DECK_Y } from '../bridge.js';
 import { CAR_POS } from '../crash.js';
 import { DEATH_REPORT } from './clues.js';
+import { sound } from '../audio/sound.js';
+import { PEAK } from '../audio/events.js';
 
 // 结局：陈墨被跑车撞飞（第一人称，全程是动画，玩家不能操作）
 // 站在车道上看着事故车 → 背后车灯逼近，强制转头 → 白光、撞击、翻滚落地
@@ -53,6 +55,8 @@ T.confirm = T.verdict + 0.8;     // 「按住 E 确认归档」出现并自动�
 T.archived = T.confirm + 1.8;
 T.black = T.archived + 2.2;      // 归档完成后停一会儿，淡出黑场
 T.end = T.black + 1.0;
+const HIT_SOUND_AT = T.hit - PEAK.hitBody;
+const HIT_POS = { x: START.x, y: DECK_Y + 0.9, z: START.z - 0.6 };
 
 const clamp01 = (u) => Math.min(1, Math.max(0, u));
 const smooth = (u) => { u = clamp01(u); return u * u * (3 - 2 * u); };
@@ -320,7 +324,12 @@ export function createFinale({ scene, camera, tablet, ui }) {
     update(dt, running) {
       if (!playing) return;
       const go = running && ready && !frozen;
-      if (go) t += dt;
+      if (go) {
+        const before = t;
+        t += dt;
+        // 撞人声提前触发，素材峰值正好落在撞击那一帧；声源在车头撞上来的位置（转头后的正前方）
+        if (before < HIT_SOUND_AT && t >= HIT_SOUND_AT) sound.play('vehicle/hit_body', { position: HIT_POS });
+      }
       apply(go ? dt : 0);
       if (t >= T.end) {
         playing = false;

@@ -7,8 +7,9 @@ const root = new URL('../', import.meta.url);
 const project = fileURLToPath(new URL('Fmod/3DSyBer/3DSyBer.fspro', root));
 const executable = process.env.FMOD_STUDIO_BIN || '/Applications/FMOD Studio.app/Contents/MacOS/fmodstudio';
 const mode = process.argv[2];
-const SCRIPTS = { 'create-test': 'Fmod/create-test-event.js', events: 'Fmod/build-events.js', mix: 'Fmod/setup-mix.js' };
-if (mode !== 'build' && !SCRIPTS[mode]) throw new Error('Usage: node scripts/fmod.mjs create-test|events|mix|build');
+// scene 只新增缺失对象（第二批音效与 Snapshot），可重复执行，不覆盖手工调音
+const SCRIPTS = { 'create-test': 'Fmod/create-test-event.js', events: 'Fmod/build-events.js', mix: 'Fmod/setup-mix.js', scene: 'Fmod/scene-sfx.js' };
+if (mode !== 'build' && !SCRIPTS[mode]) throw new Error('Usage: node scripts/fmod.mjs create-test|events|mix|scene|build');
 // 调音后日常同步只允许 build。重建事件 / 混音必须显式授权，防止覆盖 Studio 的手工设置。
 if ((mode === 'events' || mode === 'mix') && process.env.FMOD_ALLOW_REAUTHOR !== '1') {
   throw new Error('此命令会重建事件或混音，可能覆盖 Studio 音量。同步请用 npm run audio:build；确需重新创作时显式设置 FMOD_ALLOW_REAUTHOR=1。');

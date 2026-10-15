@@ -28,9 +28,10 @@ async function load(path, imports, globals = {}) {
   return module.namespace;
 }
 
-test('试听清单只保留两个大小写匹配的 Foley 事件', () => {
+test('试听清单的 Foley 事件与 Studio 大小写一致', () => {
   assert.deepEqual(events.EVENTS.filter((e) => e.path.startsWith('event:/foley/')).map((e) => e.path), [
-    'event:/foley/FootStep', 'event:/foley/ClothFoley',
+    'event:/foley/FootStep', 'event:/foley/FootStep_Water', 'event:/foley/ClothFoley',
+    'event:/foley/pry_insert', 'event:/foley/pry_open',
   ]);
 });
 
@@ -145,7 +146,7 @@ test('scifi 替换素材后沿用原事件路径 / 分析起停，不覆盖 Stud
     'event:/scifi/analyze_complete', 'event:/scifi/analyze_cancel',
     'event:/scifi/dream_enter', 'event:/scifi/dream_exit',
   ];
-  assert.deepEqual(events.EVENTS.filter((event) => event.path.startsWith('event:/scifi/')).map((event) => event.path), paths);
+  for (const path of paths) assert.ok(events.EVENTS.some((event) => event.path === path), path);
   const { FmodRuntime: Runtime } = await load('src/audio/fmodRuntime.js', { './events.js': events });
   const calls = [], pitches = [], warnings = [];
   class FmodRuntime extends Runtime {
@@ -234,7 +235,7 @@ test('试听页启用 / 播放不覆盖 Studio 音量，仅手动推子会修改
   assert.deepEqual(writes, [['vca:/Ambience', 0.42]]);
 });
 
-async function player(audio) {
+async function player(audio, puddle = () => false) {
   const input = {}, calls = [];
   class Controls extends THREE.EventDispatcher {
     isLocked = true;
@@ -247,7 +248,7 @@ async function player(audio) {
   }
   const { createPlayer } = await load('src/player.js', {
     'three/addons/controls/PointerLockControls.js': { PointerLockControls: Controls },
-    './bridge.js': { DECK_Y: 0, HALF_W: 7 },
+    './bridge.js': { DECK_Y: 0, HALF_W: 7, puddleAt: puddle },
     './crash.js': { carCollider: { x: 100, z: 0, yaw: 0, minX: -1, maxX: 1, minZ: -1, maxZ: 1 } },
     './policeCar.js': { policeCollider: { x: 100, z: 0, yaw: 0, minX: -1, maxX: 1, minZ: -1, maxZ: 1 } },
     './cordon.js': { CORDON: { z0: -1000, z1: 1000 }, CORDON_MARGIN: 1 },
@@ -488,4 +489,146 @@ test('平板拿出 / 收起各触发一次，重复设置状态不会重播', as
   tablet.toggle(false);
   tablet.toggle(false);
   assert.deepEqual(calls, ['cloth', 'cloth']);
+});
+
+test('踩在水洼上用水脚步代替普通脚步，衣物声照常', async () => {
+  const played = [];
+  class FmodRuntime {
+    ready = true;
+    play({ path }) { played.push(path); }
+  }
+  const { sound } = await load('src/audio/sound.js', {
+    './fmodRuntime.js': { FmodRuntime }, './events.js': events,
+  }, { document: { addEventListener() {} } });
+  // 从 z = -10.8 往 -Z 走，过了 z = -13 才是水洼
+  const p = await player(sound, (x, z) => z < -13);
+  p.key('KeyW');
+  p.frames(120);
+  const steps = played.filter((path) => path !== 'event:/foley/ClothFoley');
+  assert.ok(steps.includes('event:/foley/FootStep'));
+  assert.ok(steps.includes('event:/foley/FootStep_Water'));
+  assert.equal(steps.indexOf('event:/foley/FootStep_Water'), steps.lastIndexOf('event:/foley/FootStep') + 1);
+  assert.equal(played.filter((path) => path === 'event:/foley/ClothFoley').length, steps.length);
+});
+
+function runtimeStub(calls) {
+  // 记录 FMOD 调用的最小运行时：loops / complete 与真实 FmodRuntime 同名
+  return class FmodRuntime {
+    ready = false;
+    complete = false;
+    loops = new Map();
+    loaded = Promise.resolve();
+    initialize() { this.ready = true; calls.push(['init']); return Promise.resolve(); }
+    setMuted() {}
+    play({ path, position }) { calls.push(['play', path, position]); }
+    startLoop(path, position) { this.loops.set(path, {}); calls.push(['start', path, position]); return {}; }
+    moveLoop(path, position) { if (this.loops.has(path)) calls.push(['move', path, position]); }
+    stopLoop(path, immediate = false) { if (this.loops.delete(path)) calls.push(['stop', path, immediate]); }
+    setSnapshot(path, on) { calls.push(['snapshot', path, on]); }
+    instance() { return null; }
+    update() {}
+  };
+}
+
+test('加载界面先有手势才放菜单音乐；点开始时音乐淡出、播进入音效，全部 Bank 就绪后才铺环境，不放警笛', async () => {
+  const calls = [];
+  const { sound } = await load('src/audio/sound.js', {
+    './fmodRuntime.js': { FmodRuntime: runtimeStub(calls) }, './events.js': events,
+  }, { document: { addEventListener() {}, hidden: false } });
+  sound.unlock();
+  await new Promise((resolve) => setTimeout(resolve));
+  assert.deepEqual(calls.filter(([a]) => a === 'start').map(([, path]) => path), ['event:/music/menu']);
+  calls.length = 0;
+  sound.start();
+  await new Promise((resolve) => setTimeout(resolve));
+  assert.deepEqual(calls.slice(0, 3), [['init'], ['stop', 'event:/music/menu', false], ['play', 'event:/ui/enter_game', undefined]]);
+  const started = calls.filter(([a]) => a === 'start').map(([, path]) => path);
+  assert.ok(started.includes('event:/amb/rain'));
+  assert.ok(!started.includes('event:/vehicle/siren'));
+  assert.ok(!started.includes('event:/music/menu'));
+});
+
+test('没有提前手势时点开始不会补放菜单音乐', async () => {
+  const calls = [];
+  const { sound } = await load('src/audio/sound.js', {
+    './fmodRuntime.js': { FmodRuntime: runtimeStub(calls) }, './events.js': events,
+  }, { document: { addEventListener() {}, hidden: false } });
+  sound.start();
+  sound.unlock();
+  await new Promise((resolve) => setTimeout(resolve));
+  assert.ok(!calls.some(([a, path]) => a === 'start' && path === 'event:/music/menu'));
+  assert.ok(calls.some(([a, path]) => a === 'play' && path === 'event:/ui/enter_game'));
+});
+
+test('跟随声源：Bank 未装完不启动；第一次开始、之后移动、null 停止（可立即切断）', async () => {
+  const calls = [];
+  const Runtime = runtimeStub(calls);
+  let runtime;
+  class FmodRuntime extends Runtime { constructor() { super(); runtime = this; this.ready = true; } }
+  const { sound } = await load('src/audio/sound.js', {
+    './fmodRuntime.js': { FmodRuntime }, './events.js': events,
+  }, { document: { addEventListener() {} } });
+  sound.follow('vehicle/drive_out', { x: 0, y: 0, z: 0 });
+  sound.loop('vehicle/drive_in', true);
+  assert.deepEqual(calls, []);
+  runtime.complete = true;
+  sound.follow('vehicle/drive_out', { x: 0, y: 0, z: 0 });
+  sound.follow('vehicle/drive_out', { x: 0, y: 0, z: 5 });
+  sound.follow('vehicle/drive_out', null, { immediate: true });
+  sound.follow('vehicle/drive_out', null);
+  sound.loop('vehicle/drive_in', true);
+  sound.loop('vehicle/drive_in', false);
+  assert.deepEqual(calls, [
+    ['start', 'event:/vehicle/drive_out', { x: 0, y: 0, z: 0 }],
+    ['move', 'event:/vehicle/drive_out', { x: 0, y: 0, z: 5 }],
+    ['stop', 'event:/vehicle/drive_out', true],
+    ['start', 'event:/vehicle/drive_in', undefined],
+    ['stop', 'event:/vehicle/drive_in', false],
+  ]);
+});
+
+test('广告牌只在近处大屏换图时响，世界开始前和远处的屏不响', async () => {
+  const calls = [];
+  const { sound } = await load('src/audio/sound.js', {
+    './fmodRuntime.js': { FmodRuntime: runtimeStub(calls) }, './events.js': events,
+  }, { document: { addEventListener() {}, hidden: false } });
+  const area = { x: [-7, 7], z: [-46, 68], y: 21.7 };
+  sound.setBillboards([{ x: 20, y: 30, z: 0, phase: 1 }, { x: 400, y: 30, z: 0, phase: 1 }], area, 9);
+  sound.updateBillboards(7.5);
+  sound.updateBillboards(8.5);   // (8.5 + 1) / 9 跨过整数：换图，但世界还没开始
+  assert.deepEqual(calls, []);
+  sound.start();
+  await new Promise((resolve) => setTimeout(resolve));
+  calls.length = 0;
+  sound.updateBillboards(16);
+  sound.updateBillboards(17.5);  // 再换一次
+  sound.updateBillboards(17.6);
+  assert.deepEqual(calls.map(([a, path, at]) => [a, path, at.x, at.y, at.z]), [['play', 'event:/world/billboard_update', 20, 30, 0]]);
+});
+
+test('运行时先装入 BOOT Bank，其余随后补齐；全部装完仍缺的事件只报一次', async () => {
+  const { FmodRuntime } = await load('src/audio/fmodRuntime.js', { './events.js': events });
+  const fmod = new FmodRuntime();
+  const loaded = [];
+  fmod.module = { OK: 0, STUDIO_LOAD_MEMORY: 0, STUDIO_LOAD_BANK_NORMAL: 0, ErrorString: () => 'not found' };
+  fmod.ready = true;
+  fmod.system = {
+    loadBankMemory(bytes, length, mode, flags, out) { loaded.push(bytes.file); out.val = { loadSampleData: () => 0 }; return 0; },
+    getEvent(path, out) { return path === 'event:/ok' ? ((out.val = {}), 0) : 1; },
+  };
+  const later = [];
+  fmod.fetched = new Map();
+  fmod.fetches = new Map(events.BANKS.map((file) => [file, new Promise((resolve) => later.push(() => resolve(Object.assign(new Uint8Array(1), { file }))))]));
+  for (const file of events.BOOT_BANKS) fmod.loadBank(file, Object.assign(new Uint8Array(1), { file }));
+  const rest = fmod.loadRest();
+  assert.deepEqual(loaded, events.BOOT_BANKS);
+  assert.throws(() => fmod.description('event:/missing'));
+  assert.throws(() => fmod.description('event:/missing'));   // 还没装完：可能只是 Bank 未到
+  later.forEach((resolve) => resolve());
+  await rest;
+  assert.deepEqual(loaded, events.BANKS);
+  assert.equal(fmod.complete, true);
+  assert.throws(() => fmod.description('event:/missing'));
+  assert.equal(fmod.description('event:/missing'), undefined);
+  assert.deepEqual(fmod.description('event:/ok'), {});
 });

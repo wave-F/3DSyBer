@@ -57,7 +57,7 @@ const TRACK_B = new Track([
   { t: 3.0, x: -4.4, z: 12, yaw: STRAIGHT },
   { t: 4.0, x: -4.4, z: 40, yaw: STRAIGHT },
 ]);
-const IMPACT_T = 2.6;
+export const IMPACT_T = 2.6;
 // 乘员甩出（惯性）：LURCH_T 车开始急减速，人没系安全带，保持此刻的车速继续前冲（车在身下减速，人相对车往前滑）
 // 撞上仪表台 / 挡风玻璃（HIT0~HIT1）：水平速度损失到 KEEP，同时被向上弹起，腿被仪表台绊住 → 开始向前翻滚
 // 之后是自由抛体 + 翻滚，四肢被离心力甩开、拖在翻滚方向后面

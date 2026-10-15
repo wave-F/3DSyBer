@@ -30,8 +30,12 @@ import { createInvestigation } from './investigation/state.js';
 import { addLightGroup } from './debugLights.js';
 import { HURT } from './investigation/finale.js';
 import { sound } from './audio/sound.js';
+import { AD_DWELL } from './ads.js';
 
 sound.preload();
+// 加载期间第一次点击 / 按键开始菜单音乐；还没就绪时的点击是无效点击
+loading.onWake(() => sound.unlock());
+loading.onDeny(() => sound.play('ui/deny'));
 
 const renderer = new THREE.WebGPURenderer();
 // Forward+ 分簇光照：每个像素只计算真正照到它的点光源（灯一盏不少，开销按覆盖范围算）
@@ -82,8 +86,11 @@ const police = buildPoliceCar(scene);
 const updateSky = buildSky(scene);
 const updateRain = buildRain(scene, camera);
 const updateCordon = buildCordon(scene);
-sound.setRainSpots(updateCity.rainSpots, { x: [-HALF_W, HALF_W], z: [CORDON.z0, CORDON.z1], y: DECK_Y + 1.7 });
-const updatePlayer = createPlayer(camera, document.body, document.getElementById('overlay'));
+const playArea = { x: [-HALF_W, HALF_W], z: [CORDON.z0, CORDON.z1], y: DECK_Y + 1.7 };
+sound.setRainSpots(updateCity.rainSpots, playArea);
+sound.setBillboards(updateCity.adScreens, playArea, AD_DWELL);
+const overlay = document.getElementById('overlay');
+const updatePlayer = createPlayer(camera, document.body, overlay);
 const inv = createInvestigation(scene, camera, crash, updatePlayer.controls, updatePlayer.gait);
 // 加载界面点击开始：这一下是用户手势，同时启动 FMOD 并锁定鼠标
 loading.onStart(() => { sound.start(); updatePlayer.controls.lock(); });
@@ -188,6 +195,7 @@ addEventListener('resize', () => {
 });
 
 let last = performance.now();
+let pauseShown = false;
 renderer.setAnimationLoop(() => {
   const now = performance.now();
   const dt = Math.min((now - last) / 1000, 0.1);
@@ -197,6 +205,11 @@ renderer.setAnimationLoop(() => {
   const paused = !controls.isLocked && !controls.keepOverlayHidden;
   const step = paused ? 0 : dt;
   sound.setDialoguePaused(paused);
+  // 暂停层出现 / 消失：面板音 + 世界高切
+  if (pauseShown !== !overlay.classList.contains('hidden')) {
+    pauseShown = !pauseShown;
+    sound.setPause(pauseShown);
+  }
   tick(step);
   if (intro.playing) intro.update(step);
   else updatePlayer(step, inv.moveScale);
@@ -207,6 +220,7 @@ renderer.setAnimationLoop(() => {
   updateSky(clock.dt, clock.elapsed);
   updateCity();
   inv.update(step);
+  sound.updateBillboards(clock.elapsed);
   sound.update(dt, camera);
   tabletAmt.value = Math.min(1, inv.tablet.amount * 1.4);
   pipeline.render();

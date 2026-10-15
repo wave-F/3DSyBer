@@ -71,6 +71,9 @@ export function createSignKit(scene, r) {
 
   const box = new THREE.BoxGeometry(1, 1, 1);
   const plane = new THREE.PlaneGeometry(1, 1);
+  // 轮播广告屏的中心与换图相位（广告牌刷新音效用）
+  const screens = [];
+  const addScreen = (panel, slot) => { screens.push({ x: panel.position.x, y: panel.position.y, z: panel.position.z, phase: slot.phase }); };
   const _m = new THREE.Matrix4();
   const _p = new THREE.Vector3();
 
@@ -145,6 +148,7 @@ export function createSignKit(scene, r) {
     const slot = opt.slot ?? adSlot(h > w ? 1 : 0);
     const panel = new THREE.Mesh(adGeometry(w, h, slot), adScreenMaterial());
     place(panel, face, u, y, face.dep + 0.32, [face.t, UP, face.n]);
+    addScreen(panel, slot);
     boxAt(face, frameMat, u, y, face.dep + 0.15, w + 0.6, h + 0.6, 0.3);
     boxAt(face, opt.edge ? edgeOf(opt.edge) : pick(edgeMats), u, y - h / 2 - 0.35, face.dep + 0.17, w + 0.7, 0.12, 0.34);
     if (opt.gap) {
@@ -159,6 +163,7 @@ export function createSignKit(scene, r) {
     const slot = adSlot(1);
     const panel = new THREE.Mesh(adGeometry(w, h, slot), adScreenMaterial());
     place(panel, face, u, y, face.dep + 0.62, [face.t, UP, face.n]);
+    addScreen(panel, slot);
     boxAt(face, frameMat, u, y, face.dep + 0.3, w + 0.5, h + 0.5, 0.6);            // 箱体
     for (const s of [-1, 1]) boxAt(face, steelMat, u + s * (w / 2 + 0.35), y, face.dep + 0.3, 0.3, h + 1.6, 0.3);   // 立柱
     boxAt(face, edgeOf(edgeHex), u, y + h / 2 + 0.45, face.dep + 0.62, w + 0.9, 0.14, 0.12);
@@ -173,6 +178,7 @@ export function createSignKit(scene, r) {
     const slot = adSlot(h > w ? 1 : 0);
     const panel = new THREE.Mesh(adGeometry(w, h, slot), adHoloMaterial());
     place(panel, face, u, y, face.dep, [face.t, UP, face.n]);
+    addScreen(panel, slot);
     // 投影器：画面下方的墙上，伸出的短臂 + 发光镜头
     const py = y - h / 2 - 0.8;
     boxAt(face, frameMat, u, py, face.dep - gap + 0.5, 1.6, 0.7, 1.0);
@@ -225,6 +231,7 @@ export function createSignKit(scene, r) {
     const slot = adSlot(0);
     const panel = new THREE.Mesh(adGeometry(w, h, slot), adScreenMaterial());
     place(panel, face, 0, y + legs + h / 2, 0.2, [t, UP, n]);
+    addScreen(panel, slot);
     boxAt(face, frameMat, 0, y + legs + h / 2, 0, w + 0.5, h + 0.5, 0.3);
     for (const k of [-0.4, 0, 0.4]) boxAt(face, frameMat, k * w, y + legs / 2, -0.3, 0.3, legs + 0.2, 0.3);
     return slot;
@@ -235,5 +242,5 @@ export function createSignKit(scene, r) {
     addLightGroup('灯牌（自己发光，不靠灯光）', (on) => { group.visible = on; });
   };
 
-  return { blade, flat, screen, vscreen, holo, ticker, logo, rooftop, finish, neonHex: NEON_HEX };
+  return { blade, flat, screen, vscreen, holo, ticker, logo, rooftop, finish, screens, neonHex: NEON_HEX };
 }

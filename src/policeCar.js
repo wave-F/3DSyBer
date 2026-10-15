@@ -76,7 +76,11 @@ export function buildPoliceCar(scene) {
     light.color.copy(isRed ? RED : BLUE);
     light.intensity = flash * (isRed ? 5 : 7);
   }
-  return { group, update, setDoor };
+
+  // 开关门声源位置（世界坐标）：驾驶门中部
+  const DOOR_POINT = new THREE.Vector3(0.95, 0.9, -0.25);
+  const doorWorld = (out) => { group.updateMatrixWorld(); return group.localToWorld(out.copy(DOOR_POINT)); };
+  return { group, update, setDoor, doorWorld };
 }
 
 // Sketchfab 导出的材质全是 BLEND + 双面 + 纯黑自发光贴图，逐个改成合适的渲染方式

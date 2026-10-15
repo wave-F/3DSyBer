@@ -694,8 +694,8 @@ export function createTablet(camera) {
     if (!canPoint()) return;
     if (e.target.closest('button')) return;
     const p = pick(e);
-    // 点到平板外：收起平板（不播拒绝音）
-    if (!p) { onBlank?.(); return; }
+    // 点到平板外：能收起就收起（收起音）；当前收不起（待确认、接入中、过场）就是无效点击
+    if (!p) { if (onBlank?.() === false) sound.play('ui/deny'); return; }
     const r = hitTest(p);
     // 点到可交互区域是确认音，点到平板空白是拒绝音
     sound.play(r ? 'ui/click' : 'ui/deny');

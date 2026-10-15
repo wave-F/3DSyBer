@@ -30,8 +30,8 @@ let loaded = 0, total = 0;
 const t0 = performance.now();
 let lastChange = t0;
 let assetsDone = false, warmStart = 0, good = 0, lastFrame = 0;
-let shown = 0, ready = false;
-let startFn = null;
+let shown = 0, ready = false, started = false;
+let startFn = null, wakeFn = null, denyFn = null;
 
 const m = THREE.DefaultLoadingManager;
 m.onStart = m.onProgress = (url, l, t) => {
@@ -78,10 +78,17 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
+// 加载期间的任意点击 / 按键都是用户手势：交给 wakeFn 启动音频（菜单音乐）
+// 就绪后的点击就是「开始」，不再先起音乐
+const wake = () => { if (!started && !ready) wakeFn?.(); };
+root.addEventListener('pointerdown', wake);
+addEventListener('keydown', wake);
+
 // 点击开始：必须在点击事件里同步调用 startFn（锁定鼠标需要用户手势）
 root.addEventListener('click', () => {
-  if (!ready) return;
+  if (!ready) { if (!started) denyFn?.(); return; }   // 还没就绪：无效点击
   ready = false;
+  started = true;
   root.style.pointerEvents = 'none';
   root.classList.add('closing');
   startFn?.();
@@ -91,5 +98,7 @@ root.addEventListener('click', () => {
 
 export const loading = {
   onStart(fn) { startFn = fn; },
+  onWake(fn) { wakeFn = fn; },
+  onDeny(fn) { denyFn = fn; },
   get done() { return root.classList.contains('gone'); },
 };
