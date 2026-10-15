@@ -48,6 +48,7 @@ let lastChange = t0;
 let assetsDone = false, warmStart = 0, good = 0, lastFrame = 0;
 let shown = 0, ready = false;
 let startFn = null;
+let fadeAt = 0;
 let phase = 'init';
 let lastUrl = '';
 
@@ -132,11 +133,16 @@ root.addEventListener('click', () => {
   root.style.pointerEvents = 'none';
   root.classList.add('closing');
   startFn?.();
-  setTimeout(() => root.classList.add('fading'), BLACK_MS + HOLD_MS);
+  setTimeout(() => { fadeAt = performance.now(); root.classList.add('fading'); }, BLACK_MS + HOLD_MS);
   setTimeout(() => root.classList.add('gone'), BLACK_MS + HOLD_MS + FADE_MS);
 });
 
 export const loading = {
   onStart(fn) { startFn = fn; },
   get done() { return root.classList.contains('gone'); },
+  // 距离黑幕完全揭开还剩多少毫秒；还没开始淡出时为 null
+  get fadeLeft() {
+    if (!fadeAt) return null;
+    return Math.max(0, FADE_MS - (performance.now() - fadeAt));
+  },
 };

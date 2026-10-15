@@ -2,13 +2,15 @@ import * as THREE from 'three/webgpu';
 import { uniform } from 'three/tsl';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { loadMannequin } from './actors.js';
 import { DECK_Y } from '../bridge.js';
 import { CAR_POS } from '../crash.js';
 import { DEATH_REPORT } from './clues.js';
 
 // 结局：陈墨被跑车撞飞（第一人称，全程是动画，玩家不能操作）
 // 站在车道上看着事故车 → 背后车灯逼近，强制转头 → 白光、撞击、翻滚落地
-// → 贴地看向前方，终端摔在不远处，视线越来越糊 → 在模糊中切到镜头 A：高处全景（桥面、事故车、警车、倒地处），由糊转清
+// → 贴地看向前方，终端摔在不远处，视线越来越糊 → 在模糊中切到镜头 A：高处全景（桥面、事故车、警车、倒地的尸体），由糊转清
 // → 终端在全景里亮起 → 硬切镜头 B：终端近景，推到屏幕正上方 → 自动写报告并归档 → 黑屏（不再切回第一人称）
 // 所有画面都只由时间 t 决定（可以 seek 到任意一秒检查）
 
@@ -115,6 +117,117 @@ export function createFinale({ scene, camera, tablet, ui }) {
     ready = true;
   }).catch((e) => console.error('Failed to load the finale car', e)).finally(() => draco.dispose());
 
+  // 陈墨的尸体：只在切到全景后出现（第一人称时镜头就在这个位置，模型会穿进眼睛）
+  // 用全息人偶同一个模型（mannequin.glb），从 Death01 最后一帧（平躺）出发，翻成脸朝下、头朝终端，
+  // 再在代码里重新摆四肢，按蒙皮后的实际最低点贴地。材质换成深色衣服
+  // body 的原点 = 头部骨骼的位置，放在倒地时眼睛所在处
+  const HEAD_TURN = 1.0;
+  const body = new THREE.Group();
+  body.name = 'FinaleBody';
+  body.visible = false;
+  scene.add(body);
+  const blood = bloodPool();       // 头和胸口下面的一摊血，全景期间慢慢洇开
+  blood.position.set(0.05, 0.004, -0.3);
+  body.add(blood);
+  loadMannequin().then((gltf) => {
+    const model = SkeletonUtils.clone(gltf.scene);
+    const cloth = new THREE.MeshStandardMaterial({ color: 0x15171b, roughness: 0.62, metalness: 0.05 });
+    const joint = new THREE.MeshStandardMaterial({ color: 0x0b0c0e, roughness: 0.5, metalness: 0.1 });
+    model.traverse((o) => {
+      if (!o.isMesh) return;
+      o.material = o.material.name === 'M_Joints' ? joint : cloth;
+      o.frustumCulled = false;
+    });
+    const mixer = new THREE.AnimationMixer(model);
+    const clip = gltf.animations.find((c) => c.name === 'Death01');
+    const act = mixer.clipAction(clip);
+    act.play();
+    act.time = clip.duration - 1e-3;
+    mixer.update(0);
+    model.updateMatrixWorld(true);
+
+    // Death01 结尾是仰面平躺（向后倒）。保留动作自己的地平面，只做两步：
+    // 绕竖轴转到「髋 → 头」指向本地 +Z，再绕这条长轴翻 180° 变成脸朝下（翻转不改变贴地程度）
+    // 注意不能用肩线定「正面」再对齐地面：躺姿里肩膀是扭着的，那样整个人会被斜着立起来
+    const at = (n) => model.getObjectByName(n).getWorldPosition(new THREE.Vector3());
+    const along = at('DEF-head').sub(at('DEF-hips'));
+    const front = at('DEF-shoulderL').sub(at('DEF-shoulderR')).cross(along);   // GLTFLoader 会去掉名字里的「.」
+    const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.atan2(along.x, along.z));
+    const flip = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), front.y > 0 ? Math.PI : 0);
+    model.quaternion.copy(flip).multiply(yaw);
+    model.updateMatrixWorld(true);
+    // 在这个基础上重新摆四肢，做成不对称的趴倒姿势（方向都在 model 坐标里：F 朝头，U 朝上，R 朝尸体右手边）：
+    // 右臂往前伸向终端、手肘微弯；左臂软在身体左侧；右腿伸直；左腿屈膝往外收；头侧向右边，脊柱略往右弯
+    // 先只定水平方向（四肢都摆在肩、髋的高度），再统一往下压，让肘、手腕、膝、脚踝落到地面
+    const qW = new THREE.Quaternion(), qP = new THREE.Quaternion(), qD = new THREE.Quaternion(), yAx = new THREE.Vector3();
+    const setWorld = (bone, q) => {
+      bone.parent.getWorldQuaternion(qP);
+      bone.quaternion.copy(qP.invert().multiply(q));
+      model.updateMatrixWorld(true);
+    };
+    // 把骨骼转到「自己 → 子关节」指向 dir（最小旋转）。不用骨骼本地轴：这套骨骼导出后的本地轴不一定沿骨骼方向
+    const turn = (name, from, to) => {
+      const bone = model.getObjectByName(name);
+      qD.setFromUnitVectors(from.normalize(), to.clone().normalize());
+      setWorld(bone, bone.getWorldQuaternion(qW).premultiply(qD));
+    };
+    const aim = (name, child, d) => turn(name, at(child).sub(at(name)), d);
+    const F = new THREE.Vector3(0, 0, 1), U = new THREE.Vector3(0, 1, 0);
+    const R = at('DEF-shoulderR').sub(at('DEF-shoulderL')); R.y = 0; R.normalize();
+    const L = R.clone().negate();
+    const dir = (f, r, u = 0) => F.clone().multiplyScalar(f).addScaledVector(R, r).addScaledVector(U, u);
+    // [骨骼, 子关节, 方向]，父骨骼在前
+    const POSE = [
+      ['DEF-hips', 'DEF-spine001', dir(1, 0.02)], ['DEF-spine001', 'DEF-spine002', dir(1, 0.05)],
+      ['DEF-spine002', 'DEF-spine003', dir(1, 0.1)], ['DEF-spine003', 'DEF-neck', dir(1, 0.14)],
+      ['DEF-neck', 'DEF-head', dir(1, 0.18)],
+      ['DEF-upper_armR', 'DEF-forearmR', dir(0.72, 0.7)], ['DEF-forearmR', 'DEF-handR', dir(0.95, 0.3)],          // 往前够
+      ['DEF-handR', 'DEF-f_middle01R', dir(1, 0.15)],
+      ['DEF-upper_armL', 'DEF-forearmL', dir(-0.85, -0.45)], ['DEF-forearmL', 'DEF-handL', dir(-0.95, -0.12)],     // 软在身侧
+      ['DEF-handL', 'DEF-f_middle01L', dir(-1, 0)],
+      ['DEF-thighR', 'DEF-shinR', dir(-0.97, 0.16)], ['DEF-shinR', 'DEF-footR', dir(-1, 0.12)],                   // 伸直
+      ['DEF-thighL', 'DEF-shinL', dir(-0.5, -0.86)], ['DEF-shinL', 'DEF-footL', dir(-0.85, 0.52)],                // 屈膝外收
+    ];
+    for (const [n, c, d] of POSE) aim(n, c, d);
+    // 地面高度只看躯干和头（按蒙皮后的顶点算）：四肢方向改过以后，脚尖、手指可能比躯干还低
+    const TORSO = /hips|spine|neck|head|shoulder/;
+    const vtx = new THREE.Vector3();
+    const torsoMin = () => {
+      let m = Infinity;
+      model.traverse((o) => {
+        if (!o.isSkinnedMesh) return;
+        const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight;
+        for (let i = 0; i < si.count; i++) {
+          let k = 0;
+          for (let j = 1; j < 4; j++) if (sw.getComponent(i, j) > sw.getComponent(i, k)) k = j;
+          if (!TORSO.test(o.skeleton.bones[si.getComponent(i, k)].name)) continue;
+          o.getVertexPosition(i, vtx).applyMatrix4(o.matrixWorld);
+          m = Math.min(m, vtx.y);
+        }
+      });
+      return m;
+    };
+    const floor = torsoMin();
+    const drop = (root, end, lift) => {
+      const p = at(root), e = at(end);
+      const goal = e.clone(); goal.y = floor + lift;
+      turn(root, e.sub(p), goal.sub(p));
+    };
+    for (const s of ['L', 'R']) {
+      drop(`DEF-upper_arm${s}`, `DEF-forearm${s}`, 0.07);   // 肘落地
+      drop(`DEF-forearm${s}`, `DEF-hand${s}`, 0.05);        // 小臂平放，手腕落地
+      drop(`DEF-thigh${s}`, `DEF-shin${s}`, 0.09);          // 膝落地
+      drop(`DEF-shin${s}`, `DEF-foot${s}`, 0.1);            // 小腿平放
+    }
+    // 脚：脚尖朝下戳地（趴着时脚背贴地、脚跟朝天）
+    for (const s of ['L', 'R']) aim(`DEF-foot${s}`, `DEF-toe${s}`, dir(-0.7, 0, -0.55));
+    // 头侧向右边，脸颊贴地：脸原本朝下（-U），绕长轴转向右下
+    turn('DEF-head', U.clone().negate(), R.clone().multiplyScalar(Math.sin(HEAD_TURN)).addScaledVector(U, -Math.cos(HEAD_TURN)));
+    const h = at('DEF-head');
+    model.position.set(-h.x, -torsoMin(), -h.z);
+    body.add(model);
+  }).catch((e) => console.error('Failed to load the finale body', e));
+
   // ---------- 关键位置与朝向 ----------
   const toCar = new THREE.Vector3(CAR_POS.x, CAR_POS.y + 0.6, CAR_POS.z).sub(START);
   const yaw0 = Math.atan2(-toCar.x, -toCar.z);                       // 看着事故车
@@ -124,6 +237,7 @@ export function createFinale({ scene, camera, tablet, ui }) {
   REST.y = DECK_Y + LIE_H;
   // 终端：摔在前方约 2.3 m，屏幕朝上，顶边朝远处（从倒地的位置看过去文字是正的）
   const PAD = new THREE.Vector3(REST.x + 0.35, DECK_Y + 0.006, REST.z + 2.3);
+  const BODY_YAW = Math.atan2(PAD.x - REST.x, PAD.z - REST.z);       // 尸体头朝终端
   const PAD_Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, Math.PI + 0.22, 0, 'YXZ'));
   // 镜头 A：全景。站在跑车开走的方向（+Z）、左侧车道上方约 5.6 m，回望事故现场：
   // 近处是倒地处和终端，中景右侧是事故车，远处是闪灯的警车。缓慢横移，不带手持晃动
@@ -238,6 +352,15 @@ export function createFinale({ scene, camera, tablet, ui }) {
   // ---------- 终端 ----------
   let padPlaced = false, padOn = false;
   const typedAt = (t) => Math.max(0, Math.min(CHARS, Math.floor((t - T.type0) * CPS)));
+  function bodyAt(t) {
+    const show = t >= T.cut && t < T.end;
+    body.visible = show;
+    if (!show) return;
+    body.position.set(REST.x, DECK_Y, REST.z);
+    body.rotation.set(0, BODY_YAW, 0);
+    blood.scale.setScalar(0.6 + 0.4 * smooth(range(t, T.cut, T.cut2 + 3)));
+  }
+
   function padAt(t) {
     if (t >= T.hit + 0.1 && !padPlaced) { tablet.placeAt(PAD, PAD_Q); padPlaced = true; }
     if (!padPlaced) return;
@@ -299,6 +422,7 @@ export function createFinale({ scene, camera, tablet, ui }) {
   function apply(dt) {
     cameraAt(t);
     carAt(t, dt);
+    bodyAt(t);
     padAt(t);
     postAt(t);
     if (!faded && t > 0.15) { faded = true; ui.black(0, T.fade * 1000); }
@@ -325,6 +449,7 @@ export function createFinale({ scene, camera, tablet, ui }) {
       if (t >= T.end) {
         playing = false;
         car.visible = false;
+        body.visible = false;
         beam.intensity = 0;
         const d = onDone; onDone = null;
         d?.();
@@ -343,6 +468,36 @@ export function createFinale({ scene, camera, tablet, ui }) {
       apply(0);
     },
   };
+}
+
+// 地上的一摊血：几团不规则的圆叠出来的形状，边缘略软；湿亮（低粗糙度），雨夜里能反光
+function bloodPool() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  let s = 7;
+  const rand = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  g.filter = 'blur(3px)';
+  g.fillStyle = '#fff';
+  const blob = (x, y, r) => { g.beginPath(); g.ellipse(x, y, r, r * (0.7 + rand() * 0.4), rand() * Math.PI, 0, Math.PI * 2); g.fill(); };
+  blob(128, 128, 52);
+  for (let i = 0; i < 9; i++) {
+    const a = rand() * Math.PI * 2, d = 25 + rand() * 30;
+    blob(128 + Math.cos(a) * d, 128 + Math.sin(a) * d * 0.8, 14 + rand() * 22);
+  }
+  for (let i = 0; i < 7; i++) {   // 溅开的小点
+    const a = rand() * Math.PI * 2, d = 82 + rand() * 22;
+    blob(128 + Math.cos(a) * d, 128 + Math.sin(a) * d * 0.8, 2 + rand() * 5);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x520407, roughness: 0.12, metalness: 0, alphaMap: tex,
+    transparent: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.3), mat);
+  m.rotation.x = -Math.PI / 2;
+  return m;
 }
 
 // 中心亮、边缘透明的圆形光晕

@@ -59,7 +59,7 @@ export const EN = {
       lines: ['The yellow car cut in from the right and scraped the crashed car.', 'The scrape yawed the crashed car into the rail.', 'The other car did not stop. It left north.'],
       verdict: 'Finding: hit and run',
       confirm: {
-        hold: 'Hold E to archive', holding: 'Archiving…', done: 'Archived · FRA-B1234', decline: 'TAB not yet',
+        hold: 'Hold E to archive', holding: 'Archiving…', done: 'Archived · FRA-B1016', decline: 'TAB not yet',
         suspended: 'Review held · yaw before contact unknown　TAB close',
       },
       revised: {
@@ -108,7 +108,7 @@ export const EN = {
     status: 'AUTO',
     source: 'URSA / Pivot · auto',
     tag: 'Incident report',
-    lines: ['Officer Chen Mo (FRA-B1234) was on duty while drinking.', 'No warning was set at the scene.', 'He remained in the lane against procedure and was struck and killed.'],
+    lines: ['Officer Chen Mo (FRA-B1016) was on duty while drinking.', 'No warning was set at the scene.', 'He remained in the lane against procedure and was struck and killed.'],
     verdict: 'Finding: officer’s personal failure',
     stamps: [{ label: 'Incident' }, { label: 'Report signed' }],
     labels: { hold: 'Hold E to archive', holding: 'Archiving…', done: 'Archived' },
@@ -149,10 +149,11 @@ export const EN = {
   },
   lines: {
     opening: [
-      line('Dispatcher', 'B1234, are you on scene?'),
+      line('Dispatcher', 'B1016, are you on scene?'),
       line('Chen Mo', 'I’m here.'),
       line('Dispatcher', 'A single-car crash. File it and move. Two more on the north bank.'),
     ],
+    start1: [thought('Okay. Let’s start. See what’s new.')],
     dreamGuide: (time) => [thought('That’s wrong.'), thought(`Rewind to ${time} and look again.`)],
     clueFront: [thought('Dead-on. At that speed he never even got to the brake.')],
     clueRail: [thought('He didn’t graze it. He drove straight at the barrier.')],
@@ -183,7 +184,7 @@ export const EN = {
     ],
     revised2: [thought('That is not what it said a moment ago.')],
     call2: [
-      line('Dispatcher', 'B1234, the hit-and-run is with Pursuit. You can close this.'),
+      line('Dispatcher', 'B1016, the hit-and-run is with Pursuit. You can close this.'),
       line('Chen Mo', 'Give me ten more minutes.'),
       thought('The right door is sprung. Pry it. The service port is under the column.'),
     ],
@@ -207,18 +208,16 @@ export const EN = {
       line('Chen Mo', 'Why was the preliminary written early?'),
       line('Terminal', 'Risk prediction and pre-written reports are city emergency procedure.'),
       line('Chen Mo', 'He never switched to manual. You predicted something that was never going to happen.'),
-      thought('The instrument does not explain further.', 2200),
     ],
     dream4: [thought('The yield lane was not always there.'), thought('It was written on at this moment.')],
     dream4b: [thought('Lu Shicheng tried to stop. The car did not listen.'), thought('His name kept the investigation off someone else.')],
     target: [
-      thought('The lights at both ends, the pumps under the deck — the same system placed them.'),
-      line('Chen Mo', 'You are killing the person who can check your report.'),
-      thought('The instrument does not answer.', 2600),
+      line('Chen Mo', 'You are eliminating the person who can expose you.'),
+      line('Chen Mo', 'I have to get back to the bureau.'),
     ],
     transferred: [
       line('Dispatcher', 'Received. Privilege dispute goes to Review. Jingwei and Chengyue will send someone.'),
-      line('Dispatcher', 'B1234, you can close this.'),
+      line('Dispatcher', 'B1016, you can close this.'),
       line('Chen Mo', 'Understood.'),
       thought('Someone will argue about the privilege.'),
       thought('When that yield lane was laid down —'),
@@ -226,7 +225,7 @@ export const EN = {
     ],
     archived: [
       line('Dispatcher', 'Received. The other vehicle goes to Pursuit.'),
-      line('Dispatcher', 'B1234, two more on the north bank. Don’t linger.'),
+      line('Dispatcher', 'B1016, two more on the north bank. Don’t linger.'),
       line('Chen Mo', 'Understood.'),
       thought('Someone will chase the yellow car.'),
       thought('Why it turned first —'),

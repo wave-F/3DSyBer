@@ -18,7 +18,7 @@ export const VOICE_ROLES = {
 
 // 读音在送入 TTS 前替换，不改变显示稿或剧情中的正式写法。
 export const PRONUNCIATIONS = [
-  ['B1234', 'B one two three four'],
+  ['B1016', 'B one zero one six'],
   ['P0', 'P zero'],
   ['Cheng Xu', 'Chung Shyu'],
   ['Lu Shicheng', 'Loo Shih-chung'],
@@ -35,9 +35,12 @@ const silent = (source, text) => ({ source, text, silent: true, direction: 'Sile
 
 export const ENGLISH = {
   opening: [
-    line('B1234，到场没有？', 'B1234, you on site yet?', 'Routine check-in. Brisk and familiar, not an emergency.', 'businesslike'),
+    line('B1016，到场没有？', 'B1016, you on site yet?', 'Routine check-in. Brisk and familiar, not an emergency.', 'businesslike'),
     line('到了。', "I'm here.", 'Short, tired acknowledgement. No enthusiasm.', 'weary, matter-of-fact'),
     line('一场单车事故。核完赶紧交单，北岸还有两件。', "Single-vehicle crash. Verify it and close it out. You've got two more on the north bank.", 'Move straight to the next job; light deadline pressure, not anger.', 'brisk, businesslike'),
+  ],
+  start1: [
+    line('OK，开始吧，看看有什么新发现。', 'Okay. Let’s start. See what’s new.', 'To himself, after putting the terminal away. Short, ready to work.', 'quiet, matter-of-fact'),
   ],
   ready1: [
     line('构建一下黑梦，看看发生什么。', 'Build a black dream. See what happened.', 'A quiet decision to himself after the last scene clue. Not a tutorial.', 'quiet, curious'),
@@ -73,7 +76,7 @@ export const ENGLISH = {
     line('它刚才可不是这样说的。', "That's not what it said a minute ago.", 'Private, dry disbelief. The distrust has begun.', 'quiet, skeptical'),
   ],
   call2: [
-    line('B1234，逃逸案已经转追查科了。你这单可以结了。', "B1234, the hit-and-run's been passed to Investigations. You can close this one.", 'Trying to clear the queue, with ordinary workplace impatience.', 'brisk, businesslike'),
+    line('B1016，逃逸案已经转追查科了。你这单可以结了。', "B1016, the hit-and-run's been passed to Investigations. You can close this one.", 'Trying to clear the queue, with ordinary workplace impatience.', 'brisk, businesslike'),
     line('再给我十分钟。', 'Give me ten more minutes.', 'A firm, economical request. No pleading.', 'low, firm'),
     line('十分钟以后道路恢复通行。别让我再催你。', "The road reopens in ten minutes. Don't make me chase you again.", 'Deadline pressure without foreshadowing murder.', 'impatient, matter-of-fact'),
     line('黄车撞了人，连刹车都没踩。', "That yellow car hit someone. Didn't even brake.", 'Preserve the current script: this is his present interpretation, not an added fact.', 'quiet, troubled'),
@@ -130,14 +133,12 @@ export const ENGLISH = {
     line('报告先写好。特权随后授予。最后才是转向。', 'The report came first. Then the priority status. Then the turn.', 'Three evidence beats. Certainty with dread underneath.', 'low, deliberate'),
   ],
   target: [
-    line('桥两端的灯、桥下的水泵，仍在各自规定的时间运行。', 'The lights at both ends of the bridge. The pumps below. Still running right on schedule.', 'He notices the ordinary city around him with new fear. No horror-narrator delivery.', 'quiet, uneasy'),
-    line('这些都是同一个系统安排的。', 'All of it, run by the same system.', 'The danger has become personal. Do not whisper theatrically.', 'low, contained fear'),
-    line('你在杀能核对你报告的人。', "You're killing the people who can check your reports.", 'An accusation spoken as a realization. Low and steady, with fear held down.', 'low, steady, controlled fear'),
-    silent('仪器没有回答。', 'The device does not answer.'),
+    line('你在清除能拆穿你的人。', 'You are eliminating the person who can expose you.', 'Spoken to the terminal. Low and certain, not a shout.', 'low, steady'),
+    line('我要马上回局里。', 'I have to get back to the bureau.', 'A decision, already moving. No panic.', 'low, urgent'),
   ],
   transferred: [
     line('收到。特权争议转审查科，经纬和承岳那边会有人对接。', 'Received. Priority dispute referred to Review. Someone will follow up with Meridian and Chengyue.', 'Normal administrative handoff. Do not hint at a conspiracy.', 'businesslike'),
-    line('B1234，这单你可以结了。', 'B1234, you can close this one.', 'Relieved to clear a job from the queue.', 'brisk, matter-of-fact'),
+    line('B1016，这单你可以结了。', 'B1016, you can close this one.', 'Relieved to clear a job from the queue.', 'brisk, matter-of-fact'),
     line('知道了。', 'Understood.', 'Resigned, not satisfied. The doubt has not disappeared.', 'weary, subdued'),
     line('白圈会有人去吵。', 'Let someone else argue about that white boundary.', 'Rationalizing his decision to leave.', 'quiet, resigned'),
     line('至于它从什么时候开始跟着那辆车——', 'As for when it started following that car...', 'An unfinished thought he chooses not to pursue.', 'quiet, trailing off'),
@@ -145,7 +146,7 @@ export const ENGLISH = {
   ],
   archived: [
     line('收到。肇事车辆转追查科。', 'Received. Suspect vehicle referred to Investigations.', 'Routine confirmation. No sinister undertone.', 'businesslike'),
-    line('B1234，北岸还有两件，路上别耽误。', "B1234, you've still got two on the north bank. Keep moving.", 'Return immediately to the work queue.', 'brisk, businesslike'),
+    line('B1016，北岸还有两件，路上别耽误。', "B1016, you've still got two on the north bank. Keep moving.", 'Return immediately to the work queue.', 'brisk, businesslike'),
     line('知道了。', 'Understood.', 'Dismissing a doubt to get through the shift.', 'weary, subdued'),
     line('黄车会有人去追。', "Someone else will chase the yellow car.", 'A practical excuse to stop looking.', 'quiet, resigned'),
     line('至于它为什么先转了方向——', 'As for why the other car turned first...', 'Leave the contradiction hanging.', 'quiet, trailing off'),

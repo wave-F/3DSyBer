@@ -21,7 +21,7 @@
 
 游戏运行不受影响：`voiceMap.js` 只在 `VOICE_LINES[id].source` 与当前中文原句完全一致时才播声音，其余只显示字幕，不会错配。下面三类在下次补录时一并处理（2026-10 统计，补录前用下方命令重新核对）。
 
-- **没有配音**：线索独白 `clueFront` `clueRail` `clueDebris` `clueScrape` `clueSkidB` `clueTrim` `clueP2car` `clueP3override` `clueP4end` `clueDMode` `clueDReason` `clueDRaw` `clueDRawOpen` `clueRTime`（各 1 句），`ready1_01`、`ready2_01`；`rootRead_05`「终端没有再解释。」是叙述性静默，按惯例不录。
+- **没有配音**：线索独白 `clueFront` `clueRail` `clueDebris` `clueScrape` `clueSkidB` `clueTrim` `clueP2car` `clueP3override` `clueP4end` `clueDMode` `clueDReason` `clueDRaw` `clueDRawOpen` `clueRTime`（各 1 句），`ready1_01`、`ready2_01`。
 - **中文改过、旧录音不再播放**：`dream1_01-02`、`call2_03`、`cardRead_01`、`dream3_01`、`question3_04`、`after3_01-02`、`keyFound_01-02`、`rootRead_01/02/04`、`dream4_01`、`target_01-03`、`transferred_04-05`。
 - **孤立录音（台词已删或句数减少）**：`dream1_03`、`call2_04-07`、`cardRead_02`、`after3_03-05`、`keyFound_03`、`after4_01`。补录后从 FMOD 和 `voiceEvents.js` 清掉。
 
@@ -37,7 +37,7 @@ node -e "Promise.all([import('./src/investigation/clues.js'),import('./src/audio
 
 中性美式英语。陈墨：成熟、稍沙哑、疲惫克制，怀疑逐渐变成压住恐惧的质问；内心与外部对白共用同一音色，内心更轻、更近。派单员：干练成熟女声，催工单而非威胁玩家。仪器：独立的中性服务声线，始终平静，不提前暴露反派意味。三者都录干声；无线电与设备质感留给 Studio。
 
-正式名称：Chen Mo / Cheng Xu / Lu Shicheng / Meridian / Chengyue / Rootkey / Blackdream / Zero Priority。`B1234` 按 B + 单个数字读，`P0` 按 P zero 读。中文姓名在合成输入中使用英语近似读音，正式英文稿不改拼写；这些读音必须实听验收。
+正式名称：Chen Mo / Cheng Xu / Lu Shicheng / Meridian / Chengyue / Rootkey / Blackdream / Zero Priority。`B1016` 按 B + 单个数字读，`P0` 按 P zero 读。中文姓名在合成输入中使用英语近似读音，正式英文稿不改拼写；这些读音必须实听验收。
 
 ## 本机配置
 

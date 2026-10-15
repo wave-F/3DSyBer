@@ -14,6 +14,7 @@ import { DOOR_AJAR } from '../crash.js';
 import { createFinale } from './finale.js';
 import { sound } from '../audio/sound.js';
 import { bi, onLang, tx } from '../i18n.js';
+import { loading } from '../loading.js';
 
 const HOLD_TIME = 1.4;      // Includes raising the instrument and one readable scan pass.
 const AIM_RANGE = 6;        // 准星可分析距离
@@ -101,6 +102,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   const probes = PROBES_ZH.map((c) => bi({ ...c, probe: true, p: c.pos ? new THREE.Vector3(...c.pos) : new THREE.Vector3(), done: false, visible: false }, probeEN(c.id)));
   const reports = ['initial'];
   let guideTablet = true;   // 下车后第一次按 Tab，直接落在系统初判
+  let arrivalClosed = false; // 开场初判被收起，结束开场后说一句开始搜证
   const roundDone = { 1: false, 2: false, 3: false, 4: false };
   let round = 1;
   let glint = false;           // 残漆随双闪反光
@@ -573,7 +575,11 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   function beginOpening() {
     if (started) return;
     started = true;
-    ui.say(LINES.opening, { radio: true });
+    ui.setCinema(true);
+    // 黑幕淡出 3.6 秒，完全揭开前 2 秒开始字幕
+    const left = loading.fadeLeft;
+    const delay = left == null ? 1600 : Math.max(0, left - 2000);
+    setTimeout(() => { if (intro) ui.say(LINES.opening, { radio: true }); }, delay);
   }
   addEventListener('wheel', (e) => {
     if (mode !== 'recon' || (enter.on && enter.phase !== 'scrub')) return;
@@ -1494,7 +1500,6 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     startIntro() {
       intro = true;
       ui.setMode('cut', '');
-      ui.setCinema(true);
     },
     // 下车结束后打开系统初判。收起后交还控制
     beginOpening,
@@ -1506,6 +1511,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     closeArrival() {
       if (!tablet.open) return;
       setTablet(false);
+      arrivalClosed = true;
     },
     endIntro() {
       if (!intro) return;
@@ -1513,6 +1519,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       ui.setCinema(false);
       if (mode === 'explore') setMode('explore');   // 测试按钮已切到别的阶段时不覆盖
       ui.hush();
+      if (arrivalClosed) ui.say(LINES.start1);
     },
     get moveScale() { return intro || enter.on ? 0 : mode === 'report' || mode === 'ending' || mode === 'insert' || mode === 'death' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
     update(realDt) {

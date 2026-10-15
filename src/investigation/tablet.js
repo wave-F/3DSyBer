@@ -88,7 +88,7 @@ function buildBody() {
   lg.fillStyle = 'rgba(150,170,190,0.55)';
   lg.textAlign = 'center';
   lg.textBaseline = 'middle';
-  lg.fillText('CIVIC ORDER SERVICES  ·  FRA-B1234', 512, 25);
+  lg.fillText('CIVIC ORDER SERVICES  ·  FRA-B1016', 512, 25);
   const ltex = new THREE.CanvasTexture(lc);
   ltex.colorSpace = THREE.SRGBColorSpace;
   const label = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.0047), new THREE.MeshBasicMaterial({ map: ltex, transparent: true, depthWrite: false }));
