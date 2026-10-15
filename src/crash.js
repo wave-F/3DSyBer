@@ -4,7 +4,7 @@ import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { rng } from './textures.js';
-import { DECK_Y, HALF_W, BREAK, concrete as concreteBase, metal as metalBase } from './bridge.js';
+import { DECK_Y, HALF_W, BREAK, WALL, concrete as concreteBase, metal as metalBase } from './bridge.js';
 import { mergeStatic } from './merge.js';
 import { markKeep } from './investigation/mask.js';
 import { addLightGroup } from './debugLights.js';
@@ -286,22 +286,23 @@ function buildBrokenRail(scene) {
   const rebar = markKeep(new THREE.MeshStandardMaterial({ color: 0x493a2c, roughness: 0.83, metalness: 0.45 }));
   const r = rng(9);
 
-  const railSection = new THREE.Shape();
-  railSection.moveTo(-0.04, -0.05);
-  railSection.lineTo(0.04, -0.05);
-  railSection.lineTo(0.04, 0.05);
-  railSection.lineTo(-0.04, 0.05);
-  railSection.closePath();
+  // 防撞墙在撞断处碎开：完好截面接上 bridge.js 的墙体，往缺口方向是参差的断面，露出被往桥外拽弯的钢筋
+  const w0 = WALL.inner;
+  // 截面轮廓（和墙体同一份，补几个中间点让断面更碎），顺序与下面的三角形绕向配套
+  const outline = [
+    [0, 0], [0.29, 0], [0.58, 0], [0.58, 0.43], [0.58, 0.86], [0.56, 0.88], [0.44, 0.88],
+    [0.32, 0.88], [0.3, 0.86], [0.24, 0.56], [0.18, 0.255], [0, 0.075],
+  ];
+  const N = outline.length;
   for (const [edge, direction] of [[BREAK.z0, 1], [BREAK.z1, -1]]) {
     const anchor = edge - direction * 0.7;
-    // The intact rear profile joins the curb exactly; the front is a torn surface.
-    const outline = [[-0.2, 0], [0, 0], [0.2, 0], [0.2, 0.25], [0.2, 0.5], [0, 0.5], [-0.2, 0.5], [-0.2, 0.25]];
     const points = [];
-    const ends = [0.74, 0.88, 0.67, 0.51, 0.2, 0.39, 0.28, 0.6].map((depth) => depth + (r() - 0.5) * 0.14);
+    // 墙脚更结实，断得浅；墙顶碎得深（往回缩）
+    const ends = outline.map(([, h]) => 0.62 - h * 0.45 + (r() - 0.5) * 0.24);
     for (let ring = 0; ring < 2; ring++) {
-      outline.forEach(([dx, y], i) => points.push(new THREE.Vector3(x + dx, DECK_Y + y, anchor + direction * (ring ? ends[i] : 0))));
+      outline.forEach(([u, h], i) => points.push(new THREE.Vector3(w0 + u, DECK_Y + h, anchor + direction * (ring ? ends[i] : 0))));
     }
-    points.push(new THREE.Vector3(x + 0.025, DECK_Y + 0.23, anchor + direction * 0.38));
+    points.push(new THREE.Vector3(w0 + 0.3, DECK_Y + 0.4, anchor + direction * 0.5));
     const vertices = [];
     const materialIndices = [];
     const triangle = (a, b, c, material) => {
@@ -309,50 +310,54 @@ function buildBrokenRail(scene) {
       for (const index of indices) vertices.push(...points[index].toArray());
       materialIndices.push(material);
     };
-    for (let i = 0; i < 8; i++) {
-      const j = (i + 1) % 8;
-      triangle(i, i + 8, j + 8, 0);
-      triangle(i, j + 8, j, 0);
-      triangle(i + 8, 16, j + 8, 1);
+    for (let i = 0; i < N; i++) {
+      const j = (i + 1) % N;
+      triangle(i, i + N, j + N, 0);
+      triangle(i, j + N, j, 0);
+      triangle(i + N, 2 * N, j + N, 1);
     }
-    const curbGeo = new THREE.BufferGeometry();
-    curbGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    curbGeo.setIndex(Array.from({ length: vertices.length / 3 }, (_, i) => i));
-    materialIndices.forEach((material, i) => curbGeo.addGroup(i * 3, 3, material));
-    curbGeo.computeVertexNormals();
-    group.add(new THREE.Mesh(curbGeo, [concrete, fracture]));
+    const wallGeo = new THREE.BufferGeometry();
+    wallGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    wallGeo.setIndex(Array.from({ length: vertices.length / 3 }, (_, i) => i));
+    materialIndices.forEach((material, i) => wallGeo.addGroup(i * 3, 3, material));
+    wallGeo.computeVertexNormals();
+    group.add(new THREE.Mesh(wallGeo, [concrete, fracture]));
 
-    for (const height of [0.85, 1.15]) {
-      const upper = height > 1;
-      const reach = direction === 1 ? 1.15 : 0.85;
-      const curve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(x, DECK_Y + height, edge - direction * 1.2),
-        new THREE.Vector3(x, DECK_Y + height, edge - direction * 0.95),
-        new THREE.Vector3(x + 0.12, DECK_Y + height - 0.06, edge - direction * 0.4),
-        new THREE.Vector3(x + 0.55 * reach, DECK_Y + height - 0.24, edge + direction * 0.2),
-        new THREE.Vector3(x + (upper ? 1.0 : 0.72) * reach, DECK_Y + height - (upper ? 1.35 : 0.85) * reach, edge + direction * (upper ? 1.2 : 0.85) * reach),
-      ]);
-      group.add(new THREE.Mesh(new THREE.ExtrudeGeometry(railSection, { steps: 20, bevelEnabled: false, extrudePath: curve }), metal));
-    }
+    // 墙顶钢管扶手：从完好处接出来，被车往桥外拽弯、垂到桥面外
+    const rx = w0 + WALL.railU, ry = DECK_Y + WALL.railH;
+    const reach = direction === 1 ? 1.1 : 0.85;
+    const railCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(rx, ry, edge - direction * 1.2),
+      new THREE.Vector3(rx, ry, edge - direction * 0.95),
+      new THREE.Vector3(rx + 0.1, ry - 0.04, edge - direction * 0.45),
+      new THREE.Vector3(rx + 0.5 * reach, ry - 0.22, edge + direction * 0.15),
+      new THREE.Vector3(rx + 0.95 * reach, ry - 1.3 * reach, edge + direction * 1.0 * reach),
+    ]);
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(railCurve, 28, WALL.railR, 12, false), metal));
 
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.72, 0.08), metal);
-    post.position.set(x + 0.18, DECK_Y + 0.79, edge - direction * 0.45);
-    post.rotation.set(direction * 0.18, 0, -0.46);
+    // 最后一根立柱连底板被扯歪，底板一角翘起
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.032, WALL.railH - WALL.height, 10), metal);
+    post.position.set(rx + 0.05, DECK_Y + WALL.height + 0.11, edge - direction * 0.85);
+    post.rotation.set(direction * 0.35, 0, -0.5);
     group.add(post);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.035, 0.25), metal);
-    foot.position.set(x + 0.025, DECK_Y + 0.52, edge - direction * 0.51);
-    foot.rotation.z = -0.22;
-    group.add(foot);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.014, 0.17), metal);
+    plate.position.set(rx + 0.01, DECK_Y + WALL.height + 0.02, edge - direction * 0.87);
+    plate.rotation.set(direction * 0.12, 0, -0.25);
+    group.add(plate);
 
-    for (let i = 0; i < 3; i++) {
-      const dx = (i - 1) * 0.12;
-      const y = DECK_Y + 0.13 + i * 0.065;
+    // 断面里露出的钢筋：两排纵筋，被撞向桥外、往缺口方向弯出
+    const bars = [[0.12, 0.12], [0.3, 0.1], [0.48, 0.12], [0.2, 0.42], [0.45, 0.45], [0.36, 0.74], [0.5, 0.76]];
+    for (const [u, h] of bars) {
+      const depth = 0.62 - h * 0.45;
+      const len = 0.25 + r() * 0.45;
+      const start = new THREE.Vector3(w0 + u, DECK_Y + h, anchor + direction * (depth - 0.15));
       const curve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(x + dx, y, anchor + direction * 0.24),
-        new THREE.Vector3(x + dx, y, edge + direction * 0.1),
-        new THREE.Vector3(x + dx + 0.09, y - 0.035, edge + direction * (0.4 + r() * 0.25)),
+        start,
+        start.clone().add(new THREE.Vector3(0, 0, direction * (0.25 + len * 0.3))),
+        start.clone().add(new THREE.Vector3(0.12 + r() * 0.2, -0.04 - r() * 0.1, direction * (0.3 + len * 0.8))),
+        start.clone().add(new THREE.Vector3(0.22 + r() * 0.35, -0.1 - r() * 0.2, direction * (0.35 + len))),
       ]);
-      group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 8, 0.012, 5, false), rebar));
+      group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 10, 0.011, 6, false), rebar));
     }
   }
 

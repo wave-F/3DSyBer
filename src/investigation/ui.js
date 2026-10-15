@@ -188,7 +188,7 @@ const CSS = `
 #inv-cine.on::before, #inv-cine.on::after { height: 11vh; }
 #inv-black { inset: 0; background: #000; opacity: 0; z-index: 9; }
 #inv-fin { inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; opacity: 0; transition: opacity 2s ease; }
-#inv-fin.on { opacity: 1; pointer-events: auto; cursor: pointer; }
+#inv-fin.on { opacity: 1; }
 #inv-fin .t1 { font-size: 46px; font-weight: 300; letter-spacing: .6em; text-indent: .6em; color: #d8e2ea; }
 #inv-fin .t2 { font-size: 22px; font-weight: 300; letter-spacing: .6em; text-indent: .6em; color: #ffcf4a; opacity: 0; transition: opacity 1.6s ease 1.4s; }
 #inv-fin.on .t2 { opacity: 1; }
@@ -272,15 +272,6 @@ export function createUI() {
   const cine = el('inv-cine');
   const black = el('inv-black');
   const fin = el('inv-fin', '', '<div class="t1"></div><div class="t2"></div>');
-  let finaleArmed = false;
-  let onFinaleClick = null;
-  fin.addEventListener('pointerdown', () => {
-    if (!finaleArmed || !fin.classList.contains('on')) return;
-    finaleArmed = false;
-    fin.style.transition = 'opacity 1s ease';
-    fin.classList.remove('on');
-    setTimeout(() => onFinaleClick?.(), 1000);
-  });
   const ending = el('inv-ending');
   let panelTimer = 0, toastTimer = 0, toastHold = null;
   const dialogue = createDialoguePlayer({
@@ -674,12 +665,11 @@ export function createUI() {
     get talking() { return dialogue.playing; },
     // 黑场：a 为不透明度，ms 为过渡时长
     black(a, ms = 0) { black.style.transition = `opacity ${ms}ms`; black.style.opacity = a; },
-    // 终章字幕「序章 · 完」：结局动画黑屏后淡入。点一下先淡出，再交给 onFinale
+    // 终章字幕「序章 · 完」：结局动画黑屏后淡入，停在这一屏
     fin(on) {
-      if (on) { finaleArmed = true; fin.style.transition = 'opacity 2s ease'; }
+      if (on) fin.style.transition = 'opacity 2s ease';
       fin.classList.toggle('on', on);
     },
-    onFinale(fn) { onFinaleClick = fn; },
     // 结局黑场文字：{ title, lines, back }；传 null 隐藏
     ending(d) {
       if (!d) { ending.classList.remove('on'); return; }
