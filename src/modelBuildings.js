@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { texture, uv, vertexColor, uniform, vec3, float, mix, normalWorld, positionWorld } from 'three/tsl';
+import { texture, uv, vertexColor, uniform, vec3, float, mix, smoothstep, mx_noise_float, bumpMap, normalWorld, positionWorld } from 'three/tsl';
 import { adGlowNode } from './ads.js';
 import { NEON } from './signs.js';
 import TYPES from './data/buildings.json';
@@ -10,7 +10,8 @@ import { addLightGroup } from './debugLights.js';
 
 // 近景模型楼（KitBash3D 楼体）。布局在 Blender 里摆：art/city.blend → tools/blender/city_export.py → cityLayout.json
 // 楼型网格烘焙好光照（tools/blender/city_bake.py），同楼型多栋共享网格与材质
-// 光照存在顶点色里（编码 (v/range)^(1/2.2)），运行时不受场景灯光影响：颜色 = 底色贴图 × (烘焙光照 × 高度明暗 × 冷色 + 青色环境光 + 招牌补光)
+// 光照存在顶点色里（编码 (v/range)^(1/2.2)），作为自发光：底色贴图 × (烘焙光照 × 高度明暗 × 冷色 + 青色环境光 + 招牌补光)
+// 材质是 PBR（MeshStandardNodeMaterial）：在烘焙基调上再吃场景点光源、环境反射和屏幕反射，墙面按雨痕变湿（bldgWet）
 // 材质名带类别前缀：std 普通 / glass 玻璃（顶点色已含亮窗）/ lamp 灯具 / let 字牌
 // 招牌是每栋楼单独摆的，补光不进烘焙，运行时每栋楼取自己最近的 MAX_LIGHTS 块招牌照亮立面
 
@@ -34,7 +35,19 @@ export const bldgShade = {
   cool: uniform(new THREE.Color(0.78, 0.95, 1.05)),       // 烘焙光照的色调（乘），压掉暖黄
   ambient: uniform(new THREE.Color(0.006, 0.014, 0.014)), // 青色环境光（加，乘底色）
 };
-if (import.meta.env.DEV) window.__bldg = { ...bldgLight, shade: bldgShade };
+// PBR 部分：楼体能吃到场景点光源（路灯、广告屏）、环境反射和屏幕反射
+export const bldgWet = {
+  amount: uniform(1),       // 湿度总开关
+  diffuse: uniform(0.25),   // 实时灯光的漫反射倍率（烘焙已含天光，这里只补点光源）
+  dryEnv: uniform(0.3),     // 干墙的环境反射（走 aoNode，只压环境光，不压点光源）；湿处为 1
+  darken: uniform(0.62),    // 湿处底色变深
+  dryRough: uniform(0.88),
+  wetRough: uniform(0.22),
+  bump: uniform(0.15),      // 水膜起伏强度
+  glassRough: uniform(0.06),
+  glassMetal: uniform(0.5), // 屏幕反射强度跟金属度走
+};
+if (import.meta.env.DEV) window.__bldg = { ...bldgLight, shade: bldgShade, wet: bldgWet };
 addLightGroup('楼体墙面', (on) => { bldgLight.wall.value = on ? WALL : 0; });
 addLightGroup('楼体亮窗', (on) => { bldgLight.glass.value = on ? 1 : 0; });
 addLightGroup('楼体灯具', (on) => { bldgLight.lamp.value = on ? 0.7 : 0; });
@@ -115,28 +128,87 @@ function signGlow() {
   return sum.mul(bldgLight.sign);
 }
 
+// 雨夜湿墙：竖墙上顺着往下流的雨痕 + 细水线，朝上的檐口、窗台、楼顶积水
+function wetness() {
+  const p = positionWorld;
+  const along = p.x.add(p.z);   // 楼都按轴向摆，竖墙的水平方向就是 x 或 z
+  const vert = smoothstep(0.6, 0.3, normalWorld.y.abs());
+  const flat = smoothstep(0.7, 0.95, normalWorld.y);
+  const streak = smoothstep(-0.15, 0.45, mx_noise_float(vec3(along.mul(1.4), p.y.mul(0.05), 0.0)));
+  const drip = smoothstep(0.15, 0.55, mx_noise_float(vec3(along.mul(6.5), p.y.mul(0.22), 3.1)));
+  const puddle = smoothstep(-0.3, 0.2, mx_noise_float(p.mul(vec3(0.5, 0.0, 0.5))));
+  const wet = streak.mul(0.65).add(drip.mul(0.35)).mul(vert).add(flat.mul(puddle)).clamp(0, 1).mul(bldgWet.amount);
+  // 水膜起伏：细密竖向水线，让点光源和反射在湿处碎开，不是一整块平滑高光
+  const film = mx_noise_float(vec3(along.mul(18), p.y.mul(1.2), 7.7)).mul(wet);
+  return { wet, film };
+}
+
 const RANGE = 4;
+// 返回 { pbr, basic }：basic 是改 PBR 之前的纯烘焙版本，只留着在测试面板里做前后对比
 function bakedMaterial(src) {
   const [kind] = src.name.split(':');
   const light = vertexColor().rgb.pow(2.2).mul(RANGE);
   const glow = signGlow();
-  const m = new THREE.MeshBasicNodeMaterial();
+  const m = new THREE.MeshStandardNodeMaterial();
+  const basic = new THREE.MeshBasicNodeMaterial();
   const base = src.map ? texture(src.map, uv()).rgb.mul(vec3(src.color.r, src.color.g, src.color.b)) : vec3(src.color.r, src.color.g, src.color.b);
   const k = positionWorld.y.sub(bldgShade.y0).div(bldgShade.y1.sub(bldgShade.y0)).clamp(0, 1).pow(bldgShade.curve);
   const shade = mix(bldgShade.foot, bldgShade.top, k);
   const wall = light.mul(bldgLight.wall).mul(shade).mul(bldgShade.cool).add(bldgShade.ambient);
-  const lit = base.mul(wall.add(glow));
+  // 烘焙光照 × 底色（+ 灯具 / 字牌自发光）
+  const baked = (albedo) => {
+    const lit = albedo.mul(wall.add(glow));
+    if (kind === 'lamp') return lit.add(vec3(src.emissive.r, src.emissive.g, src.emissive.b).mul(bldgLight.lamp));
+    if (kind === 'let') return lit.add(base.mul(bldgLight.letter));
+    return lit;
+  };
   if (kind === 'glass') {
-    m.colorNode = light.mul(bldgLight.glass).add(glow.mul(0.15));
-  } else if (kind === 'lamp') {
-    m.colorNode = vec3(src.emissive.r, src.emissive.g, src.emissive.b).mul(bldgLight.lamp).add(lit);
-  } else if (kind === 'let') {
-    m.colorNode = lit.add(base.mul(bldgLight.letter));
+    // 玻璃：亮窗照旧走烘焙，暗窗变成深色镜面，倒映环境、霓虹和屏幕反射
+    m.colorNode = vec3(0.04, 0.045, 0.05);
+    m.roughnessNode = bldgWet.glassRough;
+    m.metalnessNode = bldgWet.glassMetal;
+    m.emissiveNode = basic.colorNode = light.mul(bldgLight.glass).add(glow.mul(0.15));
   } else {
-    m.colorNode = lit;
+    // 墙体：烘焙光照当作自发光（夜景基调不变），实时光照只在上面加湿面高光、反射和少量漫反射
+    const { wet, film } = wetness();
+    const albedo = base.mul(mix(float(1), bldgWet.darken, wet));
+    m.colorNode = albedo.mul(bldgWet.diffuse);
+    m.roughnessNode = mix(bldgWet.dryRough, bldgWet.wetRough, wet);
+    m.metalnessNode = float(0);
+    m.aoNode = mix(bldgWet.dryEnv, float(1), wet);
+    m.normalNode = bumpMap(film, bldgWet.bump);
+    m.emissiveNode = baked(albedo);
+    basic.colorNode = baked(base);
   }
-  m.name = src.name;
-  return m;
+  m.name = basic.name = src.name;
+  return { pbr: m, basic };
+}
+
+// 测试按钮：关掉 = 改 PBR 之前的纯烘焙楼，用来对比效果和帧率
+// （材质对不放 userData：clone 会把 userData 走一遍 JSON 序列化）
+const bldgMeshes = [];
+const pairOf = new Map();   // pbr / basic 材质 → { pbr, basic }
+let usePBR = true;
+function setPBR(on) {
+  usePBR = on;
+  for (const o of bldgMeshes) o.material = pairOf.get(o.material)[on ? 'pbr' : 'basic'];
+}
+// 开发态才有；和其他测试按钮一样，鼠标未锁定时（暂停画面）显示在右上角，排在剧情测试按钮下面
+if (import.meta.env.DEV) {
+  const b = document.createElement('button');
+  const label = () => { b.textContent = `测试 · 楼体 PBR：${usePBR ? '开' : '关（旧版烘焙）'}`; };
+  label();
+  b.style.cssText = 'position:fixed;right:24px;top:316px;transform:scale(1.5);transform-origin:right top;z-index:10;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#9ad7ff;background:rgba(5,12,20,.7);border:1px solid rgba(154,215,255,.6);cursor:pointer;';
+  document.body.appendChild(b);
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setPBR(!usePBR);
+    label();
+    b.blur();
+  });
+  const sync = () => { b.style.display = document.pointerLockElement ? 'none' : ''; };
+  document.addEventListener('pointerlockchange', sync);
+  sync();
 }
 
 export function loadModelBuildings(scene) {
@@ -154,8 +226,12 @@ export function loadModelBuildings(scene) {
     proto.traverse((o) => {
       if (!o.isMesh) return;
       const key = o.material.name;
-      if (!mats.has(key)) mats.set(key, bakedMaterial(o.material));
-      o.material = mats.get(key);
+      if (!mats.has(key)) {
+        const pair = bakedMaterial(o.material);
+        mats.set(key, pair);
+        pairOf.set(pair.pbr, pair).set(pair.basic, pair);
+      }
+      o.material = mats.get(key)[usePBR ? 'pbr' : 'basic'];
     });
     for (const i of list) {
       const b = LAYOUT.buildings[i];
@@ -166,7 +242,7 @@ export function loadModelBuildings(scene) {
       // 离楼心最近的几块招牌
       const lights = signLights[i].slice().sort((a, c) =>
         Math.hypot(a.p.x - b.pos[0], a.p.z - b.pos[2]) - Math.hypot(c.p.x - b.pos[0], c.p.z - b.pos[2])).slice(0, MAX_LIGHTS);
-      root.traverse((o) => { if (o.isMesh) o.userData.signLights = lights; });
+      root.traverse((o) => { if (o.isMesh) { o.userData.signLights = lights; bldgMeshes.push(o); } });
       root.updateMatrixWorld(true);
       scene.add(root);
     }
