@@ -162,7 +162,7 @@ let hdr = sceneColor.add(ssrPass.rgb.mul(ssrAmt));
 addLightGroup('屏幕反射', (on) => { ssrAmt.value = on ? 1 : 0; });
 
 // 1.1 烟雾粒子：独立场景、半分辨率渲染，按 alpha 盖到场景上（在辉光和分析去饱和之前）
-const smoke = buildSmoke(camera, crash, sceneDepth, scene.fogNode);
+const smoke = buildSmoke(camera, sceneDepth, scene.fogNode);
 const smokePass = pass(smoke.scene, camera);
 smokePass.setResolutionScale(0.5);
 const smokeTex = smokePass.getTextureNode('output');
