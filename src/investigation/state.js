@@ -36,7 +36,7 @@ const CLUE_LINES = {
   front: 'clueFront', rail: 'clueRail', debris: 'clueDebris',
   scrape: 'clueScrape', skidB: 'clueSkidB', trim: 'clueTrim',
   p2car: 'clueP2car', p3override: 'clueP3override', p4end: 'clueP4end',
-  dMode: 'clueDMode', dReason: 'clueDReason', dRaw: 'clueDRaw', dRawOpen: 'clueDRawOpen', rTime: 'clueRTime',
+  dReason: 'clueDReason', dRaw: 'clueDRaw', dRawOpen: 'clueDRawOpen', rTime: 'clueRTime',
 };
 const READY_LINES = { 1: 'ready1', 2: 'ready2' };   // 第 1、2 轮现场线索标完、还没进黑梦
 const LINE_DELAY = 1.3;          // 分析完成到独白开口（秒）：结果面板 0.45 秒弹出，结论行再约 0.8 秒淡入
