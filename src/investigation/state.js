@@ -817,7 +817,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
 
   const CAM_IN = 0.9, CAM_OUT = 0.7;
   const _m = new THREE.Matrix4();
-  const _hack = new THREE.Vector3();
+  const _hack = new THREE.Vector3(), _type = new THREE.Vector3();
   const hackSource = () => (ins.phase ? slot.world : camera.getWorldDirection(_hack).multiplyScalar(0.45).add(camera.position));
 
   // ---------- 进出驾驶舱的镜头路径（第 3 轮插卡、第 4 轮拿根钥共用） ----------
@@ -1436,6 +1436,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       sound.setTablet(tablet.open);
       // 接入画面（插卡读取 / 根钥 / 对象索引）期间循环科技扫描声：插卡时在检修接口，其余在平板位置
       sound.follow('scifi/id_scan_loop', tablet.open && tablet.hacking ? hackSource() : null);
+      // 平板上文字正在打出时循环打字声，跟着平板（结局时在地上）；暂停时打字停住，声音也停
+      sound.follow('ui/typewrite_loop', tablet.typing && realDt > 0 ? tablet.screenWorld(_type) : null);
       if (mode === 'ending') endingT += realDt;
       slot.update(realDt);
       rootKey.update(realDt);

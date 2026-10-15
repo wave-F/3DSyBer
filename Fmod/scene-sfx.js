@@ -204,6 +204,26 @@
     // 撬门：3D 在车门门尾（镜头离门约 1.2 m）
     event('foley/pry_insert', { bus: FOLEY, files: ['44Pry_insert.wav'], spatial: { min: 1, max: 25, size: 1 } });
     event('foley/pry_open', { bus: FOLEY, files: ['45Pry_open.wav'], spatial: { min: 1, max: 25, size: 1.5 } });
+    // 科幻 UI 打字：平板（手持或结局摔在地上）上文字正在打出时循环，3D 跟着平板
+    event('ui/typewrite_loop', { bus: UI, files: ['49typewrite_loop.wav'], loop: true, fadeIn: 30, fadeOut: 120, spatial: { min: 0.3, max: 10, size: 0.5 } });
+
+    // 黑梦里的撞护栏只在黑梦播放：事件自带一路送黑梦 Reverb 的 Send（Spatializer 之前，固定电平），
+    // Studio 里单独试听也带黑梦空间；黑梦 Snapshot 打开的 WORLD 总线发送照常叠加
+    (function dreamSend(path, level) {
+        var e = need('event:/' + path);
+        var c = e.masterTrack.mixerGroup.effectChain;
+        if (c.effects.some(function (x) { return x.isOfExactType('MixerSend') && same(x.mixerReturn, reverb); })) return;
+        var s = c.addEffect('MixerSend');
+        s.mixerReturn = reverb;
+        s.level = level;
+        var after = [], seen = false;
+        c.effects.forEach(function (x) {
+            if (x.isOfExactType('SpatialiserEffect')) seen = true;
+            if (seen && !same(x, s)) after.push(x);
+        });
+        after.forEach(function (x) { c.relationships.effects.remove(x); c.relationships.effects.add(x); });
+        created.push(path + ' -> Reverb');
+    })('vehicle/hit_rail', -12);
 
     // ---------- 已有 UI 事件换素材：路径与触发不变，只换仍是旧生成素材（Assets/ui/）的 ----------
     function swap(path, file) {

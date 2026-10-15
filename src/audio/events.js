@@ -14,7 +14,7 @@ export const VCAS = { ambience: 'vca:/Ambience', sfx: 'vca:/SFX', ui: 'vca:/UI',
 export const FOLEY = { step: 'foley/FootStep', water: 'foley/FootStep_Water', cloth: 'foley/ClothFoley' };
 
 // 单发素材的波形峰值（秒）。撞击类要提前这么久触发，峰值才落在画面撞击那一帧
-export const PEAK = { hitBody: 0.181, hitRail: 0.326, doorClose: 0.028, pryOpen: 0.161 };
+export const PEAK = { hitBody: 0.167, hitRail: 0.224, doorClose: 0.028, pryOpen: 0.161 };
 
 const e = (path, label, description, bank = 'Main.bank') => ({ path, label, description, bank, pitch: 1 });
 
@@ -35,7 +35,7 @@ export const EVENTS = [
   e('event:/vehicle/brake', '刹车（3D）', '31car_brake · 开场停车阶段开始'),
   e('event:/vehicle/door_open', '开车门（3D）', '32car_open · 开场下车推门'),
   e('event:/vehicle/door_close', '关车门（3D）', '33car_close · 开场下车关门落锁'),
-  e('event:/vehicle/hit_rail', '车撞护栏（3D）', '34Car_Hit_bridge · 每轮黑梦第一次正向播过撞击时刻'),
+  e('event:/vehicle/hit_rail', '车撞护栏（3D）', '34Car_Hit_bridge · 每轮黑梦第一次正向播过撞击时刻 · 事件自带黑梦 Reverb 发送'),
   e('event:/vehicle/hit_body', '车撞人（3D）', '35Car_hit_body · 结局被撞，峰值对齐撞击帧'),
   e('event:/world/billboard_update', '广告牌刷新（3D）', '43SciFi_Billboard_update · 桥两侧近处大屏换图时 · 随机音高'),
   e(`event:/${FOLEY.step}`, '脚步', '走 / 跑共用 · 跟随手持设备每次行走下沉触发，每一步叠加衣物声'),
@@ -48,6 +48,7 @@ export const EVENTS = [
   e('event:/ui/click', 'UI 成功点击', '38UI_Click_confirm · 点到可交互区域'),
   e('event:/ui/hover', 'UI 悬停 / 切换', '指向新按钮、键盘切页'),
   e('event:/ui/deny', 'UI 无效点击', '39UI_Click_normal · 点到平板空白、收不起时点平板外、加载未就绪时点击', 'Frontend.bank'),
+  e('event:/ui/typewrite_loop', 'UI 打字（循环 · 3D）', '49typewrite_loop · 平板上报告 / 线索 / 接入日志 / 结局终端正在打字时循环，跟着平板'),
   e('event:/ui/warning', 'UI 警告', '40UI_alarm · 走近两端封锁屏障、出现禁止通过提示时'),
   e('event:/ui/toast', 'UI 提示', '普通提示条'),
   e('event:/ui/confirm', 'UI 重要提示', '常驻大提示（如黑梦就绪）'),

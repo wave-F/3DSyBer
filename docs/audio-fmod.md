@@ -15,11 +15,13 @@ Fmod/3DSyBer/Assets/{amb,foley,ui,scifi}/*.wav
    ↓ FMOD Studio 脚本建 Event / 总线 / Bank                    npm run audio:events
    ↓ 在手工 amb 事件上搭 3D / 子总线 / Snapshot / VCA          npm run audio:mix
    ↓ 第二批素材（Assets/26–48）建事件 / 总线 / Snapshot          npm run audio:scene
+   ↓ 场景基础混响 CityVerb + 各 3D 事件的距离 Send               npm run audio:reverb
 Fmod/3DSyBer/3DSyBer.fspro
    ↓ 构建 Desktop Bank 并同步                                  npm run audio:build
 public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 ```
 
+- `Fmod/city-reverb.js`（`npm run audio:reverb`）：场景基础混响，见下文「场景混响」。同样只补缺失对象，已有的 Send、曲线、效果器参数不改。
 - `Fmod/scene-sfx.js`（`npm run audio:scene`）：第二批音效（菜单音乐、车辆、场景、UI、撬门、水脚步）和 `CarInterior` / `Pause` / `Radar` Snapshot。**只新增缺失对象**：事件、总线、效果器、Snapshot 属性已存在就跳过，Studio 里调过的值不会被覆盖，可重复执行；四个旧 UI 事件只在仍用 `Assets/ui/` 旧素材时才换成新素材。
 
 - `scripts/freesound.mjs`：`search` 检索 CC0 素材，`get <id> <name>` 下载并登记出处，`fetch` 按 `credits.json` 重新下载。原始 mp3 不入库。
@@ -66,9 +68,30 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
   - `CarInterior`（开场坐在警车里，0 / 0.9 s）：AMB 低通 700 Hz、WORLD（车外声）900 Hz；车内引擎 `CABIN` 不动。
   - `Pause`（暂停层，0.25 / 0.3 s）：AMB / FOLEY / SCIFI / WORLD / CABIN 低通 600 Hz；UI 与音乐不受影响。
   - `Radar`（Q 发射瞬间）：AMB / FOLEY / WORLD / CABIN 低通 900 Hz；AHDSR 为 40 ms 起、保持 150 ms、900 ms 衰减到 0，自己恢复，游戏 2 秒后释放实例。雷达本身在 SCIFI，不被切。
-- VCA：`Ambience`（AMB）、`SFX`（FOLEY + SCIFI + WORLD + CABIN）、`UI`、`Dialogue`（DIALOGUE）、`Music`（MUSIC）。游戏不覆盖 VCA 音量；试听页首次启用读取当前值，只有手动拖动推子才改变该页的播放增益，不回写 Studio。
+- VCA：`Ambience`（AMB）、`SFX`（FOLEY + SCIFI + WORLD + CABIN + CityVerb）、`UI`、`Dialogue`（DIALOGUE）、`Music`（MUSIC）。游戏不覆盖 VCA 音量；试听页首次启用读取当前值，只有手动拖动推子才改变该页的播放增益，不回写 Studio。
 - 多变体事件（脚步、衣物）用 Multi Instrument 随机播放，并加音高 / 音量随机器。
 - 接线员广播：8 条派单员台词统一走 `DIALOGUE/radio`，窄带 400–3400 Hz、中频存在感、4:1 压缩与轻饱和；全部在 Studio 处理，不烘焙进源配音，不影响陈墨和仪器。参数与创作脚本见 [voice-en.md](voice-en.md)。
+
+## 场景混响 CityVerb
+
+目的：单声道 3D 点声源只有定位时像「贴」在场景上，加一层共享的街谷混响，让它们融进雨夜高架两侧的楼群并带出距离感。黑梦的 `Reverb` 是另一套，不受影响。
+
+- 做法依据 FMOD 官方论坛员工的建议：不在每个事件里挂混响，而是在事件主轨加 Send 到共享 Return，按距离自动化 Send；城市街道用 50–200 ms、几乎无反馈的拍击延迟加短混响，加大 early / late delay，湿声低通。混响参数参考 FMOD 内置 City / Alley 预设（1.5 s，HighCut 4–8 kHz）。
+- `bus:/CityVerb`（Return → Master，归 `vca:/SFX`），效果链：
+  - Delay 120 ms、反馈 10 %、湿 -8 dB：两侧第一排楼面离桥中心约 19–25 m，往返 40–50 m，即楼面拍击回声。
+  - SFX Reverb：1.6 s、Early 30 ms、Late 50 ms、HF Decay 50 %、Diffusion 70 %、Low Gain -6 dB @ 250 Hz、High Cut 4.5 kHz、Early/Late 60 %、湿 -8 dB、干 -80 dB。
+  - Multiband EQ：A 高通 150 Hz；B 500 Hz 削 3 dB（减少对直达声的掩蔽）；C 低通平时全开，给 Snapshot 用。
+- Send：每个 3D 事件主轨在 Fader 之后、Spatializer 之前加一路 Send，所以送进去的量不随距离衰减；电平按内置参数 `Distance (Normalized)`（0 为事件最小距离，1 为最大距离，全工程共用一个参数预设）自动化。直达声随距离衰减，混响场基本不变，越远越「湿」，到最大距离淡出：
+
+  | 归一化距离 | 0 | 0.15 | 0.5 | 0.85 | 1 |
+  |---|---|---|---|---|---|
+  | 车辆 / 撞击 / 门 / 撬门 / 广告牌（dB） | -10 | -8 | -6 | -9 | -40 |
+  | `amb/Amb_1..6`（本身是连续纹理） | -16 | -14 | -12 | -15 | -46 |
+  | `scifi/id_scan_loop`（手里的设备） | -18 | -16 | -14 | -17 | -48 |
+
+  浏览器实测刹车（5–90 m）：6 m 处混响峰值约 -30 dB（直达声约 -2 dB），60 m 处约 -28 dB（直达声约 -24 dB，干湿接近），超出最大距离后约 -61 dB。整体太湿或太干先推 `CityVerb` 推子，再改曲线。
+- 事件 Send 直接进 Return、不经过 AMB / WORLD 总线，所以 Snapshot 单独处理返回：`CarInterior` / `Pause` / `Radar` 把返回 EQ 的低通 C 降到 700 / 600 / 900 Hz；`Dream` 把 CityVerb -10 dB、低通 1.1 kHz；`Tablet` 把 CityVerb -5 dB。
+- 2D 声音（雨 / 车流铺底、脚步、衣物、UI、配音）不送 CityVerb。
 
 ## 事件与触发点
 
@@ -83,8 +106,8 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 | `vehicle/brake` | 停车阶段开始，跟着车滑进车位 |
 | `vehicle/drive_in` + `snapshot:/CarInterior` | 切到驾驶座镜头的同一帧硬切进来（2D）；推门（开场 2.45 s）时两者一起淡出 |
 | `vehicle/door_open` / `door_close` | 开场推门 / 关门落锁，3D 在驾驶门；关门按素材峰值提前，对准门板合上的一帧 |
-| `vehicle/hit_rail` | 黑梦里 A 车撞断护栏：每轮黑梦第一次正向播放经过撞击时刻（`recon.js` 的 `IMPACT_T`）时响一次，按峰值提前触发；滚轮拖动、倒放和之后重播都不响 |
-| `vehicle/hit_body` | 结局被撞：按峰值提前 0.181 s 触发，峰值落在撞击帧 |
+| `vehicle/hit_rail` | 黑梦里 A 车撞断护栏：每轮黑梦第一次正向播放经过撞击时刻（`recon.js` 的 `IMPACT_T`）时响一次，按峰值（0.224 s）提前触发；滚轮拖动、倒放和之后重播都不响。事件里自带一路送黑梦 `Reverb` 的 Send（Spatializer 之前，-12 dB），Studio 里单独试听也带黑梦空间；黑梦 Snapshot 打开的 WORLD 总线发送照常叠加 |
+| `vehicle/hit_body` | 结局被撞：按峰值提前 0.167 s 触发，峰值落在撞击帧 |
 | `world/billboard_update` | 离玩家活动范围 60 m 内的轮播大屏（现在 14 块）每次换图时在屏幕中心响，随机音高在 Studio；世界时间冻结（黑梦）时不换图也不响 |
 | `snapshot:/Pause` + `ui/panel_open` / `panel_close` | 暂停层出现 / 消失 |
 | `snapshot:/Dream` | 进入 / 离开黑梦 |
@@ -101,6 +124,7 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 | `voice/en/<group>_<两位序号>` | `ui.say` 中对应的英文对白或独白，等待真实结束后进入下一句；暂停/取消与剧情队列同步 |
 | `ui/record` | 黑梦里记录事件 |
 | `scifi/radar` + `snapshot:/Radar` | Q 扫描。素材在事件时间线上后移 0.198 s，峰值落在举枪 0.5 s 后的发射瞬间；发射瞬间触发 Radar 高切 |
+| `ui/typewrite_loop` | 平板上有文字正在打出时循环（`tablet.typing`）：报告逐字打出、线索详情逐行出现、接入画面日志逐字打出、结局终端自动写报告；开机扫描线期间和暂停时不响。3D 跟着平板（`tablet.screenWorld`，结局时在地上） |
 | `scifi/id_scan_loop` | 平板接入画面（第 3 轮插卡读取、第 4 轮根钥接入、对象索引）播放期间循环；插卡时 3D 在检修接口，其余在平板位置 |
 | `foley/pry_insert` / `pry_open` | 撬棍捅进门缝 / 卡扣崩开（峰值对准 `PRY_POP`），3D 在车门门尾（1–25 m），取代原来 WebAudio 合成的金属声 |
 | `scifi/analyze_loop` | 按住 E 分析期间循环，音高随进度从 0.85 升到 1.4 |
@@ -121,7 +145,7 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 
 现有环境 / Foley / UI / scifi 来源为 Freesound 上的 CC0 素材，ID、标题和链接见 `Fmod/source/credits.json`。下载的是 Freesound 的 HQ 预览（128 kbps mp3），不是原始文件。原始 WAV 要登录下载；以后需要更高音质，用同名文件替换后重跑 `audio:design`。新制作的 ElevenLabs 配音不属于这份 CC0 清单，商用与音色授权须单独核验。
 
-`Assets/` 根目录的 26–48 号 WAV（菜单音乐、车辆、UI、雷达、广告牌、撬门、水脚步）是在 Reaper 里制作的成品，导出目录 `/Volumes/Data/Reaper/CyberBridge/Out/1`。替换时保持文件名不变，覆盖后在 Studio 里刷新素材、运行 `audio:build`。
+`Assets/` 根目录的 26–49 号 WAV（49 为打字循环；28 / 29 / 34 / 35 已用 `Out/2` 的重做版同名覆盖）（菜单音乐、车辆、UI、雷达、广告牌、撬门、水脚步）是在 Reaper 里制作的成品，导出目录 `/Volumes/Data/Reaper/CyberBridge/Out/1`、`Out/2`。替换时保持文件名不变，覆盖后在 Studio 里刷新素材、运行 `audio:build`；撞击类素材的峰值变了要同步改 `events.js` 的 `PEAK`。**运行任何 `audio:*` 脚本前先关闭 FMOD Studio**，脚本直接改磁盘上的工程，Studio 开着时保存会用内存里的旧状态覆盖。
 
 ## 命令
 
@@ -131,6 +155,7 @@ npm run audio:design   # 渲染编辑后的 WAV
 npm run audio:events   # 重新创作事件（默认阻止，须显式 FMOD_ALLOW_REAUTHOR=1）
 npm run audio:mix      # 重建混音（默认阻止，须显式 FMOD_ALLOW_REAUTHOR=1）
 npm run audio:scene    # 第二批音效 / Snapshot：只补缺失对象，不覆盖手工调音
+npm run audio:reverb   # 场景混响 CityVerb 与 3D 事件距离 Send：只补缺失对象
 npm run audio:build    # 构建 Bank 并同步到 public/fmod/
 npm run test:audio     # Foley / scifi 触发与音量保护回归测试（无需浏览器 / 声卡）
 ```

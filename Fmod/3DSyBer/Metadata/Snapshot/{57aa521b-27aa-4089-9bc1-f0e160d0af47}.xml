@@ -22,10 +22,12 @@
 		<relationship name="snapshotProperties">
 			<destination>{2ce01979-8542-456d-b59a-a4e27ecae118}</destination>
 			<destination>{de31abd6-e9f4-410e-bd66-c9f4b5df249e}</destination>
+			<destination>{5acd4fd7-e6e9-40d0-8bc4-90860d13192b}</destination>
 		</relationship>
 		<relationship name="snapshotTracks">
 			<destination>{ed5ec4ae-00f0-49f6-80cd-e1271002f7dd}</destination>
 			<destination>{13884f57-64b3-4d98-b616-c05279659091}</destination>
+			<destination>{e783c817-03e1-47b6-b924-ad7ef6317689}</destination>
 		</relationship>
 	</object>
 	<object class="EventAutomatableProperties" id="{3f3d5c2e-1465-4615-8b0c-572af3cf2f43}">
@@ -58,6 +60,17 @@
 			<destination>{185ba2a4-0cd6-4271-8bed-7abd81342525}</destination>
 		</relationship>
 	</object>
+	<object class="SnapshotProperty" id="{5acd4fd7-e6e9-40d0-8bc4-90860d13192b}">
+		<property name="propertyName">
+			<value>frequencyC</value>
+		</property>
+		<property name="value">
+			<value>700</value>
+		</property>
+		<relationship name="automatableObject">
+			<destination>{c58cbebb-99b7-4e9f-8b93-092dd31d5805}</destination>
+		</relationship>
+	</object>
 	<object class="SnapshotTrack" id="{ed5ec4ae-00f0-49f6-80cd-e1271002f7dd}">
 		<relationship name="mixerStrip">
 			<destination>{4c34a905-2a3e-49e3-888e-a489a4052266}</destination>
@@ -66,6 +79,11 @@
 	<object class="SnapshotTrack" id="{13884f57-64b3-4d98-b616-c05279659091}">
 		<relationship name="mixerStrip">
 			<destination>{cb6192c0-f772-41e9-a6c4-17b0df209ce0}</destination>
+		</relationship>
+	</object>
+	<object class="SnapshotTrack" id="{e783c817-03e1-47b6-b924-ad7ef6317689}">
+		<relationship name="mixerStrip">
+			<destination>{1621be25-a14d-41b9-8fb6-70b0b1f2ff95}</destination>
 		</relationship>
 	</object>
 	<object class="ADSRModulator" id="{01a351ab-742d-4cf7-86a9-a730eb240b47}">
