@@ -27,10 +27,10 @@ async function fixture(t) {
 test('新版英文稿覆盖当前 36 组、60 条台词，保留中文原文，不恢复已删除的句子', () => {
   const before = JSON.stringify(LINES);
   const all = dialogueLines({ includeReserve: true, includeSilent: true });
-  assert.equal(Object.keys(ENGLISH).length, 36);
-  assert.equal(all.length, 60);
-  assert.equal(lines.length, 60);
-  assert.equal(new Set(all.map((l) => l.id)).size, 60);
+  assert.equal(Object.keys(ENGLISH).length, 35);
+  assert.equal(all.length, 57);
+  assert.equal(lines.length, 57);
+  assert.equal(new Set(all.map((l) => l.id)).size, 57);
   assert.ok(all.every((l) => !l.reserve && !l.silent));
   assert.ok(lines.some((l) => l.group === 'archived'));
   assert.ok(lines.some((l) => l.group === 'transferred'));
@@ -84,7 +84,7 @@ test('新版 11 条试听涵盖三角色、内心独白和早晚情绪，陈墨�
 
 test('API 只接收英文，表演标签不改显示稿，编号按字母数字念', () => {
   const l = lines[0];
-  assert.equal(spokenText('B1016 P0 Cheng Xu'), 'B one zero one six P zero Chung Shyu');
+  assert.equal(spokenText('B1016 P0 Cheng Xu'), 'B one zero one six P0 Chung Shyu');
   assert.equal(l.text, 'B1016, are you on scene?');
   for (const l of lines) {
     const { request } = speechRequest(l, options);

@@ -69,7 +69,7 @@ export const ENGLISH = {
     line('碰撞时产生了新数据。', 'The collision produced new data.', 'Notice the new record without raising his voice.', 'quiet, certain'),
   ],
   clueP3override: [
-    line('就在这儿，方向被接过去了。', 'Right here. That is when it took over the steering.', 'Pinpoint the takeover without raising his voice.', 'quiet, focused'),
+    line('就在这儿，控制权被夺过去了。', 'Right here. That is when control was taken.', 'Pinpoint the takeover without raising his voice.', 'quiet, focused'),
   ],
   clueP4end: [
     line('这辆车，已经不受控制了。', 'This car is no longer under control.', 'Let the implication settle between the two beats.', 'low, grave'),
@@ -87,7 +87,7 @@ export const ENGLISH = {
     line('早了 0.38 秒。那时候车还没转。', '0.38 seconds early. The car had not turned yet.', 'Read the timing precisely; contained unease.', 'low, troubled'),
   ],
   dream1: [
-    line('还没撞护栏，轮子就转了。', 'The wheel turned before it hit the barrier.', 'The contradiction is becoming clear. Stress before, not barrier.', 'thoughtful, skeptical'),
+    line('轮子现在就转向了。', 'The wheel is turning now.', 'Watching the replay. The turn is happening at this moment. Keep it short.', 'quiet, focused'),
     line('像是发生了碰撞。', 'Looks like there was a collision.', 'A tentative working theory, not a solution.', 'quiet, curious'),
   ],
   after1: [
@@ -99,24 +99,24 @@ export const ENGLISH = {
   ],
   question2: [
     line('你说刮擦让它转向。可胎痕在刮擦点之前就弯了。', 'You said the scrape made it turn. But the tire marks curve before the contact point.', 'Point out the timing contradiction calmly.', 'questioning, controlled'),
-    line('接触可能影响了后续轨迹。', 'Contact may have affected the subsequent trajectory.', 'Same neutral service voice; do not emphasize the retreat in certainty.', 'measured, neutral'),
+    line('接触可能影响了判断轨迹。', 'Contact may have affected the assessed trajectory.', 'Same neutral service voice; do not emphasize the retreat in certainty.', 'measured, neutral'),
     line('可能？', 'May have?', 'Catch the changed certainty. Short and restrained.', 'skeptical, clipped'),
   ],
   revised2: [],
   call2: [
     line('B1016，逃逸案已经转追查科了。你这单可以结了。', 'B1016, the hit-and-run is with Pursuit. You can close this.', 'Trying to clear the queue, with ordinary workplace impatience.', 'brisk, businesslike'),
     line('再给我十分钟。', 'Give me ten more minutes.', 'A firm, economical request. No pleading.', 'low, firm'),
-    line('右门翘着，应该撬得开。检修接口在转向柱下面。', 'The right door is bent out. Should be able to pry it open. Service port is under the steering column.', 'Work through the next action to himself; stay conversational.', 'quiet, resolved'),
+    line('右门翘着，应该撬得开，查看下检修接口。', 'The right door is bent out. Should pry open. Check the service port.', 'Work through the next action to himself; stay conversational.', 'quiet, resolved'),
   ],
   cardRead: [
-    line('不是他打错了方向。是系统不让他把车开直。', 'He did not miss the wheel. The system would not let him hold it straight.', 'The accusation emerges from the evidence; restrained, not theatrical.', 'low, grave'),
+    line('不是他手动操作，是被强制转向了。', 'It was not a manual input. The wheel was forced.', 'The accusation emerges from the evidence; restrained, not theatrical.', 'low, grave'),
   ],
   dream3: [
     line('零号保障...有钱人的护身符。', 'Zero Priority... a talisman for the rich.', 'Understated, bitter irony. No relief or theatrical sarcasm.', 'quiet, bitter'),
   ],
   question3: [
     line('原始记录为什么锁着？', 'Why are the raw records locked?', 'Question the lock itself, not a theory he already knows.', 'questioning, controlled'),
-    line('我要看零号保障的生效时间。', 'I want to see when Zero Priority took effect.', 'Ask for the underlying record without raising his voice.', 'firm, clipped'),
+    line('我要看接口日志。', 'I want to see the port log.', 'Ask for the locked entry by name, without raising his voice.', 'firm, clipped'),
     line('当前权限不足。', 'Current permissions are insufficient.', 'A routine permissions notice, neither apologetic nor threatening.', 'measured, neutral'),
   ],
   revised3: [],
@@ -129,9 +129,8 @@ export const ENGLISH = {
     line('先借用一下。', 'I’ll borrow it.', 'A trace of wry humor; no chuckle or comic punchline.', 'understated, wry'),
   ],
   rootRead: [
-    line('为什么提前写好事故报告？', 'Why was the accident report written in advance?', 'A direct, controlled challenge. Do not shout.', 'low, questioning'),
-    line('风险预测与报告预生成属于城市应急流程。', 'Risk prediction and pre-written reports are city emergency procedure.', 'The same reassuring service cadence as every earlier answer.', 'measured, neutral'),
-    line('可他根本没有违规。', 'But he never broke the rules.', 'Disbelief hardens into accusation; no screaming or melodrama.', 'controlled anger, incredulous'),
+    line('为什么临时添加了零号保障？', 'Why was Zero Priority added temporarily?', 'A direct, controlled challenge. Do not shout.', 'low, questioning'),
+    line('...', '...', 'The terminal does not answer. Leave the silence.', 'silent'),
   ],
   dream4: [
     line('这时候才添加了零号保障。', 'That is when Zero Priority was added.', 'Pinpoint the moment; firm but not shouted.', 'quiet, certain'),
@@ -140,7 +139,7 @@ export const ENGLISH = {
     line('他想取消变道。系统没让。', 'He tried to cancel the lane change. The system refused.', 'Recognize that the apparent perpetrator was also being controlled.', 'quiet, grave'),
   ],
   target: [
-    line('就因为他能查原始记录？', 'Just because he could check the raw records?', 'Spoken to the terminal. A contained, accusatory question.', 'low, questioning'),
+    line('就因为他查看了原始记录？', 'Just because he looked at the raw records?', 'Spoken to the terminal. A contained, accusatory question.', 'low, questioning'),
     line('得把这些带回去。', 'I need to take this back.', 'A decision, already moving. No panic.', 'low, urgent'),
   ],
   transferred: [
@@ -148,7 +147,7 @@ export const ENGLISH = {
     line('B1016，这单你可以结了。', 'B1016, you can close this.', 'Relieved to clear a job from the queue.', 'brisk, matter-of-fact'),
     line('知道了。', 'Understood.', 'Resigned, not satisfied. The doubt has not disappeared.', 'weary, subdued'),
     line('特权会有人去吵。', 'Someone will argue about the privilege.', 'Rationalizing his decision to leave.', 'quiet, resigned'),
-    line('至于那条让行道是什么时候铺上的——', 'When that yield lane was laid down —', 'An unfinished thought he chooses not to pursue.', 'quiet, trailing off'),
+    line('至于零号保障是什么时候生效的——', 'As for when Zero Priority took effect —', 'An unfinished thought he chooses not to pursue.', 'quiet, trailing off'),
     line('那不是我的单子了。', 'That is no longer my file.', 'Self-dismissal, not a triumphant closing line.', 'quiet, resigned'),
   ],
   archived: [
@@ -164,7 +163,7 @@ export const ENGLISH = {
 export const AUDITION_IDS = [
   'opening_01', 'opening_02', 'opening_03',
   'question2_01', 'question2_02', 'question2_03',
-  'cardRead_01', 'dream3_01', 'keyFound_02', 'rootRead_03', 'target_02',
+  'cardRead_01', 'dream3_01', 'keyFound_02', 'question3_03', 'target_02',
 ];
 
 // script 默认是游戏里当前的中文台词；台词改过而配音稿没跟上时会报错，防止用旧稿生成。

@@ -886,7 +886,11 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     tablet.showClue('rTime');
     keySaid.then((completed) => {
       if (completed === false) return;
-      if (round === 4 && mode !== 'death') ui.say(LINES.rootRead);
+      if (round !== 4 || mode === 'death') return;
+      // 先说原始记录和时间差，再说质问。这两句不再在翻看详情时重复。
+      dataSaid.add('dRawOpen');
+      dataSaid.add('rTime');
+      ui.say([...LINES.clueDRawOpen, ...LINES.clueRTime, ...LINES.rootRead]);
     });
   }
 
@@ -972,7 +976,6 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     ins.done = true;
     syncTablet();
     tablet.showClue('dMode');
-    ui.say(LINES.cardRead);
   }
   // 收起平板。合上之后先拔卡（镜头停在车里），拔完再起身
   function finishInsert(relock) {
@@ -1325,6 +1328,15 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     ui.say(p.lines).then(p.resolve);
   }
 
+  // 接管记录的结论打出之后才说。接入画面结束时先停在这一页，不提前开口。
+  let cardReadSaid = false;
+  function tickCardRead() {
+    if (cardReadSaid || ui.talking) return;
+    if (tablet.viewing?.id !== 'dMode') return;
+    cardReadSaid = true;
+    ui.say(LINES.cardRead);
+  }
+
   // 车载数据没有按住 E 的分析：平板上第一次看完某条详情（结论已打出）时播独白。
   // 正在播别的台词（读卡、根钥、质询）时先不播，等说完、玩家还停在这条上再播
   function tickDataLine() {
@@ -1580,7 +1592,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     update(realDt) {
       ui.updateDialogue(realDt);
       tablet.update(realDt);
-      if (!intro) { updateRootHold(realDt); tickDataLine(); tickPendingSay(realDt); }
+      if (!intro) { updateRootHold(realDt); tickCardRead(); tickDataLine(); tickPendingSay(realDt); }
       ui.setTabletOpen(tablet.amount > 0.05);
       ui.updateHud(realDt);
       sound.setTablet(tablet.open);
