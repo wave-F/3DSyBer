@@ -19,7 +19,8 @@
 | `src/cordon.js` | 龙门与全息封锁，导出玩家 z 限制 |
 | `src/player.js` | 指针锁定、WASD、护栏与封锁夹紧、事故车碰撞 |
 | `src/crash.js` | 事故超跑、脱落轮、`CAR_POS`、碰撞盒 |
-| `src/rain.js` | 跟随相机的雨线 |
+| `src/rain.js` | 跟随相机的雨线，导出风向 `WIND` |
+| `src/smoke.js` | GPU 粒子：车头浓烟与火星、桥面风雾、桥下蒸汽（独立场景，`main.js` 半分辨率叠回） |
 | `src/fog.js` | 雾色与全部雾参数、距离雾、自发光随距离变暗、体积雾后期、开发态调雾面板 |
 | `src/sky.js` | 夜空天空盒（`public/assets/sky_overcast.jpg`）与低空碎云、远景巨楼、全息广告、飞行器光点 |
 | `src/city.js` | 程序化街区与近处屏幕点光 |

@@ -21,6 +21,7 @@ import { buildCity } from './city.js';
 import { buildCrash } from './crash.js';
 import { buildPoliceCar } from './policeCar.js';
 import { buildRain } from './rain.js';
+import { buildSmoke } from './smoke.js';
 import { buildCordon, CORDON } from './cordon.js';
 import { createPlayer } from './player.js';
 import { createIntro } from './intro.js';
@@ -160,6 +161,14 @@ const ssrAmt = uniform(1);
 let hdr = sceneColor.add(ssrPass.rgb.mul(ssrAmt));
 addLightGroup('屏幕反射', (on) => { ssrAmt.value = on ? 1 : 0; });
 
+// 1.1 烟雾粒子：独立场景、半分辨率渲染，按 alpha 盖到场景上（在辉光和分析去饱和之前）
+const smoke = buildSmoke(camera, crash, sceneDepth, scene.fogNode);
+const smokePass = pass(smoke.scene, camera);
+smokePass.setResolutionScale(0.5);
+const smokeTex = smokePass.getTextureNode('output');
+hdr = hdr.mul(float(1).sub(smokeTex.a)).add(smokeTex.rgb);
+if (import.meta.env.DEV) window.__smoke = smoke.scene;   // 开发时截图对比用
+
 // 1.2 体积雾：雾里的灯光散射（光晕、路灯光锥、底雾），在手和终端叠加之前
 const volFog = createVolumetricFog({ scene, camera, renderer, depthNode: sceneDepth });
 hdr = hdr.add(volFog.node);
@@ -236,6 +245,7 @@ renderer.setAnimationLoop(() => {
   crash.update(clock.dt, clock.elapsed);
   police.update(clock.dt, clock.elapsed);
   updateRain(clock.dt);
+  smoke.update();
   updateCordon(step, camera.position);
   updateSky(clock.dt, clock.elapsed);
   updateCity();
