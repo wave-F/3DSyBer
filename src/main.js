@@ -33,6 +33,7 @@ import { addLightGroup } from './debugLights.js';
 import { HURT } from './investigation/finale.js';
 import { sound } from './audio/sound.js';
 import { AD_DWELL } from './ads.js';
+import { createStaticGI } from './globalIllumination.js';
 
 // 网页一打开就装入全部 Bank 并预备好所有循环；加载界面等声音就绪后才允许点击开始
 loading.waitFor(sound.preload(), '声音', 'AUDIO');
@@ -79,8 +80,22 @@ new HDRLoader().load(`${import.meta.env.BASE_URL}assets/shanghai_bund_1k.hdr`, (
   scene.environmentIntensity = envOn ? 0.12 : 0;
 });
 
-buildBridge(scene);
-const updateCity = buildCity(scene);
+// 静态光照只采集桥和城市，不把演出车辆 / 警灯 / 雨 / 全息烘进去。
+const staticWorld = new THREE.Group();
+staticWorld.name = '桥与城市';
+scene.add(staticWorld);
+buildBridge(staticWorld);
+const updateCity = buildCity(staticWorld);
+const gi = createStaticGI({
+  scene, world: staticWorld, ambientLights: [hemi, moon], assetsReady: updateCity.ready,
+  volume: {
+    width: HALF_W * 2 + 6, height: 6, depth: CORDON.z1 - CORDON.z0 + 20,
+    position: [0, DECK_Y + 3.3, (CORDON.z0 + CORDON.z1) / 2],
+  },
+});
+loading.waitFor(gi.ready, '静态全局光照', 'STATIC GLOBAL ILLUMINATION');
+addLightGroup('全局光照（静态探针）', (on) => gi.setEnabled(on));
+if (import.meta.env.DEV) window.__gi = gi;
 const crash = buildCrash(scene);
 const police = buildPoliceCar(scene);
 const updateSky = buildSky(scene);
@@ -249,6 +264,7 @@ renderer.setAnimationLoop(() => {
   updateCordon(step, camera.position);
   updateSky(clock.dt, clock.elapsed);
   updateCity();
+  gi.update(renderer);
   inv.update(step);
   sound.updateBillboards(clock.elapsed);
   sound.update(dt, camera);

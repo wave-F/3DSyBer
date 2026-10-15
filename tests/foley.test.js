@@ -625,6 +625,7 @@ function runtimeStub(calls) {
     play({ path, position }) { calls.push(['play', path, position]); }
     prepareLoop(path, position) { this.loops.set(path, {}); this.prepared.add(path); calls.push(['prepare', path, position]); }
     prepareInstance() { return null; }
+    streamsLoaded(instances) { calls.push(['streams', instances.length]); return Promise.resolve(); }
     startLoop(path, position) {
       if (this.prepared.delete(path)) { calls.push(['unpause', path]); return {}; }
       if (this.loops.has(path)) return this.loops.get(path);
@@ -745,7 +746,7 @@ test('运行时先装入 BOOT Bank，其余逐个装入并等采样解码完；�
   const fmod = new FmodRuntime();
   const loaded = [];
   let decoding = 3;   // 前几次查询仍在解码
-  fmod.module = { OK: 0, STUDIO_LOAD_MEMORY: 0, STUDIO_LOAD_BANK_NORMAL: 0, STUDIO_LOADING_STATE_LOADING: 2, ErrorString: () => 'not found' };
+  fmod.module = { OK: 0, STUDIO_LOAD_MEMORY: 0, STUDIO_LOAD_BANK_NORMAL: 0, STUDIO_LOADING_STATE_LOADING: 2, STUDIO_LOADING_STATE_LOADED: 3, ErrorString: () => 'not found' };
   fmod.ready = true;
   fmod.system = {
     update: () => 0,
@@ -797,4 +798,165 @@ test('预备好的循环保持暂停，第一次 startLoop / moveLoop 才取消�
   assert.deepEqual(log, [['event:/a', 'paused', false], ['event:/b', '3d'], ['event:/b', 'paused', false], ['event:/b', '3d']]);
   fmod.stopLoop('event:/a');
   assert.equal(fmod.prepared.size, 0);
+});
+
+test('FMOD pthread 启动前检查跨源隔离，缺响应头时明确失败而不是退回无线程库', async () => {
+  const { FmodRuntime } = await load('src/audio/fmodRuntime.js', { './events.js': events }, {
+    window: { crossOriginIsolated: false },
+    document: { createElement() { assert.fail('不应请求不兼容的 SDK'); } },
+    fetch: async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) }),
+  });
+  const fmod = new FmodRuntime();
+  await assert.rejects(fmod.preload(), /Cross-Origin-Opener-Policy/);
+  await assert.rejects(fmod.loaded, /Cross-Origin-Embedder-Policy/);
+  assert.equal(fmod.ready, false);
+});
+
+test('SDK 使用官方 pthread 日志版与配套 WASM，开发 / 预览 / 静态部署声明隔离头', async () => {
+  const code = await readFile(new URL('../src/audio/fmodRuntime.js', import.meta.url), 'utf8');
+  assert.match(code, /script\.src = `\$\{BASE\}fmodstudioPL\.js`/);
+  assert.doesNotMatch(code, /Debug_Initialize|console\.(log|warn|error)\s*=/);
+  for (const name of ['fmodstudioPL.js', 'fmodstudioPL.wasm']) {
+    assert.ok((await readFile(new URL(`../public/fmod/${name}`, import.meta.url))).length > 0);
+  }
+  const { default: config } = await import('../vite.config.js');
+  for (const target of [config.server, config.preview]) {
+    assert.equal(target.headers['Cross-Origin-Opener-Policy'], 'same-origin');
+    assert.equal(target.headers['Cross-Origin-Embedder-Policy'], 'require-corp');
+  }
+  const headers = await readFile(new URL('../public/_headers', import.meta.url), 'utf8');
+  assert.match(headers, /Cross-Origin-Opener-Policy: same-origin/);
+  assert.match(headers, /Cross-Origin-Embedder-Policy: require-corp/);
+});
+
+test('Bank 采样状态失败 / ERROR / 超时不能误报就绪', async () => {
+  const { FmodRuntime } = await load('src/audio/fmodRuntime.js', { './events.js': events }, { setTimeout });
+  const fmod = new FmodRuntime();
+  fmod.ready = true;
+  fmod.module = { OK: 0, STUDIO_LOADING_STATE_LOADED: 3, STUDIO_LOADING_STATE_ERROR: 4, ErrorString: () => 'failed' };
+  fmod.system = { update: () => 0 };
+  fmod.banks = [{ getSampleLoadingState: () => 1 }];
+  await assert.rejects(fmod.samplesLoaded(), /sample loading state/);
+  fmod.banks = [{ getSampleLoadingState(out) { out.val = 4; return 0; } }];
+  await assert.rejects(fmod.samplesLoaded(), /sample loading failed/);
+  fmod.banks = [{ getSampleLoadingState(out) { out.val = 2; return 0; } }];
+  await assert.rejects(fmod.samplesLoaded(0), /timed out/);
+  assert.equal(fmod.complete, false);
+  fmod.disposed = true;
+  fmod.fetches = new Map(events.BANKS.map((file) => [file, Promise.resolve(new Uint8Array(0))]));
+  await fmod.loadRest();
+  assert.equal(fmod.complete, false);
+});
+
+test('加载界面等循环流就绪后才结束声音预载，期间不取消暂停', async () => {
+  const calls = [];
+  const Runtime = runtimeStub(calls);
+  let finishStreams;
+  class FmodRuntime extends Runtime {
+    streamsLoaded(instances) {
+      assert.equal(instances.length, 9);
+      calls.push(['streams']);
+      return new Promise((resolve) => { finishStreams = resolve; });
+    }
+  }
+  const { sound } = await load('src/audio/sound.js', {
+    './fmodRuntime.js': { FmodRuntime }, './events.js': events,
+  }, { document: { addEventListener() {}, hidden: false }, setTimeout, clearTimeout });
+  let ready = false;
+  const loading = sound.preload().then(() => { ready = true; });
+  await flush();
+  assert.equal(ready, false);
+  assert.ok(calls.some(([action]) => action === 'streams'));
+  assert.ok(!calls.some(([action]) => action === 'unpause'));
+  finishStreams();
+  await loading;
+  assert.equal(ready, true);
+});
+
+test('流式预热检查嵌套 Channel 的 open / 缺数据状态，允许虚拟声源且不改暂停状态', async () => {
+  const { FmodRuntime } = await load('src/audio/fmodRuntime.js', { './events.js': events }, { setTimeout });
+  const fmod = new FmodRuntime();
+  fmod.ready = true;
+  fmod.module = { OK: 0, ERR_STUDIO_NOT_LOADED: 70, OPENSTATE_READY: 0, OPENSTATE_PLAYING: 6, OPENSTATE_ERROR: 2, ErrorString: () => 'failed' };
+  let ticks = 0;
+  fmod.system = { update() { ticks++; return 0; } };
+  const sound = { getOpenState(state, buffered, starving) { state.val = 6; starving.val = ticks < 3; return 0; } };
+  const child = {
+    getNumChannels(out) { out.val = 1; return 0; }, getNumGroups(out) { out.val = 0; return 0; },
+    getChannel(i, out) { out.val = { getCurrentSound(out) { out.val = sound; return 0; } }; return 0; },
+  };
+  const group = {
+    getNumChannels(out) { out.val = 0; return 0; }, getNumGroups(out) { out.val = 1; return 0; },
+    getGroup(i, out) { out.val = child; return 0; },
+  };
+  const inst = {
+    isVirtual(out) { out.val = false; return 0; },
+    getPaused(out) { out.val = false; return 0; },
+    getChannelGroup(out) { if (ticks < 2) return 70; out.val = group; return 0; },
+    setPaused() { assert.fail('预热不能取消暂停'); },
+  };
+  const virtual = { isVirtual(out) { out.val = true; return 0; }, getChannelGroup() { assert.fail('虚拟声源没有 Channel'); } };
+  await fmod.streamsLoaded([inst, virtual]);
+  assert.equal(ticks, 3);
+  sound.getOpenState = (state) => { state.val = 2; return 0; };
+  await assert.rejects(fmod.streamsLoaded([inst]), /stream loading failed/);
+  sound.getOpenState = () => 1;
+  await assert.rejects(fmod.streamsLoaded([inst]), /stream open state/);
+  const empty = { ...inst, getChannelGroup(out) { out.val = { ...child, getNumChannels(out) { out.val = 0; return 0; } }; return 0; } };
+  await assert.rejects(fmod.streamsLoaded([empty], 0), /timed out/);
+  fmod.disposed = true;
+  const before = ticks;
+  await fmod.streamsLoaded([inst]);
+  assert.equal(ticks, before);
+});
+
+test('暂停的预备实例先静音再运行开流，就绪 / 超时均恢复暂停和原始静音，不重置时间线', async () => {
+  const { FmodRuntime } = await load('src/audio/fmodRuntime.js', { './events.js': events }, { setTimeout });
+  for (const originalMute of [false, true]) {
+    const fmod = new FmodRuntime();
+    fmod.ready = true;
+    fmod.module = { OK: 0, ErrorString: () => 'failed' };
+    const calls = [];
+    let paused = true;
+    fmod.system = { update() { calls.push('update'); return 0; } };
+    const group = { getMute(out) { out.val = originalMute; return 0; }, setMute(on) { calls.push(['mute', on]); return 0; } };
+    const inst = {
+      isVirtual(out) { out.val = false; return 0; }, getChannelGroup(out) { out.val = group; return 0; },
+      getPaused(out) { out.val = paused; return 0; }, setPaused(on) { paused = on; calls.push(['paused', on]); return 0; },
+      setVolume() { assert.fail('预热不能改事件增益'); }, setTimelinePosition() { assert.fail('时间线重置会关闭已开的流'); },
+    };
+    fmod.streamGroupReady = () => true;
+    await fmod.streamsLoaded([inst]);
+    assert.equal(paused, true);
+    assert.deepEqual(calls.filter(Array.isArray), [['mute', true], ['paused', false], ['paused', true], ['mute', originalMute]]);
+    assert.equal(calls[calls.findIndex((v) => Array.isArray(v) && v[0] === 'paused' && v[1]) + 1], 'update');
+    calls.length = 0;
+    fmod.streamGroupReady = () => false;
+    await assert.rejects(fmod.streamsLoaded([inst], 0), /timed out/);
+    assert.equal(paused, true);
+    assert.deepEqual(calls.filter(Array.isArray), [['mute', true], ['paused', false], ['paused', true], ['mute', originalMute]]);
+  }
+});
+
+test('流式预热期间点击播放菜单音乐，不会在预热结束时又被暂停', async () => {
+  const { FmodRuntime } = await load('src/audio/fmodRuntime.js', { './events.js': events }, { setTimeout });
+  const fmod = new FmodRuntime();
+  fmod.ready = true;
+  fmod.module = { OK: 0 };
+  fmod.system = { update: () => 0 };
+  let paused = true, muted = false;
+  const group = { getMute(out) { out.val = muted; return 0; }, setMute(on) { muted = on; return 0; } };
+  const inst = {
+    isVirtual(out) { out.val = false; return 0; }, getChannelGroup(out) { out.val = group; return 0; },
+    getPaused(out) { out.val = paused; return 0; }, setPaused(on) { paused = on; return 0; },
+  };
+  fmod.loops.set('event:/music/menu', inst);
+  fmod.prepared.add('event:/music/menu');
+  fmod.streamGroupReady = () => true;
+  const loading = fmod.streamsLoaded([inst]);
+  assert.equal(muted, true);
+  fmod.startLoop('event:/music/menu');
+  await loading;
+  assert.equal(muted, false);
+  assert.equal(paused, false);
 });

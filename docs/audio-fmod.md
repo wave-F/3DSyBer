@@ -135,14 +135,27 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 
 ### 预加载与防卡顿
 
-这个 FMOD WASM 版本没有线程：即使输出走 AudioWorklet，**混音也在主线程上算**，Worklet 只有两块 2048 帧（约 43 ms）的缓冲。主线程卡住超过一块的时长，Worklet 就重播上一块，听起来是卡顿 / 重复。所以运行时不能在转场时做重活：
+当前使用官方 **FMOD 2.03.14 pthread 日志版** `fmodstudioPL.js` / `fmodstudioPL.wasm`，流读取和非阻塞加载有真正的后台线程。Studio 使用 `STUDIO_INIT_SYNCHRONOUS_UPDATE`，保持游戏侧 `update`、播放状态查询和配音结束通知的顺序；Core 不使用 `INIT_THREAD_UNSAFE` 或强制主线程开流的标志。仍应避免在转场时做主线程重活：
 
 - **网页一打开**（`sound.preload()`，`main.js` 第一时间调用）：下载全部 Bank（`BOOT_BANKS` 即 Master / Frontend 高优先级），WASM 和 `BOOT_BANKS` 一到就初始化 FMOD（不需要用户手势，浏览器音频输出先挂起），菜单音乐预备好；其余 Bank 每个单独一个任务依次装入，再等全部采样数据解码完（`fmod.loaded` / `fmod.complete`）。
-- **预备循环**：全部事件描述先查好缓存；雨 / 车流铺底、城市点声源、21 个雨打楼体、开场车内外行驶声都在加载界面里**开始但保持暂停**，流式素材这时就打开。之后 `startLoop` / `moveLoop` 只取消暂停（`fmodRuntime.js` 的 `prepareLoop` / `prepareInstance` / `prepared`）。
+- **预备循环**：全部事件描述先查好缓存；雨 / 车流铺底、城市点声源、21 个雨打楼体、开场车内外行驶声先以暂停状态创建。仅 `start + setPaused(true)` **不会打开流**，`Bank.loadSampleData()` 也不包含流式素材。`streamsLoaded()` 会先静音底层 ChannelGroup，再短暂运行，轮询真实 Channel 的 `Sound.getOpenState` / 缺数据状态；就绪后重新暂停并还原静音，失败 / 超时也还原。不改事件增益、Studio 混音或素材，不重置时间线（重置会关闭已开的流）。虚拟声源无需真实 Channel。之后 `startLoop` / `moveLoop` 只取消暂停。
 - **加载界面等声音**：`loading.waitFor(sound.preload(), '声音')`，声音全部就绪才进入画面预热、出现「点击开始」。声音失败或超过 30 秒也放行，不卡住游戏。
 - **第一次点击 / 按键**：`unlock` 在手势里恢复音频输出，取消暂停菜单音乐。**点击开始**：`start` 只做音乐淡出、进入音效、取消暂停环境循环，实测点击回调 3 ms（原来同步装 Bank 要 297 ms，紧接着开流又卡 225 ms）。
 - **画面侧**：转场第一帧现场编译材质同样会卡住主线程。加载界面期间 `main.js` 的 `warmTransitions` 轮流把镜头摆到开场跟车起点 / 终点（`intro.warm`），并把结局跑车放到视线与桥面的交点（`finale.warm`），让这些物体在加载时就编译好。实测开场第一帧（原 214 ms）和结局开始（原 157 ms）都已没有 50 ms 以上的长任务；进出黑梦、切车内本来就没有。以后新增「第一次才出现」的物体，也要加进预热。
-- 当前用的是 FMOD 日志版运行时 `fmodstudioL.js`，每次建采样 / 开流都会打印日志；这些都发生在加载阶段。换成 SDK 里的非日志版 `fmodstudio.js` 可以再省一点开销。
+- **空临界区报警根因**：旧的无线程 `fmodstudioL` 在不加载任何 Bank 的最小 Studio 场景中，10 次 `update` 就产生 60 条 `NULL critical section`；仅 Core 不产生。改为同版本官方 pthread 日志版后，同样测试及真实 Bank / 29 个循环预热均不再产生该报警。保留原生全部日志，没有 `console` 拦截或降低 `Debug_Initialize` 等级；不是用非日志版隐藏问题。SDK 文件直接来自官方 HTML5 包 `api/studio/lib/wasm/`，JS / WASM 必须配套替换，不能改二进制或混用 L / PL。
+
+### 部署要求（pthread / SharedArrayBuffer）
+
+必须通过 HTTPS（本地可用 localhost）访问，并在 HTML、SDK JS / Worker 和 WASM 响应上配置：
+
+```http
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+Vite 开发和 `npm run preview` 已配置。`public/_headers` 会随构建复制到 `dist/`，供支持该格式的静态托管平台使用；其他服务器（如 Nginx）必须自行配置这两个头，不能以为上传 `dist/` 就自动生效。当前资源均为同源；未来外域资源需正确的 CORS / CORP 授权。浏览器中 `crossOriginIsolated` 应为 `true`。缺响应头 / SharedArrayBuffer 时音频明确报部署错误，不静默退回有空锁报警的无线程库；游戏仍可无声运行。
+
+回归：`npm run test:audio`，以及 `node scripts/verify-voice-browser.mjs`（真实 Chrome，原生日志全开；验证流式预热、主线程阻塞、配音播放 / 暂停 / 取消及零空锁 / 加载延迟报警）。
 
 角色动作统一使用 `sound.step()`（FootStep + ClothFoley）和 `sound.cloth()`（仅 ClothFoley）；新动作也走这两个入口。Foley 事件路径大小写与 Studio 完全一致，均为单次事件，不启动循环；素材、随机音高和混音由 Studio 保持控制。手工修改后保存工程并执行 `npm run audio:build` 同步浏览器 Bank。
 
@@ -171,4 +184,4 @@ npm run audio:build    # 构建 Bank 并同步到 public/fmod/
 npm run test:audio     # Foley / scifi 触发与音量保护回归测试（无需浏览器 / 声卡）
 ```
 
-默认使用 `/Applications/FMOD Studio.app/Contents/MacOS/fmodstudio`（2.03.14），可以用 `FMOD_STUDIO_BIN` 指定其他路径。浏览器端的 `fmodstudioL.js` / `.wasm` 要和 Studio 版本兼容。
+默认使用 `/Applications/FMOD Studio.app/Contents/MacOS/fmodstudio`（2.03.14），可以用 `FMOD_STUDIO_BIN` 指定其他路径。浏览器端的 `fmodstudioPL.js` / `.wasm` 要和 Studio 版本兼容。

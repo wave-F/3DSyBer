@@ -28,7 +28,7 @@ let rainSpots = [];
 const BILLBOARD_RANGE = 60;
 let billboards = [], billboardDwell = 9;
 
-// 开场才用到、但在加载界面就预备好（流已打开、保持暂停）的循环
+// 开场才用到、但在加载界面里经 streamsLoaded 开流预热并恢复暂停的循环
 const PREPARED = ['event:/vehicle/drive_out', 'event:/vehicle/drive_in'];
 const READY_TIMEOUT = 30000;   // 声音预载最多拖住加载界面这么久，失败或超时都不影响进游戏
 
@@ -42,7 +42,7 @@ function guard(fn) {
   try { return fmod.ready ? fn() : undefined; } catch (error) { console.warn('[audio]', error.message); }
 }
 
-// 加载界面里把所有长循环都开好、保持暂停：流式素材在这时打开，点击开始只取消暂停，不卡主线程
+// 加载界面里先创建暂停实例，再由 streamsLoaded 静音开流预热，点击开始只取消暂停
 function prepareWorld() {
   // 先把全部事件描述查好缓存，第一次触发时不再查找
   for (const { path } of EVENTS) {
@@ -97,6 +97,7 @@ export const sound = {
         .then(() => fmod.loaded).then(() => guard(() => {
         fmod.setMuted(document.hidden);
         prepareWorld();
+        return fmod.streamsLoaded([...fmod.loops.values(), ...rainInstances]);
       })),
       new Promise((resolve) => setTimeout(resolve, READY_TIMEOUT)),
     ]).catch((e) => console.warn('[audio] preload', e.message));

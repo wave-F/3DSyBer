@@ -9,6 +9,7 @@
 | `index.html` | 启动壳、加载界面（`#loading`）、Esc 暂停层、准星 |
 | `src/loading.js` | 加载进度、画面预热、点击开始和黑场淡出 |
 | `src/main.js` | 唯一编排：WebGPU、接雾、灯光、后期、每帧更新 |
+| `src/globalIllumination.js` | 加载期预计算静态光照探针，桥面和车辆接收城市反弹光，游戏中不更新 |
 | `package.json` | `dev` / `build` / `preview` |
 
 ## 场景

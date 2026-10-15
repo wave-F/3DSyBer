@@ -12,13 +12,13 @@ export function addLightGroup(label, set, on = true) {
 const btn = import.meta.env.DEV ? document.createElement('button') : null;
 if (btn) {
   btn.textContent = '测试 · 光源';
-  btn.style.cssText = 'display:none;position:fixed;right:24px;top:68px;transform:scale(1.5);transform-origin:right top;z-index:10;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#9ad7ff;background:rgba(5,12,20,.7);border:1px solid rgba(154,215,255,.6);cursor:pointer;';
+  btn.style.cssText = 'display:none;position:fixed;right:24px;bottom:84px;transform:scale(1.5);transform-origin:right bottom;z-index:12;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#9ad7ff;background:rgba(5,12,20,.7);border:1px solid rgba(154,215,255,.6);cursor:pointer;';
   document.body.appendChild(btn);
 }
 
 const panel = document.createElement('div');
 if (import.meta.env.DEV) {
-  panel.style.cssText = 'display:none;position:fixed;right:24px;top:120px;z-index:10;padding:10px 12px;background:rgba(5,12,20,.82);border:1px solid rgba(154,215,255,.35);font:13px "PingFang SC",sans-serif;color:#d7ecff;';
+  panel.style.cssText = 'display:none;position:fixed;right:24px;bottom:144px;z-index:12;max-height:calc(100vh - 168px);overflow-y:auto;padding:10px 12px;background:rgba(5,12,20,.82);border:1px solid rgba(154,215,255,.35);font:13px "PingFang SC",sans-serif;color:#d7ecff;';
   document.body.appendChild(panel);
 }
 
@@ -42,3 +42,13 @@ btn?.addEventListener('click', (e) => {
   panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
   btn.blur();
 });
+
+if (btn) {
+  const sync = () => {
+    const locked = !!document.pointerLockElement;
+    btn.style.display = locked ? 'none' : '';
+    if (locked) panel.style.display = 'none';
+  };
+  document.addEventListener('pointerlockchange', sync);
+  sync();
+}
