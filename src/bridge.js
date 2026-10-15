@@ -151,6 +151,19 @@ function addGantry(parent, zPos, flip, signA, signB, ticker, tickerColor) {
   group.add(strip);
 }
 
+// 脚下是不是水洼（水脚步用）：读路面同一张水洼遮罩，阈值约等于着色器里水洼过半的位置
+let puddleMask = null, puddlePixels = null;
+const PUDDLE_LEVEL = 0.42 * 255;
+export function puddleAt(x, z) {
+  if (!puddleMask) return false;
+  if (!puddlePixels) puddlePixels = puddleMask.getContext('2d').getImageData(0, 0, puddleMask.width, puddleMask.height).data;
+  // 路面平面绕 X 转 -90°：u 沿 +X，v 沿 -Z；画布第 0 行是 v = 1（贴图默认 flipY）
+  const col = Math.floor((x / (HALF_W * 2 - 1) + 0.5) * puddleMask.width);
+  const row = Math.floor((0.5 + z / (HALF_L * 2)) * puddleMask.height);
+  if (col < 0 || row < 0 || col >= puddleMask.width || row >= puddleMask.height) return false;
+  return puddlePixels[(row * puddleMask.width + col) * 4] > PUDDLE_LEVEL;
+}
+
 // 湿沥青：PBR 贴图 + 车道线 + 水洼。水洼处更暗、更光滑、反射更强（metalness 同时驱动 SSR 反射强度）
 function roadMaterial() {
   const diff = loadTexture('clean_asphalt_diff_2k.jpg');
@@ -158,6 +171,7 @@ function roadMaterial() {
   const rough = loadTexture('clean_asphalt_rough_2k.jpg', false);
   const lanes = laneTexture();
   const puddles = puddleTexture();
+  puddleMask = puddles.image;
 
   const W = HALF_W * 2 - 1, L = HALF_L * 2;
   const aUV = uv().mul(vec2(W / 4, L / 4));

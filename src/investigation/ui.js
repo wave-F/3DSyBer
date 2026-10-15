@@ -582,9 +582,14 @@ export function createUI() {
       const m = markPos.get(c.id);
       if (m) placePanel(m.x, m.y, m.front);
       setTimeout(() => { const i = panel.querySelector('.pb i'); if (i) i.style.width = `${c.prob * 100}%`; }, (dl + 0.3) * 1000);
-      panelTimer = setTimeout(() => { panel.classList.remove('on'); panel.style.visibility = ''; clueId = null; }, 5000);
+      panelTimer = setTimeout(() => this.hidePanel(), 5000);
     },
-    hidePanel() { clearTimeout(panelTimer); panel.classList.remove('on'); panel.style.visibility = ''; clueId = null; },
+    // 线索卡正显示时收起才响消失音
+    hidePanel() {
+      clearTimeout(panelTimer);
+      if (panel.classList.contains('on')) sound.play('ui/panel_close');
+      panel.classList.remove('on'); panel.style.visibility = ''; clueId = null;
+    },
     get panelOn() { return panel.classList.contains('on'); },
     // ms 为 0 时不自动消失，直到下一条提示或 clearToast
     toast(t1, t2, ms = 3200) {

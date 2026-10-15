@@ -32,6 +32,7 @@ async function run(action) {
   try {
     const wasReady = fmod.ready;
     await fmod.initialize();
+    await fmod.loaded;   // 先装入 Frontend，其余 Bank 随后补齐
     if (disposed) return;
     // 首次启用只读 Studio 的 VCA 值，不用默认 100% 推子覆盖已调好的混音。
     if (!wasReady) {
@@ -61,7 +62,7 @@ volume.disabled = true;
 
 // 混音：VCA 推子 + Snapshot 开关，FMOD 就绪后才生效
 const vcaInputs = new Map();
-const vcaLabels = { ambience: '环境 Ambience', sfx: '音效 SFX', ui: '界面 UI', dialogue: '英文配音 Dialogue' };
+const vcaLabels = { ambience: '环境 Ambience', sfx: '音效 SFX', ui: '界面 UI', dialogue: '英文配音 Dialogue', music: '音乐 Music' };
 for (const [key, path] of Object.entries(VCAS)) {
   const label = document.createElement('label');
   label.className = 'volume';
@@ -76,7 +77,7 @@ for (const [key, path] of Object.entries(VCAS)) {
   label.append(vcaLabels[key], input, out);
   document.querySelector('#vcas').append(label);
 }
-const snapshotLabels = { dream: '黑梦 Dream', tablet: '平板 Tablet' };
+const snapshotLabels = { dream: '黑梦 Dream', tablet: '平板 Tablet', carInterior: '车内 CarInterior', pause: '暂停 Pause', radar: '雷达 Radar' };
 for (const [key, path] of Object.entries(SNAPSHOTS)) {
   const button = document.createElement('button');
   button.type = 'button';

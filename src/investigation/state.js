@@ -9,12 +9,13 @@ import { createViewmodel } from './viewmodel.js';
 import { createPryArm, PRY_INSERT, PRY_HIT } from './pryArm.js';
 import { CLUES, CLUES_ZH, PROBES_ZH, clueEN, probeEN, ROUNDS, REPORTS, LINES, ENDINGS, CARD_HACK, ROOT_HACK, TARGET_INDEX } from './clues.js';
 import { buildCardSlot, buildRootKey } from './cardSlot.js';
-import { metalCreak, metalPop } from './sfx.js';
-import { DOOR_AJAR } from '../crash.js';
+import { DOOR_AJAR, CAR_POS } from '../crash.js';
 import { createFinale } from './finale.js';
 import { sound } from '../audio/sound.js';
 import { bi, onLang, tx } from '../i18n.js';
 import { loading } from '../loading.js';
+import { PEAK } from '../audio/events.js';
+import { IMPACT_T } from './recon.js';
 
 const HOLD_TIME = 1.4;      // Includes raising the instrument and one readable scan pass.
 const AIM_RANGE = 6;        // 准星可分析距离
@@ -129,7 +130,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   const root = { picked: false, done: false, told: false };
   let keyAimed = false;
   // 第 3 轮撬门：phase 为 null | camIn | brace（举撬棍插进门缝）| pry | camOut
-  const pry = { phase: null, t: 0, done: false, sfx: 0, camFrom: new THREE.Vector3(), quatFrom: new THREE.Quaternion(), camTo: new THREE.Vector3(), quatTo: new THREE.Quaternion() };
+  const pry = { phase: null, t: 0, done: false, popped: false, camFrom: new THREE.Vector3(), quatFrom: new THREE.Quaternion(), camTo: new THREE.Vector3(), quatTo: new THREE.Quaternion() };
   let doorAimed = false;
   let finale = null;           // 报告 04 之后：null | 'index'（对象索引已显示）| 'done'
   let endingT = 0;             // 假结局黑场文字出现后的计时，防止误按立刻返回
@@ -415,8 +416,10 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     const dur = R().duration;
     const advance = () => {
       if (!playing) return;
+      const before = rt;
       rt = Math.min(dur, rt + dt);
       if (rt >= dur) playing = false;
+      railHit(before);
     };
     switch (enter.phase) {
       // 转向 A 车起点：前后都缓，中段也不快
@@ -451,6 +454,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
           enter.phase = 'talk';
           enter.back1 = target.t;
           const r = round;
+          // 这段过场不能操作。对白被打断也要进入倒回，否则会停在 talk。
           ui.say(LINES.dreamGuide(clockText(target.t))).then(() => {
             if (mode === 'recon' && round === r && enter.phase === 'talk') { enter.phase = 'scrub'; enter.t = 0; }
           });
@@ -604,7 +608,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   function scheduleDreamExit(said) {
     const r = round;
     const wait = new Promise((res) => { dreamExit = setTimeout(res, DREAM_EXIT_DELAY); });
-    Promise.all([said, wait]).then(() => {
+    Promise.all([said, wait]).then(([completed]) => {
+      if (completed === false) return;
       if (mode === 'recon' && round === r) advanceAfterDream();
     });
   }
@@ -638,20 +643,22 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     return { key, p: 0, state: 'idle', text: '', onDecline: declineReport };
   }
 
-  // 点在终端画面外面：和 Tab / Esc 能收起时一样收起
+  // 点在终端画面外面：和 Tab / Esc 能收起时一样收起。返回 false 表示这次点击没有作用（无效点击音）
   function closeTabletFromBlank() {
-    if (intro || mode === 'death' || mode === 'ending') return;
+    if (intro || mode === 'death' || mode === 'ending') return false;
     if (mode === 'insert') {
-      if (ins.phase === 'data') finishInsert(false);
-      return;
+      if (ins.phase !== 'data') return false;
+      finishInsert(false);
+      return true;
     }
     if (mode === 'report') {
-      if (tablet.hacking) return;
+      if (tablet.hacking) return false;
       const closable = !confirm || confirm.state === 'suspended';
       if (closable) closeReport(false);
-      return;
+      return closable;
     }
     if (tablet.open) setTablet(false, true);
+    return true;
   }
 
   // 收起报告：按剧情阶段决定下一步
@@ -675,7 +682,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       pressureCall();
     } else if (key === 'r3' && suspended && !after3Said) {
       after3Said = true;
-      setTimeout(() => ui.say(LINES.after3).then(() => {
+      setTimeout(() => ui.say(LINES.after3).then((completed) => {
+        if (!completed) return;
         if (round === 3) startRound4();
       }), 700);
     } else if (round === 4 && root.done && !root.told) {
@@ -719,8 +727,11 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     syncTablet();
     holdSkip = false; skipP = 0;
     ui.setSkip(true);
-    // 被跳过时 skipQuestion 先改写，这里的 finishQuestion 因状态已变而跳过
-    ui.say(LINES[REPORTS[key].confirm.question]).then(() => finishQuestion(key));
+    // 被跳过时 skipQuestion 已经改写，这里收到 false 不再重复
+    ui.say(LINES[REPORTS[key].confirm.question]).then((completed) => {
+      if (!completed) return;
+      finishQuestion(key);
+    });
   }
   function skipQuestion() {
     if (confirm?.state !== 'talking') return;
@@ -744,7 +755,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   // 收起挂起的报告 02：派单员催单，陈墨拒绝交单，给出第 3 轮目标
   function pressureCall() {
     setTimeout(() => {
-      ui.say(LINES.call2, { radio: true }).then(() => {
+      ui.say(LINES.call2, { radio: true }).then((completed) => {
+        if (!completed) return;
         if (round === 2) startRound3();
       });
     }, 700);
@@ -865,11 +877,16 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     root.done = true;
     syncTablet();
     tablet.showClue('rTime');
-    keySaid.then(() => { if (round === 4 && mode !== 'death') ui.say(LINES.rootRead); });
+    keySaid.then((completed) => {
+      if (completed === false) return;
+      if (round === 4 && mode !== 'death') ui.say(LINES.rootRead);
+    });
   }
 
   const CAM_IN = 0.9, CAM_OUT = 0.7;
   const _m = new THREE.Matrix4();
+  const _hack = new THREE.Vector3(), _type = new THREE.Vector3();
+  const hackSource = () => (ins.phase ? slot.world : camera.getWorldDirection(_hack).multiplyScalar(0.45).add(camera.position));
 
   // ---------- 进出驾驶舱的镜头路径（第 3 轮插卡、第 4 轮拿根钥共用） ----------
   // 不能从站姿直线插进车里（会从车顶穿进去）：先蹲到右门门洞外侧、门框顶以下，再横着从门洞钻进驾驶舱
@@ -948,6 +965,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   // 收起平板。合上之后立刻起身，拔卡和起身同时进行
   function finishInsert(relock) {
     ins.phase = 'out';
+    sound.play('ui/panel_close');
     tablet.toggle(false);
     if (relock) controls.lock();
     else controls.showPause();
@@ -989,9 +1007,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   // 关键帧（秒, 度）：两次拽不动 → 卡扣崩开猛地弹开一截 → 吱嘎着拉到 55°，回弹一点停住
   const PRY_KEYS = [[0, 7], [0.25, 11], [0.45, 9], [0.8, 14], [1.05, 12.5], [1.25, 13], [1.38, 24], [1.55, 27], [2.5, 54], [2.75, 57], [3.0, 55]];
   const PRY_END = 3.3;
-  const PRY_SFX = [   // [时刻, 类型, 时长]
-    [0.0, 'creak', 0.3], [0.55, 'creak', 0.45], [1.36, 'pop'], [1.5, 'creak', 1.1],
-  ];
+  const PRY_POP = 1.36;   // 卡扣崩开、车门猛地弹开一截的时刻；撬开声的峰值对准这里
   function pryAngle(t) {
     if (t <= 0) return PRY_KEYS[0][1];
     for (let i = 1; i < PRY_KEYS.length; i++) {
@@ -1041,25 +1057,23 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
         return;
       }
       // 镜头到位：右手举起撬棍插进门缝，插稳后开始撬（模型没加载好就直接撬）
+      // 撬棍插进门缝时响插入声（模型没加载好、直接开撬时立刻响）
       if (pryArm?.ready) { pry.phase = 'brace'; pry.hit = false; pryArm.set(0); }
-      else { pry.phase = 'pry'; pry.sfx = 0; }
+      else { pry.phase = 'pry'; sound.play('foley/pry_insert', { position: doorHandle() }); }
       pry.t = 0;
+      pry.popped = false;
       return;
     }
     if (pry.phase === 'brace') {
       camera.position.copy(pry.camTo);
       camera.quaternion.copy(pry.quatTo);
       pryArm.set(pry.t);
-      if (!pry.hit && pry.t >= PRY_HIT) { pry.hit = true; metalPop({ gain: 0.22 }); }
-      if (pry.t >= PRY_INSERT) { pry.phase = 'pry'; pry.t = 0; pry.sfx = 0; }
+      if (!pry.hit && pry.t >= PRY_HIT) { pry.hit = true; sound.play('foley/pry_insert', { position: doorHandle() }); }
+      if (pry.t >= PRY_INSERT) { pry.phase = 'pry'; pry.t = 0; }
       return;
     }
     // pry：车门按关键帧张开，镜头跟着用力的节奏晃
-    while (pry.sfx < PRY_SFX.length && pry.t >= PRY_SFX[pry.sfx][0]) {
-      const [, kind, len] = PRY_SFX[pry.sfx++];
-      if (kind === 'pop') metalPop();
-      else metalCreak(len, { gain: kind === 'creak' && len > 1 ? 0.4 : 0.3 });
-    }
+    if (!pry.popped && pry.t >= PRY_POP - PEAK.pryOpen) { pry.popped = true; sound.play('foley/pry_open', { position: doorHandle() }); }
     const deg = pryAngle(pry.t);
     setDoor(deg * Math.PI / 180);
     pryArm?.set(PRY_INSERT + pry.t);
@@ -1249,8 +1263,9 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   function scan() {
     if (scanCd > 0) return;
     // 手持设备举起对准前方，发射瞬间从设备位置放出扫描波
-    if (!vm.scan((origin) => { clues.forEach((c) => { c.hit = false; }); fx.pulse(origin); })) return;
-    sound.play('scifi/scan_pulse');   // 前 0.5 秒充能，与举枪同长，脉冲落在发射瞬间
+    // 发射瞬间世界声音高切一下（Radar Snapshot）
+    if (!vm.scan((origin) => { clues.forEach((c) => { c.hit = false; }); fx.pulse(origin); sound.radarDuck(); })) return;
+    sound.play('scifi/radar');   // Studio 里素材后移 0.198 秒，峰值落在举枪 0.5 秒后的发射瞬间
     scanCd = SCAN_COOLDOWN;
   }
 
@@ -1440,11 +1455,23 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   function keyTarget() { _key.p.copy(rootKey.world); return _key; }
 
   // ---------- 黑梦 ----------
+  // A 车撞断护栏：每轮第一次正向播过撞击时刻时响一次（拖动 / 倒放 / 之后重播都不响），素材峰值对准撞击
+  const RAIL_AT = IMPACT_T - PEAK.hitRail;
+  const RAIL_POS = { x: CAR_POS.x, y: CAR_POS.y + 0.6, z: CAR_POS.z };
+  const railHeard = new Set();
+  function railHit(before) {
+    if (before >= RAIL_AT || rt < RAIL_AT || railHeard.has(round)) return;
+    railHeard.add(round);
+    sound.play('vehicle/hit_rail', { position: RAIL_POS });
+  }
+
   function updateRecon(dt) {
     const r = R();
     if (playing) {
+      const before = rt;
       rt += dt;
       if (rt >= r.duration) { rt = r.duration; playing = false; }
+      railHit(before);
     }
     recon.setTime(rt);
 
@@ -1530,6 +1557,10 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       ui.setTabletOpen(tablet.amount > 0.05);
       ui.updateHud(realDt);
       sound.setTablet(tablet.open);
+      // 接入画面（插卡读取 / 根钥 / 对象索引）期间循环科技扫描声：插卡时在检修接口，其余在平板位置
+      sound.follow('scifi/id_scan_loop', tablet.open && tablet.hacking ? hackSource() : null);
+      // 平板上文字正在打出时循环打字声，跟着平板（结局时在地上）；暂停时打字停住，声音也停
+      sound.follow('ui/typewrite_loop', tablet.typing && realDt > 0 ? tablet.screenWorld(_type) : null);
       if (mode === 'ending') endingT += realDt;
       slot.update(realDt);
       rootKey.update(realDt);

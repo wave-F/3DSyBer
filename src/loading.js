@@ -46,8 +46,8 @@ let loaded = 0, total = 0;
 const t0 = performance.now();
 let lastChange = t0;
 let assetsDone = false, warmStart = 0, good = 0, lastFrame = 0;
-let shown = 0, ready = false;
-let startFn = null;
+let shown = 0, ready = false, started = false;
+let startFn = null, wakeFn = null, denyFn = null;
 let fadeAt = 0;
 let replay = false;
 let phase = 'init';
@@ -102,6 +102,12 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
+// 加载期间的任意点击 / 按键都是用户手势：交给 wakeFn 启动音频（菜单音乐）
+// 就绪后的点击就是「开始」，不再先起音乐
+const wake = () => { if (!started && !ready) wakeFn?.(); };
+root.addEventListener('pointerdown', wake);
+addEventListener('keydown', wake);
+
 // 点击开始：必须在点击事件里同步调用 startFn（锁定鼠标需要用户手势）
 function paintLangButtons() {
   const en = getLang() === 'en';
@@ -130,6 +136,7 @@ document.getElementById('lang-btn').addEventListener('click', toggleLang);
 
 function beginGame() {
   ready = false;
+  started = true;
   root.style.pointerEvents = 'none';
   root.classList.add('closing');
   startFn?.();
@@ -138,7 +145,7 @@ function beginGame() {
 }
 
 root.addEventListener('click', () => {
-  if (!ready) return;
+  if (!ready) { if (!started) denyFn?.(); return; }   // 还没就绪：无效点击
   // 结局回到标题后再点「开始」：先盖黑，再整页重开，调查进度不带着进下一轮
   if (replay) {
     ready = false;
@@ -153,6 +160,8 @@ root.addEventListener('click', () => {
 
 export const loading = {
   onStart(fn) { startFn = fn; },
+  onWake(fn) { wakeFn = fn; },
+  onDeny(fn) { denyFn = fn; },
   // 序章结束后：标题页从黑里淡入，进度条保持收起，等再次点击开始
   showTitle() {
     replay = true;

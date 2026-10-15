@@ -99,6 +99,7 @@ export function buildCity(scene) {
     for (const light of screenPoints) if (light.userData.slot) adGlowAt(light.userData.slot, gameTime.value, light.color);
   }
   update.rainSpots = rainSpots;
+  update.adScreens = signs.screens;
   return update;
 
   function decorate(b, side, near) {

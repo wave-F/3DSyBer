@@ -5,6 +5,7 @@ import {
 import { DECK_Y, HALF_W } from './bridge.js';
 import { gameTime } from './investigation/clock.js';
 import { onLang, tx } from './i18n.js';
+import { sound } from './audio/sound.js';
 
 // 调查区域边界：两个龙门路牌（z = -48 / 70）往里缩 2 m，立全息封锁屏障
 export const CORDON = { z0: -46, z1: 68 };
@@ -129,6 +130,7 @@ export function buildCordon(scene) {
     + 'border-left:2px solid #ff2236;background:rgba(24,0,4,0.5);color:#ff5a66;'
     + 'font:13px Menlo,"PingFang SC",monospace;letter-spacing:2px;pointer-events:none;opacity:0;transition:opacity 0.3s';
   document.body.appendChild(hint);
+  let warned = false;   // 提示出现时响一次警告；退到 3.5 m 外再靠近才重新响
 
   return function update(dt, playerPos) {
     let minD = Infinity;
@@ -142,5 +144,7 @@ export function buildCordon(scene) {
       hitX.value = out > 0 ? 1 - ux : ux;
     }
     hint.style.opacity = minD < 2.5 ? '1' : '0';
+    if (minD < 2.5 && !warned && dt > 0) { warned = true; sound.play('ui/warning'); }
+    else if (minD > 3.5) warned = false;
   };
 }

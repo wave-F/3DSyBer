@@ -29,7 +29,7 @@
 			<destination>{063555b7-29a8-4218-895a-21cb1a8b540b}</destination>
 		</relationship>
 		<relationship name="banks">
-			<destination>{ba691b7b-a1f5-4a3a-b1de-9240dc43aa23}</destination>
+			<destination>{52441eeb-1097-4daf-bd0f-426ed9333548}</destination>
 		</relationship>
 	</object>
 	<object class="EventMixer" id="{db7fcf69-409c-40c8-8ceb-8fd190ff9612}">
@@ -76,10 +76,10 @@
 	</object>
 	<object class="SingleSound" id="{c5363b1a-11c7-4287-96f1-ce21bc562be1}">
 		<property name="length">
-			<value>0.59999999999999998</value>
+			<value>0.25721088435374151</value>
 		</property>
 		<relationship name="audioFile">
-			<destination>{1619dd60-00ec-49c3-a4e0-49cc0dd7905a}</destination>
+			<destination>{c9ea59a2-1d6c-463b-acc4-6f4712182622}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusEffectChain" id="{22118a38-2173-47f3-ab1b-d2bab995dc71}">

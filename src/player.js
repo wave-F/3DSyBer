@@ -1,5 +1,5 @@
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { DECK_Y, HALF_W } from './bridge.js';
+import { DECK_Y, HALF_W, puddleAt } from './bridge.js';
 import { carCollider } from './crash.js';
 import { policeCollider } from './policeCar.js';
 import { CORDON, CORDON_MARGIN } from './cordon.js';
@@ -60,7 +60,7 @@ export function createPlayer(camera, domElement, overlay) {
     gait.amplitude = Math.min(1, gait.speed / 4) * (gait.speed > 6 ? 1.7 : 1);
     if (walking) {
       moving = 0.15;
-      if (Math.floor((gait.phase + Math.PI / 2) / Math.PI) > before) sound.step();
+      if (Math.floor((gait.phase + Math.PI / 2) / Math.PI) > before) sound.step(puddleAt(camera.position.x, camera.position.z));
     } else {
       if (moving > 0 && (moving -= dt) <= 0) sound.cloth();
     }

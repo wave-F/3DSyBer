@@ -1,4 +1,5 @@
 // 英文配音稿，不替换 clues.js 的中文字幕。source 用于阻止中文台词改动后误用旧配音。
+// 游戏里播哪段录音不看这里，看已发布的 VOICE_LINES，见 voiceMap.js。
 import { LINES } from '../investigation/clues.js';
 
 export const VOICE_ROLES = {

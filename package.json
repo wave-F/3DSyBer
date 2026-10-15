@@ -20,6 +20,8 @@
     "audio:design": "node scripts/sound-design.mjs",
     "audio:events": "node scripts/fmod.mjs events",
     "audio:mix": "node scripts/fmod.mjs mix",
+    "audio:scene": "node scripts/fmod.mjs scene",
+    "audio:reverb": "node scripts/fmod.mjs reverb",
     "audio:build": "node scripts/fmod.mjs build"
   },
   "dependencies": {

@@ -174,6 +174,7 @@ export function createTablet(camera) {
     glitch: 0,                    // 强干扰剩余时间（报告被质疑改写、接入画面开始时）
     hack: null,                   // 插卡接入画面：{ t, cfg, onDone }
     world: null,                  // 结局：平板掉在地上，固定在世界坐标 { pos, quat }，不再跟随相机
+    typing: false,                // 本次绘制时有文字正在逐字 / 逐行打出（打字音效用）
   };
   const sway = { yaw: 0, pitch: 0, vx: 0, vy: 0 };
   let lastYaw = 0, lastPitch = 0;
@@ -259,6 +260,7 @@ export function createTablet(camera) {
     const { clues } = state.data;
     state.regions = [];
     state.actionOn = false;
+    state.typing = false;
     g.clearRect(0, 0, CW, CH);
     g.fillStyle = 'rgba(40,110,160,0.07)';
     g.fillRect(0, 0, CW, CH);
@@ -327,6 +329,7 @@ export function createTablet(camera) {
       ly += rows.length * 48 + 20;
     }
     const typing = f.typed < f.lines.join('').length;
+    if (typing && f.typed > 0) state.typing = true;
     if (caret && typing && Math.floor(uiTime.value * 3) % 2 === 0) {
       g.fillStyle = C.cyan;
       g.fillRect(caret.x, caret.y - 30, 16, 36);
@@ -403,6 +406,7 @@ export function createTablet(camera) {
       const color = s.tone === 'red' ? C.red : s.tone === 'gold' ? C.gold : '#d6effc';
       // 每行逐字打出
       const n = Math.min(s.text.length, Math.floor((t - s.t) * 60));
+      if (n < s.text.length) state.typing = true;
       text('>', 70, y, 26, C.dim, 400, 'left', true);
       text(s.text.slice(0, n), 104, y, 28, color, s.tone ? 500 : 400);
       y += 56;
@@ -503,6 +507,7 @@ export function createTablet(camera) {
     const noImage = c.probe || c.data;
     const maxW = noImage ? CW - 70 - (x + 28) : CW - 70 - 380 - 40 - (x + 28);
     const shown = Math.floor(state.typeT * 6);
+    if (shown <= c.lines.length) state.typing = true;   // 结论行出现前都算在打字
     let ly = 448;
     c.lines.forEach((l, i) => {
       const rows = wrap(l, maxW, 27);
@@ -666,6 +671,7 @@ export function createTablet(camera) {
           && hint.length === (r.hint || '').length;
       }
     }
+    if (!verdictDone) state.typing = true;
     if (r.confirm && verdictDone) drawConfirm(x, !!rv, r.confirm);
   }
 
@@ -751,8 +757,8 @@ export function createTablet(camera) {
     if (!canPoint()) return;
     if (e.target.closest('button')) return;
     const p = pick(e);
-    // 点到平板外：收起平板（不播拒绝音）
-    if (!p) { onBlank?.(); return; }
+    // 点到平板外：能收起就收起（收起音）；当前收不起（待确认、接入中、过场）就是无效点击
+    if (!p) { if (onBlank?.() === false) sound.play('ui/deny'); return; }
     const r = hitTest(p);
     if (r?.hold) return;
     // 点到可交互区域是确认音，点到平板空白是拒绝音
@@ -837,7 +843,7 @@ export function createTablet(camera) {
     // 内容：举到位后开机，界面动画期间逐帧重绘
     if (state.open && state.k > 0.6) state.boot = Math.min(1, state.boot + dt * 1.8);
     // 开机、打字、确认进度、干扰期间逐帧重绘
-    const animating = state.open && (state.boot < 1 || state.typeT < 10 || state.data.confirm?.p > 0 || state.glitch > 0 || !!state.data.final || (!!state.hack && !state.hack.held));
+    const animating = state.open && (state.boot < 1 || state.typeT < 10 || state.data.confirm?.p > 0 || state.glitch > 0 || !!state.data.final || (!!state.hack && !state.hack.held) || state.typing);
     if (state.open && state.boot >= 1) state.typeT += dt;
     // 接入画面：开机后计时，走完回调并回到普通页面
     if (state.hack && !state.hack.held && state.open && state.boot >= 1) {
@@ -925,6 +931,10 @@ export function createTablet(camera) {
     },
     get actionHeld() { return pointerHold; },
     get actionVisible() { return !!state.actionOn; },
+    // 屏幕点亮且有文字正在打出（开机扫描线期间不算）
+    get typing() { return state.open && state.boot >= 1 && state.typing; },
+    // 平板在世界里的位置（手持时在镜头前，结局时在地上）
+    screenWorld(out) { holder.updateWorldMatrix(true, false); return holder.getWorldPosition(out); },
     glitch(sec = 0.5) { state.glitch = sec; state.dirty = true; },
     get open() { return state.open; },
     set onBlank(fn) { onBlank = fn; },

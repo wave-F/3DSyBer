@@ -142,7 +142,6 @@ test('只有中文原文和录音原文一致的台词才播配音，改写过�
       const id = voiceOf(line);
       if (!id) return;
       matched++;
-      assert.ok(id.startsWith(`${group}_`));
       assert.equal(VOICE_LINES[id].source, line.text);
     });
   }
@@ -150,6 +149,15 @@ test('只有中文原文和录音原文一致的台词才播配音，改写过�
   // 录音原文和当前台词不同时不播
   const changed = { g: [{ text: '改写后的台词' }] };
   assert.equal(createVoiceMap(changed, { g_01: { source: '原来的台词' } })(changed.g[0]), undefined);
+});
+
+test('台词挪到别的组：全局唯一时仍播原录音，同组优先，多处相同时不播', () => {
+  const clips = { a_01: { source: '挪走的一句' }, a_02: { source: '重复的一句' }, b_01: { source: '重复的一句' }, c_01: { source: '重复的一句' } };
+  const script = { b: [{ text: '重复的一句' }], d: [{ text: '挪走的一句' }, { text: '重复的一句' }] };
+  const voiceOf = createVoiceMap(script, clips);
+  assert.equal(voiceOf(script.d[0]), 'a_01');      // 别组唯一
+  assert.equal(voiceOf(script.b[0]), 'b_01');      // 同组优先
+  assert.equal(voiceOf(script.d[1]), undefined);   // 全局三处相同，不猜
 });
 
 test('英文模式下 bi() 代理的台词也能找到同一条配音', () => {
