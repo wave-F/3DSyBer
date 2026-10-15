@@ -10,20 +10,32 @@ import { addLightGroup } from './debugLights.js';
 
 // 近景模型楼（KitBash3D 楼体）。布局在 Blender 里摆：art/city.blend → tools/blender/city_export.py → cityLayout.json
 // 楼型网格烘焙好光照（tools/blender/city_bake.py），同楼型多栋共享网格与材质
-// 光照存在顶点色里（编码 (v/range)^(1/2.2)），运行时不受场景灯光影响：颜色 = 底色贴图 × (烘焙光照 + 招牌补光)
+// 光照存在顶点色里（编码 (v/range)^(1/2.2)），运行时不受场景灯光影响：颜色 = 底色贴图 × (烘焙光照 × 高度明暗 × 冷色 + 青色环境光 + 招牌补光)
 // 材质名带类别前缀：std 普通 / glass 玻璃（顶点色已含亮窗）/ lamp 灯具 / let 字牌
 // 招牌是每栋楼单独摆的，补光不进烘焙，运行时每栋楼取自己最近的 MAX_LIGHTS 块招牌照亮立面
 
 // 整体亮度（调过曝就改这里）
+const WALL = 4.5;
 export const bldgLight = {
-  wall: uniform(6),     // 烘焙光照倍率
+  wall: uniform(WALL),  // 烘焙光照倍率
   glass: uniform(1.0),  // 亮窗
   lamp: uniform(0.7),   // 楼体自带灯具
   letter: uniform(0.9), // 楼体自带字牌
   sign: uniform(1.0),   // 招牌照在墙上的补光
 };
-if (import.meta.env.DEV) window.__bldg = bldgLight;
-addLightGroup('楼体墙面', (on) => { bldgLight.wall.value = on ? 6 : 0; });
+// 夜景明暗层次（只作用于烘焙光照，不动亮窗、灯具、招牌补光）：
+// 街面霓虹从下往上照，楼脚亮、往上逐渐沉进夜色；冷色倾向和青色环境光让楼体和雾色、天空同一色调
+export const bldgShade = {
+  y0: uniform(0),                                         // 从这个高度开始变暗（世界坐标 y，桥面 20）
+  y1: uniform(100),                                       // 到这个高度暗到 top
+  foot: uniform(1.25),                                    // 楼脚倍率
+  top: uniform(0.22),                                     // 楼顶倍率
+  curve: uniform(0.75),                                   // <1：离开楼脚就较快变暗
+  cool: uniform(new THREE.Color(0.78, 0.95, 1.05)),       // 烘焙光照的色调（乘），压掉暖黄
+  ambient: uniform(new THREE.Color(0.006, 0.014, 0.014)), // 青色环境光（加，乘底色）
+};
+if (import.meta.env.DEV) window.__bldg = { ...bldgLight, shade: bldgShade };
+addLightGroup('楼体墙面', (on) => { bldgLight.wall.value = on ? WALL : 0; });
 addLightGroup('楼体亮窗', (on) => { bldgLight.glass.value = on ? 1 : 0; });
 addLightGroup('楼体灯具', (on) => { bldgLight.lamp.value = on ? 0.7 : 0; });
 addLightGroup('楼体字牌', (on) => { bldgLight.letter.value = on ? 0.9 : 0; });
@@ -110,7 +122,10 @@ function bakedMaterial(src) {
   const glow = signGlow();
   const m = new THREE.MeshBasicNodeMaterial();
   const base = src.map ? texture(src.map, uv()).rgb.mul(vec3(src.color.r, src.color.g, src.color.b)) : vec3(src.color.r, src.color.g, src.color.b);
-  const lit = base.mul(light.mul(bldgLight.wall).add(glow));
+  const k = positionWorld.y.sub(bldgShade.y0).div(bldgShade.y1.sub(bldgShade.y0)).clamp(0, 1).pow(bldgShade.curve);
+  const shade = mix(bldgShade.foot, bldgShade.top, k);
+  const wall = light.mul(bldgLight.wall).mul(shade).mul(bldgShade.cool).add(bldgShade.ambient);
+  const lit = base.mul(wall.add(glow));
   if (kind === 'glass') {
     m.colorNode = light.mul(bldgLight.glass).add(glow.mul(0.15));
   } else if (kind === 'lamp') {
