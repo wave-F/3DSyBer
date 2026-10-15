@@ -116,7 +116,7 @@ export const ENGLISH = {
     line('不是他打错了方向。是系统不让他把车开直。', 'He did not miss the wheel. The system would not let him hold it straight.', 'The accusation emerges from the evidence; restrained, not theatrical.', 'low, grave'),
   ],
   dream3: [
-    line('它往哪儿开，别的车就得给它让路。', 'Wherever it goes, everyone else has to make room.', 'Bitter recognition, not a grand political speech.', 'quiet, bitter'),
+    line('他倒是安全了。', 'At least he is safe.', 'Understated, bitter irony. No relief or theatrical sarcasm.', 'quiet, bitter'),
   ],
   question3: [
     line('原始记录还锁着，你怎么知道这条道从一开始就有？', 'The raw records are still locked. How do you know that lane was there from the start?', 'Question the evidence behind the reconstruction, not a theory he already knows.', 'questioning, controlled'),
@@ -127,14 +127,13 @@ export const ENGLISH = {
   revised3: [],
   after3: [
     line('我的权限不够，程叙的呢？', 'My clearance is not enough. What about Cheng Xu’s?', 'Recall the audit engineer’s credential as a possibility, not a guaranteed solution.', 'quiet, thoughtful'),
-    line('人飞出去了。钥匙未必。', 'He was thrown clear. The key may not have been.', 'Dry, practical deduction. Slight emphasis on key.', 'quiet, resolved'),
+    line('去车里找找。', 'Check inside the car.', 'A practical next step to himself.', 'quiet, resolved'),
   ],
   keyFound: [
     line('程叙的根钥。按规定应该上交。', 'Cheng Xu’s root key. Procedure says turn it in.', 'An old rule he already knows he will break.', 'quiet, dry'),
     line('先借用一下。', 'I’ll borrow it.', 'A trace of wry humor; no chuckle or comic punchline.', 'understated, wry'),
   ],
   rootRead: [
-    line('就是接单时那份。连签收时间都有。', 'Same report I got with the call. Receipt timestamp and all.', 'Recognize the report; contained unease at the timestamp.', 'low, troubled'),
     line('为什么提前写好初判？', 'Why was the preliminary written early?', 'A direct, controlled challenge. Do not shout.', 'low, questioning'),
     line('风险预测与报告预生成属于城市应急流程。', 'Risk prediction and pre-written reports are city emergency procedure.', 'The same reassuring service cadence as every earlier answer.', 'measured, neutral'),
     line('可他根本没切手动。报告里为什么写他切了？', 'But he never switched to manual. Why does the report say he did?', 'Disbelief hardens into accusation; no screaming or melodrama.', 'controlled anger, incredulous'),
@@ -170,7 +169,7 @@ export const ENGLISH = {
 export const AUDITION_IDS = [
   'opening_01', 'opening_02', 'opening_03',
   'question2_01', 'question2_02', 'question2_03',
-  'cardRead_01', 'dream3_01', 'keyFound_02', 'rootRead_04', 'target_02',
+  'cardRead_01', 'dream3_01', 'keyFound_02', 'rootRead_03', 'target_02',
 ];
 
 // script 默认是游戏里当前的中文台词；台词改过而配音稿没跟上时会报错，防止用旧稿生成。

@@ -186,7 +186,7 @@ export const EN = {
       thought('The right door is bent out. Should be able to pry it open. Service port is under the steering column.'),
     ],
     cardRead: [thought('He did not miss the wheel. The system would not let him hold it straight.')],
-    dream3: [thought('Wherever it goes, everyone else has to make room.')],
+    dream3: [thought('At least he is safe.')],
     question3: [
       line('Chen Mo', 'The raw records are still locked. How do you know that lane was there from the start?'),
       line('Terminal', 'The reconstruction is based on the available summary.'),
@@ -196,11 +196,10 @@ export const EN = {
     revised3: [],
     after3: [
       thought('My clearance is not enough. What about Cheng Xu’s?'),
-      thought('He was thrown clear. The key may not have been.'),
+      thought('Check inside the car.'),
     ],
     keyFound: [thought('Cheng Xu’s root key. Procedure says turn it in.'), thought('I’ll borrow it.')],
     rootRead: [
-      thought('Same report I got with the call. Receipt timestamp and all.'),
       line('Chen Mo', 'Why was the preliminary written early?'),
       line('Terminal', 'Risk prediction and pre-written reports are city emergency procedure.'),
       line('Chen Mo', 'But he never switched to manual. Why does the report say he did?'),
