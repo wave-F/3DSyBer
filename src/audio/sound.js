@@ -1,5 +1,5 @@
 import { FmodRuntime } from './fmodRuntime.js';
-import { FOLEY, SNAPSHOTS } from './events.js';
+import { EVENTS, FOLEY, SNAPSHOTS } from './events.js';
 import { VOICE_LINES } from './voiceEvents.js';
 
 // 游戏音频入口。所有调用在 FMOD 未就绪时都是空操作，音频出错不影响游戏流程。
@@ -28,9 +28,13 @@ let rainSpots = [];
 const BILLBOARD_RANGE = 60;
 let billboards = [], billboardDwell = 9;
 
+// 开场才用到、但在加载界面就预备好（流已打开、保持暂停）的循环
+const PREPARED = ['event:/vehicle/drive_out', 'event:/vehicle/drive_in'];
+const READY_TIMEOUT = 30000;   // 声音预载最多拖住加载界面这么久，失败或超时都不影响进游戏
+
 const fmod = new FmodRuntime();
 const rainInstances = [];
-let booting = null, musicWanted = true, worldStarted = false;
+let booting = null, musicWanted = true, worldStarted = false, audioReady = null;
 let audioStarted = null, dialoguePaused = false, radarTimer = 0;
 const position = { x: 0, y: 0, z: 0 }, forward = { x: 0, y: 0, z: -1 }, up = { x: 0, y: 1, z: 0 };
 
@@ -38,19 +42,31 @@ function guard(fn) {
   try { return fmod.ready ? fn() : undefined; } catch (error) { console.warn('[audio]', error.message); }
 }
 
-function startRainHits() {
+// 加载界面里把所有长循环都开好、保持暂停：流式素材在这时打开，点击开始只取消暂停，不卡主线程
+function prepareWorld() {
+  // 先把全部事件描述查好缓存，第一次触发时不再查找
+  for (const { path } of EVENTS) {
+    try { fmod.description(path); } catch { /* 试听清单里有不在 Bank 的事件（如 test/ping） */ }
+  }
+  for (const path of BEDS) fmod.prepareLoop(path);
+  for (const [path, position] of Object.entries(EMITTERS)) fmod.prepareLoop(path, position);
+  for (const path of PREPARED) fmod.prepareLoop(path);
   if (rainInstances.length) return;
   rainSpots.forEach((p, i) => {
     const path = RAIN_HITS[i % RAIN_HITS.length];
-    const inst = fmod.instance(path);
-    try {
-      fmod.check(inst.set3DAttributes(fmod.fill(p)), `3D ${path}`);
-      fmod.check(inst.setTimelinePosition(Math.floor(Math.random() * 60000)), `offset ${path}`);
-      fmod.check(inst.setPitch(0.94 + Math.random() * 0.12), `pitch ${path}`);
-      fmod.check(inst.start(), `start ${path}`);
-      rainInstances.push(inst);
-    } catch (error) { inst.release(); throw error; }
+    const inst = fmod.prepareInstance(path, p, (it) => {
+      fmod.check(it.setTimelinePosition(Math.floor(Math.random() * 60000)), `offset ${path}`);
+      fmod.check(it.setPitch(0.94 + Math.random() * 0.12), `pitch ${path}`);
+    });
+    if (inst) rainInstances.push(inst);
   });
+}
+
+function startWorld() {
+  for (const path of BEDS) fmod.startLoop(path);
+  for (const [path, position] of Object.entries(EMITTERS)) fmod.startLoop(path, position);
+  for (const inst of rainInstances) fmod.check(inst.setPaused(false), 'rain hits');
+  worldStarted = true;
 }
 
 // 点到轴对齐盒子的距离
@@ -72,33 +88,43 @@ export const sound = {
     billboardDwell = dwell;
   },
 
-  preload() { fmod.preload().catch((e) => console.warn('[audio] preload', e.message)); },
+  // 网页一打开就调用（雨声点要先 setRainSpots）：初始化 FMOD、装入全部 Bank、解码采样、预备好所有循环。
+  // 返回的 Promise 在全部就绪（或失败 / 超时）时完成，加载界面等它；永远不会 reject。
+  preload() {
+    audioReady ??= Promise.race([
+      // Frontend 一装好就预备菜单音乐：加载界面的第一次点击只取消暂停
+      fmod.preload().then(() => guard(() => { if (musicWanted) fmod.prepareLoop(MUSIC); }))
+        .then(() => fmod.loaded).then(() => guard(() => {
+        fmod.setMuted(document.hidden);
+        prepareWorld();
+      })),
+      new Promise((resolve) => setTimeout(resolve, READY_TIMEOUT)),
+    ]).catch((e) => console.warn('[audio] preload', e.message));
+    return audioReady;
+  },
 
-  // 加载界面的任意点击 / 按键（浏览器要先有用户手势才允许出声）：初始化 FMOD，开始菜单音乐
+  // 加载界面的任意点击 / 按键（浏览器要先有用户手势才允许出声）：恢复音频输出，开始菜单音乐
   unlock() {
-    if (fmod.ready) { fmod.initialize(); return; }   // 已初始化：在手势里恢复输出
-    booting ??= fmod.initialize().then(() => guard(() => {
-      fmod.setMuted(document.hidden);
+    fmod.initialize();   // 已初始化时在手势里同步恢复输出
+    booting ??= fmod.preload().then(() => guard(() => {
       if (musicWanted) fmod.startLoop(MUSIC);
     })).catch((e) => { booting = null; console.warn('[audio] init', e.message); });
   },
 
-  // 点击开始（用户手势里调用）：音乐淡出 + 进入游戏音效；全部 Bank 就绪后铺环境
+  // 点击开始（用户手势里调用）：音乐淡出 + 进入游戏音效 + 取消暂停已预备好的环境循环。
+  // 加载界面已经等过 preload，这里没有装 Bank、开流之类的重活
   start() {
     musicWanted = false;
-    audioStarted = fmod.initialize().then(() => {
-      guard(() => {
-        fmod.setMuted(document.hidden);
-        fmod.stopLoop(MUSIC);
-        fmod.play({ path: 'event:/ui/enter_game' });
-      });
-      return fmod.loaded;
-    }).then(() => guard(() => {
-      for (const path of BEDS) fmod.startLoop(path);
-      for (const [path, position] of Object.entries(EMITTERS)) fmod.startLoop(path, position);
-      startRainHits();
-      worldStarted = true;
-    })).catch((e) => console.warn('[audio] init', e.message));
+    fmod.initialize();
+    guard(() => {
+      fmod.stopLoop(MUSIC);
+      fmod.play({ path: 'event:/ui/enter_game' });
+      if (fmod.complete) startWorld();
+    });
+    // 万一点击时还没全部就绪（预载超时），就绪后再开
+    audioStarted = Promise.resolve(sound.preload()).then(() => guard(() => {
+      if (!worldStarted) { prepareWorld(); startWorld(); }
+    }));
   },
 
   // position：3D 事件的世界坐标；不传则按 2D 播放
@@ -212,6 +238,7 @@ export const sound = {
 
 document.addEventListener('visibilitychange', () => guard(() => fmod.setMuted(document.hidden)));
 if (import.meta.env.DEV) {
+  window.__fmod = fmod;
   window.__sound = Object.assign(sound, {
     debug: () => ({ spots: rainSpots, playing: rainInstances.length, billboards: billboards.length, loops: [...fmod.loops.keys()], complete: fmod.complete }),
   });

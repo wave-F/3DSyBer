@@ -1,6 +1,7 @@
 import { BANKS, BOOT_BANKS } from './events.js';
 
 const BASE = `${import.meta.env.BASE_URL}fmod/`;
+const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
 let modulePromise;
 
 function loadModule() {
@@ -32,10 +33,12 @@ function loadModule() {
 export class FmodRuntime {
   ready = false;
   disposed = false;
-  complete = false;   // 全部 Bank 已装入
+  complete = false;   // 全部 Bank 已装入、采样数据已解码
+  banks = [];
   descriptions = new Map();
   missing = new Set();
   loops = new Map();
+  prepared = new Set();   // 已开始但保持暂停的循环（流已打开），第一次真正播放时取消暂停
   snapshots = new Map();
   vcas = new Map();
   // 保留有效句柄直到 STOPPED 再 release，避免操作已释放的一次性实例。
@@ -46,85 +49,96 @@ export class FmodRuntime {
     if (result !== this.module.OK) throw new Error(`FMOD ${label}: ${this.module.ErrorString(result)}`);
   }
 
-  // 同时下载全部 Bank；只等 WASM 和 BOOT_BANKS（加载界面的音乐 / 无效点击）就绪，其余随后补齐
+  // 网页一打开就调用：下载全部 Bank（BOOT_BANKS 高优先级），WASM 和 BOOT_BANKS 一到就初始化 FMOD，
+  // 其余 Bank 随后逐个装入并等采样数据全部解码完（loaded）。不需要用户手势：浏览器音频输出先挂起，
+  // 第一次点击 / 按键时由 initialize() 恢复。这样点击开始时不再有装 Bank 之类的重活卡住主线程。
   preload() {
     if (!this.loading) {
-      this.fetches = new Map(BANKS.map((file) => [file, fetch(BASE + file).then(async (response) => {
+      this.fetches = new Map(BANKS.map((file) => [file, fetch(BASE + file, { priority: BOOT_BANKS.includes(file) ? 'high' : 'low' }).then(async (response) => {
         if (!response.ok) throw new Error(`FMOD bank HTTP ${response.status}: ${file}`);
         return new Uint8Array(await response.arrayBuffer());
       })]));
-      // 记下已到的字节：点击时能同步加载，不经过 await
-      this.fetched = new Map();
-      for (const [file, bytes] of this.fetches) bytes.then((b) => this.fetched.set(file, b), () => {});
       this.loading = Promise.all([
         loadModule().then((module) => { this.module = module; }),
         ...BOOT_BANKS.map((file) => this.fetches.get(file)),
-      ]).catch((error) => { this.loading = undefined; this.fetches = undefined; throw error; });
+      ]).then((parts) => this.boot(parts.slice(1)))
+        .catch((error) => { this.loading = undefined; this.fetches = undefined; throw error; });
+      this.loaded = this.loading.then(() => this.loadRest());
+      this.loaded.catch((error) => console.warn('[audio] banks', error.message));
     }
     return this.loading;
+  }
+
+  boot(bootBytes) {
+    if (this.disposed || this.ready) return;
+    const f = this.module;
+    try {
+      const out = {};
+      this.check(f.Studio_System_Create(out), 'create');
+      this.system = out.val;
+      const core = {};
+      this.check(this.system.getCoreSystem(core), 'core');
+      this.core = core.val;
+      this.check(this.core.setDSPBufferSize(2048, 2), 'DSP buffer');
+      const rate = {};
+      if (this.core.getDriverInfo(0, null, null, rate, null, null) === f.OK && rate.val) {
+        this.check(this.core.setSoftwareFormat(rate.val, f.SPEAKERMODE_DEFAULT, 0), 'sample rate');
+      }
+      // 右手坐标系，与 three.js 一致：位置、朝向直接传世界坐标（米）
+      this.check(this.system.initialize(128, f.STUDIO_INIT_NORMAL, f.INIT_NORMAL | f.INIT_3D_RIGHTHANDED, null), 'initialize');
+      this.attributes = f._3D_ATTRIBUTES();
+      BOOT_BANKS.forEach((file, i) => this.loadBank(file, bootBytes[i]));
+      const bus = {};
+      this.check(this.system.getBus('bus:/', bus), 'master bus');
+      this.master = bus.val;
+      this.ready = true;
+      this.update();
+    } catch (error) {
+      this.system?.release();
+      this.system = this.core = this.master = undefined;
+      this.ready = false;
+      throw error;
+    }
   }
 
   loadBank(file, bytes) {
     const f = this.module, bank = {};
     this.check(this.system.loadBankMemory(bytes, bytes.byteLength, f.STUDIO_LOAD_MEMORY, f.STUDIO_LOAD_BANK_NORMAL, bank), `load ${file}`);
     this.check(bank.val.loadSampleData(), `samples ${file}`);
+    this.banks.push(bank.val);
   }
 
-  // 剩余 Bank 按顺序加载：已下载的同步装入，没到的等下载完
+  // 剩余 Bank 按顺序装入：每个 Bank 单独一个任务，避免一次长时间占住主线程（混音也跑在主线程）
   async loadRest() {
     for (const file of BANKS.filter((name) => !BOOT_BANKS.includes(name))) {
-      const bytes = this.fetched.get(file) ?? await this.fetches.get(file);
+      const bytes = await this.fetches.get(file);
+      await nextTask();
       if (this.disposed || !this.ready) return;
       this.loadBank(file, bytes);
     }
+    await this.samplesLoaded();
     this.complete = true;
   }
 
-  // 直接在用户手势回调中调用，已就绪时同步恢复浏览器音频输出。
+  // 等全部 Bank 的采样数据解码进内存；非线程版 FMOD 在 update 里推进异步加载
+  async samplesLoaded() {
+    const LOADING = this.module.STUDIO_LOADING_STATE_LOADING;
+    for (;;) {
+      this.update();
+      const pending = this.banks.some((bank) => {
+        const state = {};
+        return bank.getSampleLoadingState(state) === this.module.OK && state.val === LOADING;
+      });
+      if (!pending || this.disposed) return;
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+  }
+
+  // 在用户手势里调用：恢复浏览器音频输出（FMOD 在页面打开时已初始化）；还没初始化完就等它
   initialize() {
     if (this.disposed) return Promise.resolve();
     if (this.ready) { this.core.mixerResume(); return Promise.resolve(); }
-    if (this.initializing) return this.initializing;
-    const start = () => {
-      if (this.disposed) return;
-      const f = this.module;
-      try {
-        const out = {};
-        this.check(f.Studio_System_Create(out), 'create');
-        this.system = out.val;
-        const core = {};
-        this.check(this.system.getCoreSystem(core), 'core');
-        this.core = core.val;
-        this.check(this.core.setDSPBufferSize(2048, 2), 'DSP buffer');
-        const rate = {};
-        if (this.core.getDriverInfo(0, null, null, rate, null, null) === f.OK && rate.val) {
-          this.check(this.core.setSoftwareFormat(rate.val, f.SPEAKERMODE_DEFAULT, 0), 'sample rate');
-        }
-        // 右手坐标系，与 three.js 一致：位置、朝向直接传世界坐标（米）
-        this.check(this.system.initialize(128, f.STUDIO_INIT_NORMAL, f.INIT_NORMAL | f.INIT_3D_RIGHTHANDED, null), 'initialize');
-        this.attributes = f._3D_ATTRIBUTES();
-        for (const file of BOOT_BANKS) this.loadBank(file, this.fetched.get(file));
-        const bus = {};
-        this.check(this.system.getBus('bus:/', bus), 'master bus');
-        this.master = bus.val;
-        this.ready = true;
-        this.core.mixerResume();
-        this.update();
-      } catch (error) {
-        this.system?.release();
-        this.system = this.core = this.master = undefined;
-        this.ready = false;
-        throw error;
-      }
-      this.loaded = this.loadRest();
-      this.loaded.catch((error) => console.warn('[audio] banks', error.message));
-    };
-    // 预载完成后不经过 await，保留当前点击的浏览器激活状态。
-    if (this.module && BOOT_BANKS.every((file) => this.fetched?.has(file))) {
-      try { start(); return Promise.resolve(); } catch (error) { return Promise.reject(error); }
-    }
-    this.initializing = this.preload().then(start).finally(() => { this.initializing = undefined; });
-    return this.initializing;
+    return this.preload().then(() => { if (this.ready) this.core.mixerResume(); });
   }
 
   description(path) {
@@ -196,7 +210,13 @@ export class FmodRuntime {
   startLoop(path, position) {
     if (!this.ready) return;
     let inst = this.loops.get(path);
-    if (inst) return inst;
+    if (inst) {
+      if (this.prepared.has(path)) {
+        if (position) this.check(inst.set3DAttributes(this.fill(position)), `3D ${path}`);
+        this.resume(path, inst);
+      }
+      return inst;
+    }
     inst = this.instance(path);
     if (!inst) return;
     try {
@@ -207,15 +227,45 @@ export class FmodRuntime {
     return inst;
   }
 
-  // 跟着物体移动的声源：更新已启动实例的位置
+  // 预先开始一个循环但保持暂停：流式素材在加载界面就打开，之后 startLoop / moveLoop 只取消暂停
+  prepareLoop(path, position) {
+    if (!this.ready || this.loops.has(path)) return this.loops.get(path);
+    const inst = this.prepareInstance(path, position);
+    if (!inst) return;
+    this.loops.set(path, inst);
+    this.prepared.add(path);
+    return inst;
+  }
+
+  // 暂停状态下开始的实例（调用方自己管理，比如多实例的雨打楼体）
+  prepareInstance(path, position, setup) {
+    const inst = this.instance(path);
+    if (!inst) return;
+    try {
+      if (position) this.check(inst.set3DAttributes(this.fill(position)), `3D ${path}`);
+      setup?.(inst);
+      this.check(inst.setPaused(true), `pause ${path}`);
+      this.check(inst.start(), `prepare ${path}`);
+    } catch (error) { inst.release(); throw error; }
+    return inst;
+  }
+
+  resume(path, inst) {
+    if (this.prepared.delete(path)) this.check(inst.setPaused(false), `resume ${path}`);
+  }
+
+  // 跟着物体移动的声源：更新已启动实例的位置（预备好的实例同时取消暂停）
   moveLoop(path, position) {
     const inst = this.loops.get(path);
-    if (inst) this.check(inst.set3DAttributes(this.fill(position)), `3D ${path}`);
+    if (!inst) return;
+    this.check(inst.set3DAttributes(this.fill(position)), `3D ${path}`);
+    this.resume(path, inst);
   }
 
   stopLoop(path, immediate = false) {
     const inst = this.loops.get(path);
     if (!inst) return;
+    this.prepared.delete(path);
     inst.stop(immediate ? this.module.STUDIO_STOP_IMMEDIATE : this.module.STUDIO_STOP_ALLOWFADEOUT);
     inst.release();
     this.loops.delete(path);
@@ -321,6 +371,7 @@ export class FmodRuntime {
       inst.release();
     }
     this.loops.clear();
+    this.prepared.clear();
     for (const inst of this.snapshots.values()) {
       inst.stop(this.module.STUDIO_STOP_IMMEDIATE);
       inst.release();
@@ -330,6 +381,7 @@ export class FmodRuntime {
     this.descriptions.clear();
     this.system?.release();
     this.system = this.core = this.master = undefined;
-    this.fetches = this.fetched = undefined;
+    this.fetches = undefined;
+    this.banks = [];
   }
 }

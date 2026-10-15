@@ -512,51 +512,85 @@ test('踩在水洼上用水脚步代替普通脚步，衣物声照常', async ()
 });
 
 function runtimeStub(calls) {
-  // 记录 FMOD 调用的最小运行时：loops / complete 与真实 FmodRuntime 同名
+  // 记录 FMOD 调用的最小运行时：方法名与真实 FmodRuntime 一致；preload 一完成就全部就绪
   return class FmodRuntime {
     ready = false;
     complete = false;
     loops = new Map();
+    prepared = new Set();
     loaded = Promise.resolve();
-    initialize() { this.ready = true; calls.push(['init']); return Promise.resolve(); }
+    preload() { if (!this.ready) { this.ready = this.complete = true; calls.push(['boot']); } return Promise.resolve(); }
+    initialize() { calls.push(['resume']); return Promise.resolve(); }
+    description() {}
     setMuted() {}
     play({ path, position }) { calls.push(['play', path, position]); }
-    startLoop(path, position) { this.loops.set(path, {}); calls.push(['start', path, position]); return {}; }
-    moveLoop(path, position) { if (this.loops.has(path)) calls.push(['move', path, position]); }
-    stopLoop(path, immediate = false) { if (this.loops.delete(path)) calls.push(['stop', path, immediate]); }
+    prepareLoop(path, position) { this.loops.set(path, {}); this.prepared.add(path); calls.push(['prepare', path, position]); }
+    prepareInstance() { return null; }
+    startLoop(path, position) {
+      if (this.prepared.delete(path)) { calls.push(['unpause', path]); return {}; }
+      if (this.loops.has(path)) return this.loops.get(path);
+      this.loops.set(path, {}); calls.push(['start', path, position]); return {};
+    }
+    moveLoop(path, position) {
+      if (!this.loops.has(path)) return;
+      if (this.prepared.delete(path)) calls.push(['unpause', path]);
+      calls.push(['move', path, position]);
+    }
+    stopLoop(path, immediate = false) { this.prepared.delete(path); if (this.loops.delete(path)) calls.push(['stop', path, immediate]); }
     setSnapshot(path, on) { calls.push(['snapshot', path, on]); }
     instance() { return null; }
     update() {}
   };
 }
 
-test('加载界面先有手势才放菜单音乐；点开始时音乐淡出、播进入音效，全部 Bank 就绪后才铺环境，不放警笛', async () => {
+const flush = () => new Promise((resolve) => setTimeout(resolve));
+
+test('页面打开就装入 Bank 并预备好全部循环（暂停）；加载界面有手势才放菜单音乐', async () => {
   const calls = [];
   const { sound } = await load('src/audio/sound.js', {
     './fmodRuntime.js': { FmodRuntime: runtimeStub(calls) }, './events.js': events,
-  }, { document: { addEventListener() {}, hidden: false } });
+  }, { document: { addEventListener() {}, hidden: false }, setTimeout, clearTimeout });
+  await sound.preload();
+  const prepared = calls.filter(([a]) => a === 'prepare').map(([, path]) => path);
+  for (const path of ['event:/music/menu', 'event:/amb/rain', 'event:/amb/traffic', 'event:/amb/Amb_1', 'event:/vehicle/drive_out', 'event:/vehicle/drive_in']) {
+    assert.ok(prepared.includes(path), path);
+  }
+  assert.ok(!calls.some(([a]) => a === 'start' || a === 'unpause'));   // 加载期间什么都不出声
   sound.unlock();
-  await new Promise((resolve) => setTimeout(resolve));
-  assert.deepEqual(calls.filter(([a]) => a === 'start').map(([, path]) => path), ['event:/music/menu']);
+  await flush();
+  assert.deepEqual(calls.filter(([a]) => a === 'unpause').map(([, path]) => path), ['event:/music/menu']);
+});
+
+test('点击开始只做轻量操作：音乐淡出、进入音效、取消暂停已开好的环境循环，不装 Bank 也不新建实例', async () => {
+  const calls = [];
+  const { sound } = await load('src/audio/sound.js', {
+    './fmodRuntime.js': { FmodRuntime: runtimeStub(calls) }, './events.js': events,
+  }, { document: { addEventListener() {}, hidden: false }, setTimeout, clearTimeout });
+  await sound.preload();
+  sound.unlock();
+  await flush();
   calls.length = 0;
   sound.start();
-  await new Promise((resolve) => setTimeout(resolve));
-  assert.deepEqual(calls.slice(0, 3), [['init'], ['stop', 'event:/music/menu', false], ['play', 'event:/ui/enter_game', undefined]]);
-  const started = calls.filter(([a]) => a === 'start').map(([, path]) => path);
-  assert.ok(started.includes('event:/amb/rain'));
-  assert.ok(!started.includes('event:/vehicle/siren'));
-  assert.ok(!started.includes('event:/music/menu'));
+  // 全部在点击回调里同步完成
+  assert.deepEqual(calls.slice(0, 3), [['resume'], ['stop', 'event:/music/menu', false], ['play', 'event:/ui/enter_game', undefined]]);
+  assert.ok(calls.slice(3).every(([a]) => a === 'unpause'), JSON.stringify(calls));
+  const resumed = calls.filter(([a]) => a === 'unpause').map(([, path]) => path);
+  assert.ok(resumed.includes('event:/amb/rain') && resumed.includes('event:/amb/Amb_4'));
+  assert.ok(!resumed.includes('event:/vehicle/siren') && !resumed.includes('event:/vehicle/drive_out'));
+  await flush();
+  assert.equal(calls.filter(([a]) => a === 'boot' || a === 'prepare' || a === 'start').length, 0);
 });
 
 test('没有提前手势时点开始不会补放菜单音乐', async () => {
   const calls = [];
   const { sound } = await load('src/audio/sound.js', {
     './fmodRuntime.js': { FmodRuntime: runtimeStub(calls) }, './events.js': events,
-  }, { document: { addEventListener() {}, hidden: false } });
+  }, { document: { addEventListener() {}, hidden: false }, setTimeout, clearTimeout });
+  await sound.preload();
   sound.start();
   sound.unlock();
-  await new Promise((resolve) => setTimeout(resolve));
-  assert.ok(!calls.some(([a, path]) => a === 'start' && path === 'event:/music/menu'));
+  await flush();
+  assert.ok(!calls.some(([a, path]) => (a === 'unpause' || a === 'start') && path === 'event:/music/menu'));
   assert.ok(calls.some(([a, path]) => a === 'play' && path === 'event:/ui/enter_game'));
 });
 
@@ -591,14 +625,15 @@ test('广告牌只在近处大屏换图时响，世界开始前和远处的屏�
   const calls = [];
   const { sound } = await load('src/audio/sound.js', {
     './fmodRuntime.js': { FmodRuntime: runtimeStub(calls) }, './events.js': events,
-  }, { document: { addEventListener() {}, hidden: false } });
+  }, { document: { addEventListener() {}, hidden: false }, setTimeout, clearTimeout });
   const area = { x: [-7, 7], z: [-46, 68], y: 21.7 };
   sound.setBillboards([{ x: 20, y: 30, z: 0, phase: 1 }, { x: 400, y: 30, z: 0, phase: 1 }], area, 9);
   sound.updateBillboards(7.5);
   sound.updateBillboards(8.5);   // (8.5 + 1) / 9 跨过整数：换图，但世界还没开始
   assert.deepEqual(calls, []);
+  await sound.preload();
   sound.start();
-  await new Promise((resolve) => setTimeout(resolve));
+  await flush();
   calls.length = 0;
   sound.updateBillboards(16);
   sound.updateBillboards(17.5);  // 再换一次
@@ -606,18 +641,23 @@ test('广告牌只在近处大屏换图时响，世界开始前和远处的屏�
   assert.deepEqual(calls.map(([a, path, at]) => [a, path, at.x, at.y, at.z]), [['play', 'event:/world/billboard_update', 20, 30, 0]]);
 });
 
-test('运行时先装入 BOOT Bank，其余随后补齐；全部装完仍缺的事件只报一次', async () => {
-  const { FmodRuntime } = await load('src/audio/fmodRuntime.js', { './events.js': events });
+test('运行时先装入 BOOT Bank，其余逐个装入并等采样解码完；全部装完仍缺的事件只报一次', async () => {
+  const { FmodRuntime } = await load('src/audio/fmodRuntime.js', { './events.js': events }, { setTimeout });
   const fmod = new FmodRuntime();
   const loaded = [];
-  fmod.module = { OK: 0, STUDIO_LOAD_MEMORY: 0, STUDIO_LOAD_BANK_NORMAL: 0, ErrorString: () => 'not found' };
+  let decoding = 3;   // 前几次查询仍在解码
+  fmod.module = { OK: 0, STUDIO_LOAD_MEMORY: 0, STUDIO_LOAD_BANK_NORMAL: 0, STUDIO_LOADING_STATE_LOADING: 2, ErrorString: () => 'not found' };
   fmod.ready = true;
   fmod.system = {
-    loadBankMemory(bytes, length, mode, flags, out) { loaded.push(bytes.file); out.val = { loadSampleData: () => 0 }; return 0; },
+    update: () => 0,
+    loadBankMemory(bytes, length, mode, flags, out) {
+      loaded.push(bytes.file);
+      out.val = { loadSampleData: () => 0, getSampleLoadingState(state) { state.val = decoding > 0 ? 2 : 3; return 0; } };
+      return 0;
+    },
     getEvent(path, out) { return path === 'event:/ok' ? ((out.val = {}), 0) : 1; },
   };
   const later = [];
-  fmod.fetched = new Map();
   fmod.fetches = new Map(events.BANKS.map((file) => [file, new Promise((resolve) => later.push(() => resolve(Object.assign(new Uint8Array(1), { file }))))]));
   for (const file of events.BOOT_BANKS) fmod.loadBank(file, Object.assign(new Uint8Array(1), { file }));
   const rest = fmod.loadRest();
@@ -625,10 +665,37 @@ test('运行时先装入 BOOT Bank，其余随后补齐；全部装完仍缺的�
   assert.throws(() => fmod.description('event:/missing'));
   assert.throws(() => fmod.description('event:/missing'));   // 还没装完：可能只是 Bank 未到
   later.forEach((resolve) => resolve());
+  const poll = setInterval(() => { decoding--; }, 10);
   await rest;
+  clearInterval(poll);
   assert.deepEqual(loaded, events.BANKS);
+  assert.ok(decoding <= 0);
   assert.equal(fmod.complete, true);
   assert.throws(() => fmod.description('event:/missing'));
   assert.equal(fmod.description('event:/missing'), undefined);
   assert.deepEqual(fmod.description('event:/ok'), {});
+});
+
+test('预备好的循环保持暂停，第一次 startLoop / moveLoop 才取消暂停，停止时清掉标记', async () => {
+  const { FmodRuntime } = await load('src/audio/fmodRuntime.js', { './events.js': events }, { setTimeout });
+  const fmod = new FmodRuntime();
+  const log = [];
+  fmod.module = { OK: 0, STUDIO_STOP_ALLOWFADEOUT: 0, STUDIO_STOP_IMMEDIATE: 1 };
+  fmod.ready = true;
+  fmod.attributes = { position: {}, forward: {}, up: {}, velocity: {} };
+  fmod.instance = (path) => ({
+    setPaused(v) { log.push([path, 'paused', v]); return 0; }, start() { log.push([path, 'start']); return 0; },
+    set3DAttributes() { log.push([path, '3d']); return 0; }, stop() { return 0; }, release() { log.push([path, 'release']); },
+  });
+  fmod.prepareLoop('event:/a');
+  fmod.prepareLoop('event:/b', { x: 0, y: 0, z: 0 });
+  assert.deepEqual(log, [['event:/a', 'paused', true], ['event:/a', 'start'], ['event:/b', '3d'], ['event:/b', 'paused', true], ['event:/b', 'start']]);
+  log.length = 0;
+  fmod.startLoop('event:/a');
+  fmod.startLoop('event:/a');
+  fmod.moveLoop('event:/b', { x: 1, y: 0, z: 0 });
+  fmod.moveLoop('event:/b', { x: 2, y: 0, z: 0 });
+  assert.deepEqual(log, [['event:/a', 'paused', false], ['event:/b', '3d'], ['event:/b', 'paused', false], ['event:/b', '3d']]);
+  fmod.stopLoop('event:/a');
+  assert.equal(fmod.prepared.size, 0);
 });

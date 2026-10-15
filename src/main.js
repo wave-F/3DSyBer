@@ -32,7 +32,8 @@ import { HURT } from './investigation/finale.js';
 import { sound } from './audio/sound.js';
 import { AD_DWELL } from './ads.js';
 
-sound.preload();
+// 网页一打开就装入全部 Bank 并预备好所有循环；加载界面等声音就绪后才允许点击开始
+loading.waitFor(sound.preload(), '声音');
 // 加载期间第一次点击 / 按键开始菜单音乐；还没就绪时的点击是无效点击
 loading.onWake(() => sound.unlock());
 loading.onDeny(() => sound.play('ui/deny'));
@@ -93,8 +94,24 @@ const overlay = document.getElementById('overlay');
 const updatePlayer = createPlayer(camera, document.body, overlay);
 const inv = createInvestigation(scene, camera, crash, updatePlayer.controls, updatePlayer.gait);
 // 加载界面点击开始：这一下是用户手势，同时启动 FMOD 并锁定鼠标
-loading.onStart(() => { sound.start(); updatePlayer.controls.lock(); });
+let started = false;
+loading.onStart(() => {
+  started = true;
+  inv.warmFinale(false);
+  sound.start();
+  updatePlayer.controls.lock();
+});
 const intro = createIntro({ camera, police, controls: updatePlayer.controls, inv });
+// 加载界面期间（画面被盖住）轮流摆到开场跟车的起点、终点机位，并把结局跑车放到镜头前，
+// 让这些第一次出现的物体在加载时就编译好材质。否则点击开始 / 结局开始的第一帧会现场编译、卡住主线程
+// 200 ms 左右；FMOD 的混音也跑在主线程，卡住时声音会重复上一小段，听起来就是卡顿。
+// 加载界面会等画面连续不卡才允许点击开始，所以编译一定在开始前完成。
+let warmFrame = 0;
+function warmTransitions() {
+  const k = Math.floor(warmFrame++ / 6) % 3;
+  intro.warm(k === 1);
+  inv.warmFinale(k === 2);
+}
 if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; window.__renderer = renderer; window.__scene = scene; window.__police = police; window.__intro = intro; } // 开发时截图调机位用
 
 // ---------- 后期 ----------
@@ -211,6 +228,7 @@ renderer.setAnimationLoop(() => {
     sound.setPause(pauseShown);
   }
   tick(step);
+  if (!started) warmTransitions();
   if (intro.playing) intro.update(step);
   else updatePlayer(step, inv.moveScale);
   crash.update(clock.dt, clock.elapsed);

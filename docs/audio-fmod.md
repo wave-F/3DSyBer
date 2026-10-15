@@ -131,7 +131,18 @@ public/fmod/Main.bank …  →  src/audio/sound.js 在游戏里触发
 | `scifi/analyze_complete` / `analyze_cancel` | 分析完成 / 中途松开或移开准星 |
 | `scifi/dream_enter` / `dream_exit` | 进入 / 离开黑梦 |
 
-`src/audio/sound.js` 是游戏侧入口：页面加载时下载全部 Bank；加载界面第一次点击 / 按键（`unlock`）或点击开始（`start`）时初始化，先装 `BOOT_BANKS`（Master、Frontend），其余 Bank 下载完依次装入（`fmod.loaded`），场景声要等全部装完才启动；在主循环里 `update`。3D 单发用 `sound.play(name, { position })`，跟着物体走的声源用 `sound.follow(name, position)`（每帧传位置，`null` 停止），2D 循环用 `sound.loop(name, on)`。撞击类素材的峰值时刻记在 `events.js` 的 `PEAK`，换素材后要同步改。FMOD 没就绪或出错时，所有调用都是空操作，只在控制台警告，不影响游戏。切到后台时静音。
+`src/audio/sound.js` 是游戏侧入口，在主循环里 `update`。3D 单发用 `sound.play(name, { position })`，跟着物体走的声源用 `sound.follow(name, position)`（每帧传位置，`null` 停止），2D 循环用 `sound.loop(name, on)`。撞击类素材的峰值时刻记在 `events.js` 的 `PEAK`，换素材后要同步改。FMOD 没就绪或出错时，所有调用都是空操作，只在控制台警告，不影响游戏。切到后台时静音。
+
+### 预加载与防卡顿
+
+这个 FMOD WASM 版本没有线程：即使输出走 AudioWorklet，**混音也在主线程上算**，Worklet 只有两块 2048 帧（约 43 ms）的缓冲。主线程卡住超过一块的时长，Worklet 就重播上一块，听起来是卡顿 / 重复。所以运行时不能在转场时做重活：
+
+- **网页一打开**（`sound.preload()`，`main.js` 第一时间调用）：下载全部 Bank（`BOOT_BANKS` 即 Master / Frontend 高优先级），WASM 和 `BOOT_BANKS` 一到就初始化 FMOD（不需要用户手势，浏览器音频输出先挂起），菜单音乐预备好；其余 Bank 每个单独一个任务依次装入，再等全部采样数据解码完（`fmod.loaded` / `fmod.complete`）。
+- **预备循环**：全部事件描述先查好缓存；雨 / 车流铺底、城市点声源、21 个雨打楼体、开场车内外行驶声都在加载界面里**开始但保持暂停**，流式素材这时就打开。之后 `startLoop` / `moveLoop` 只取消暂停（`fmodRuntime.js` 的 `prepareLoop` / `prepareInstance` / `prepared`）。
+- **加载界面等声音**：`loading.waitFor(sound.preload(), '声音')`，声音全部就绪才进入画面预热、出现「点击开始」。声音失败或超过 30 秒也放行，不卡住游戏。
+- **第一次点击 / 按键**：`unlock` 在手势里恢复音频输出，取消暂停菜单音乐。**点击开始**：`start` 只做音乐淡出、进入音效、取消暂停环境循环，实测点击回调 3 ms（原来同步装 Bank 要 297 ms，紧接着开流又卡 225 ms）。
+- **画面侧**：转场第一帧现场编译材质同样会卡住主线程。加载界面期间 `main.js` 的 `warmTransitions` 轮流把镜头摆到开场跟车起点 / 终点（`intro.warm`），并把结局跑车放到视线与桥面的交点（`finale.warm`），让这些物体在加载时就编译好。实测开场第一帧（原 214 ms）和结局开始（原 157 ms）都已没有 50 ms 以上的长任务；进出黑梦、切车内本来就没有。以后新增「第一次才出现」的物体，也要加进预热。
+- 当前用的是 FMOD 日志版运行时 `fmodstudioL.js`，每次建采样 / 开流都会打印日志；这些都发生在加载阶段。换成 SDK 里的非日志版 `fmodstudio.js` 可以再省一点开销。
 
 角色动作统一使用 `sound.step()`（FootStep + ClothFoley）和 `sound.cloth()`（仅 ClothFoley）；新动作也走这两个入口。Foley 事件路径大小写与 Studio 完全一致，均为单次事件，不启动循环；素材、随机音高和混音由 Studio 保持控制。手工修改后保存工程并执行 `npm run audio:build` 同步浏览器 Bank。
 

@@ -161,6 +161,14 @@ export function createIntro({ camera, police, controls, inv }) {
 
   return {
     get playing() { return playing; },
+    // 加载界面期间（画面被盖住）摆到跟车镜头的起点 / 终点，提前编译这些视角里的材质，
+    // 避免点击开始后第一帧现场编译卡住主线程（混音也在主线程，会卡音）
+    warm(end = false) {
+      if (phase !== 'chase' || t > 0) return;
+      t = end ? CHASE : 0;
+      frameChase();
+      t = 0;
+    },
     seek(time) { t = time; sample(t); },   // 开发调试：定格下车镜头的某一秒
     update(dt) {
       if (!playing) return;

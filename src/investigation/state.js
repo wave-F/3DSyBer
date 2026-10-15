@@ -1428,6 +1428,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       if (mode === 'explore') setMode('explore');   // 测试按钮已切到别的阶段时不覆盖
       ui.hush();
     },
+    // 加载界面期间预热结局跑车的材质（见 finale.warm）
+    warmFinale(on) { death.warm(on); },
     get moveScale() { return intro || enter.on ? 0 : mode === 'report' || mode === 'ending' || mode === 'insert' || mode === 'death' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
     update(realDt) {
       ui.updateDialogue(realDt);

@@ -318,6 +318,19 @@ export function createFinale({ scene, camera, tablet, ui }) {
   return {
     play,
     T,
+    // 加载界面期间把跑车放到镜头前（画面被盖住），提前编译它的材质，结局开始时不再现场编译
+    warm(on) {
+      if (!ready || playing) return;
+      car.visible = on;
+      if (!on) return;
+      // 放在视线与桥面的交点（俯视的跟车机位下，「正前方 7 m」会落到视野下方被裁掉）
+      camera.updateMatrixWorld();
+      camera.getWorldDirection(_w);
+      const down = camera.position.y - DECK_Y;
+      const d = _w.y < -0.05 ? Math.min(60, down / -_w.y) : 7;
+      car.position.copy(camera.position).addScaledVector(_w, d);
+      car.position.y = DECK_Y;
+    },
     get playing() { return playing; },
     get ready() { return ready; },
     // running = false 时（暂停）画面停住

@@ -27,6 +27,8 @@ const pcEl = root.querySelector('.ld-bar .pc');
 const fillEl = root.querySelector('.ld-bar .fill');
 
 let loaded = 0, total = 0;
+// 加载管理器之外要等的任务（声音：FMOD Bank 装入、采样解码、循环预备），算进资源阶段
+let extraDone = 0, extraTotal = 0, extraLabel = '';
 const t0 = performance.now();
 let lastChange = t0;
 let assetsDone = false, warmStart = 0, good = 0, lastFrame = 0;
@@ -43,8 +45,10 @@ m.onError = (url) => console.warn('[loading] 加载失败', url);
 
 function frame(now) {
   if (!assetsDone) {
-    const settled = total > 0 && loaded >= total && now - lastChange > SETTLE_MS;
-    if (settled || (total === 0 && now - t0 > IDLE_MS)) {
+    const filesDone = total > 0 ? loaded >= total : now - t0 > IDLE_MS;
+    if (filesDone && extraDone < extraTotal) stEl.textContent = `正在加载 · ${extraLabel}`;
+    const settled = filesDone && extraDone >= extraTotal && now - lastChange > SETTLE_MS;
+    if (settled) {
       assetsDone = true;
       warmStart = now;
       stEl.textContent = '正在准备画面';
@@ -56,7 +60,7 @@ function frame(now) {
   lastFrame = now;
 
   const target = !assetsDone
-    ? ASSET_SHARE * (total ? loaded / total : 0)
+    ? ASSET_SHARE * (total + extraTotal ? (loaded + extraDone) / (total + extraTotal) : 0)
     : ASSET_SHARE + (1 - ASSET_SHARE) * Math.max(Math.min(1, good / WARM_FRAMES), Math.min(1, (now - warmStart) / WARM_MAX_MS));
   // 只增不减（新文件加入时 loaded / total 会回落），平滑追赶；最后一小段直接补满
   if (target > shown) shown += (target - shown) * 0.12;
@@ -100,5 +104,11 @@ export const loading = {
   onStart(fn) { startFn = fn; },
   onWake(fn) { wakeFn = fn; },
   onDeny(fn) { denyFn = fn; },
+  // 资源阶段额外等一个任务完成（成功或失败都算完成）
+  waitFor(promise, label) {
+    extraTotal++;
+    extraLabel = label;
+    Promise.resolve(promise).finally(() => { extraDone++; lastChange = performance.now(); });
+  },
   get done() { return root.classList.contains('gone'); },
 };
