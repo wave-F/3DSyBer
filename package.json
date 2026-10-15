@@ -22,7 +22,8 @@
     "audio:mix": "node scripts/fmod.mjs mix",
     "audio:scene": "node scripts/fmod.mjs scene",
     "audio:reverb": "node scripts/fmod.mjs reverb",
-    "audio:build": "node scripts/fmod.mjs build"
+    "audio:build": "node scripts/fmod.mjs build",
+    "lightmap": "node scripts/lightmap.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

@@ -2,7 +2,7 @@
 
 低照度是永久设定。`lightMode.js` 已删，没有照明对比键。
 
-`main.js`：`WebGPURenderer`，像素比上限 1.5，ACES，曝光 1.15。`ClusteredLighting(64, 32, 24, 16)`。半球光强度 0.55，月光方向光 0.3。`shanghai_bund_1k.hdr` 只做反射：场景 0.12，平板手部场景 0.35。
+`main.js`：`WebGPURenderer`，像素比上限 1.5，ACES，曝光 1.15。`ClusteredLighting(64, 32, 24, 16)`。静态物体的漫反射来自预烘焙光照图（[lightmap.md](lightmap.md)）；有光照图时半球光降到 0.2（只给探针范围外的动态物体），月光关掉；没有光照图时回到半球光 0.55、月光 0.3。`shanghai_bund_1k.hdr` 只做反射：场景 0.12，平板手部场景 0.35。
 
 雾都在 `fog.js`，色值 `FOG_HEX`（`sky.js` 转导出）。可调参数是文件顶部的 `FOG` 表；开发态鼠标解锁时右下角有「测试 · 雾」面板，能实时拖动、开关两种雾，「复制参数」把当前值贴回 `FOG`。分辨率、采样次数、灯数上限是表下面的常量，改了要刷新。
 - 距离雾 `distanceFog`（`scene.fogNode`）：远景雨霾密度随高度指数变薄，沿视线解析积分，上限 0.9；加桥下贴地低雾。两者都乘一层随风飘的 3D 噪声做浓淡起伏。
@@ -25,4 +25,4 @@ MRT 有 `output`、`normal`、`metalrough`、`keep`。`keep = 1` 的像素在分
 
 雨是 `rain.js` 里跟随相机的 6000 根线段。桥和招牌用 `mergeStatic` 按材质合并。
 
-导入楼不要改成实时受光还同时靠顶点色烘焙。无头 `--disable-gpu` 不能验收画面。
+静态表面不要再加吃漫反射的实时灯：漫反射已经烘在光照图里，新灯要么只给动态物体，要么标 `userData.lightmap = 'spec'` 只算高光。无头 `--disable-gpu` 不能验收画面。

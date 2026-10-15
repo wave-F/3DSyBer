@@ -25,7 +25,11 @@
 | `src/sky.js` | 夜空天空盒（`public/assets/sky_overcast.jpg`）与低空碎云、远景巨楼、全息广告、飞行器光点 |
 | `src/city.js` | 程序化街区与近处屏幕点光 |
 | `src/buildings.js` | 程序楼样式套件 |
-| `src/modelBuildings.js` | 四栋 GLB 摆放、脚印、招牌霓虹覆盖 |
+| `src/modelBuildings.js` | 近景 GLB 楼摆放、脚印、招牌摆放；墙面光照取光照图 `bldg` 图集 |
+| `src/lightmap/` | 预烘焙光照：`charts.js` 光照图 UV 分块装箱，`index.js` 加载光照图、静态材质替换、探针，`export.js` 烘焙导出页（`bake.html`） |
+| `scripts/lightmap.mjs` | `npm run lightmap`：导出静态场景 → Blender 烘焙 |
+| `tools/blender/scene_bake.py` | 统一场景 Cycles 烘焙：光照图、通道大屏、探针、近景楼 GLB |
+| `public/assets/lightmap/` | 烘焙产物（`manifest.json`、`*.exr`、`probes.bin`） |
 | `src/data/buildings.json` | 导入楼描述 |
 | `src/signs.js` | 霓虹字与广告牌套件 |
 | `src/textures.js` | 程序贴图与磁盘贴图加载 |

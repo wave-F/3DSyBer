@@ -6,6 +6,7 @@ import {
   positionView, sin, dot, step,
 } from 'three/tsl';
 import { mergeStatic } from './merge.js';
+import { prepareLightmap } from './lightmap/index.js';
 import { addLightGroup } from './debugLights.js';
 import { laneTexture, puddleTexture, loadTexture, highwaySignTexture, tickerTexture } from './textures.js';
 
@@ -18,19 +19,34 @@ export const BREAK = { side: 1, z0: -3.5, z1: 2.5 }; // 右侧护栏撞断的区
 const concreteMap = loadTexture('concrete_wall_008_diff_1k.jpg');
 export const concrete = new THREE.MeshStandardNodeMaterial({ roughness: 0.85 });
 concrete.colorNode = triplanarTexture(texture(concreteMap), null, null, float(0.3), positionWorld, normalWorld).rgb.mul(vec3(0.24, 0.25, 0.28));
+concrete.userData.lightmap = true;
+concrete.userData.bake = { albedoMap: concreteMap, albedo: [0.24, 0.25, 0.28] };   // 烘焙时的平均底色（节点材质导不出颜色）
 
 export const metal = new THREE.MeshStandardMaterial({ color: 0x5a5f66, roughness: 0.35, metalness: 0.85 });
+metal.userData.lightmap = true;
+
+// 光照图：封锁区（玩家能走到的范围）往外 15 m 内最精细，越远越粗；朝下的面和被路面盖住的桥面顶只给一点
+const LM_NEAR = [-60, 82];
+const SEG = 10;   // 长条几何体沿 z 每 10 m 分一段，光照图按段给精度
+const segs = (len) => Math.max(1, Math.ceil(len / SEG));
+function bridgeDensity(c, n, mesh) {
+  const dz = Math.max(LM_NEAR[0] - c.z, c.z - LM_NEAR[1], 0);
+  let d = 28 * Math.max(0.1, Math.exp(-dz / 30));
+  if (n.y < -0.5) d *= 0.2;
+  if (mesh.material === concrete && n.y > 0.5 && Math.abs(c.y - DECK_Y) < 0.05) d *= 0.2;
+  return d;
+}
 
 export function buildBridge(scene) {
   const group = new THREE.Group();
 
   // 桥面
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(HALF_W * 2 + 1, 1.4, HALF_L * 2), concrete);
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(HALF_W * 2 + 1, 1.4, HALF_L * 2, 1, 1, segs(HALF_L * 2)), concrete);
   deck.position.set(0, DECK_Y - 0.7, 0);
   group.add(deck);
 
   // 湿路面
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(HALF_W * 2 - 1, HALF_L * 2), roadMaterial());
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(HALF_W * 2 - 1, HALF_L * 2, 1, segs(HALF_L * 2)), roadMaterial());
   road.rotation.x = -Math.PI / 2;
   road.position.y = DECK_Y + 0.01;
   group.add(road);
@@ -66,6 +82,7 @@ export function buildBridge(scene) {
   // 灯头只要略高于辉光阈值 1.3，保留暖色光晕。原 8 会在色调映射前剪成纯白
   const headMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffe2b0, emissiveIntensity: 2.2 });
   const streetLights = [];
+  const bakeLights = [];   // 烘焙用：每个灯头都是光源（实时点光只放在封锁区附近）
   for (let z = -240; z <= 240; z += 30) {
     for (const s of [-1, 1]) {
       const zz = z + (s > 0 ? 15 : 0);
@@ -77,10 +94,12 @@ export function buildBridge(scene) {
       const head = new THREE.Mesh(headGeo, headMat);
       head.position.set(hx, DECK_Y + 7.85, zz);
       group.add(pole, arm, head);
+      bakeLights.push({ pos: [hx, DECK_Y + 7.5, zz], color: 0xffd6a0, intensity: 48, radius: 0.25 });
       if (Math.abs(zz) <= 75) {
         const light = new THREE.PointLight(0xffd6a0, 48, 28, 2);
         light.position.set(hx, DECK_Y + 7.5, zz);
         light.userData.fogCone = true;   // 体积雾里按向下的光锥散射
+        light.userData.lightmap = 'bake';   // 漫反射已烘进光照图，静态表面上只算高光
         streetLights.push(light);
         group.add(light);
       }
@@ -96,6 +115,10 @@ export function buildBridge(scene) {
   addGantry(group, 70, true, ['夜城中心', 'CITY  CENTER', 'C1'], ['港区', 'HARBOR', '5km'], '欢迎来到夜城  WELCOME TO NIGHT CITY  限速 80  SPEED LIMIT 80  ', '#ff3030');
 
   mergeStatic(group);
+  // 混凝土、路面、金属合并块进光照图；发光件、实例化立柱不进（立柱由探针照亮）
+  const receivers = group.children.filter((o) => o.isMesh && !o.isInstancedMesh && o.material.userData.lightmap);
+  prepareLightmap('bridge', receivers, { width: 2048, height: 2048, density: bridgeDensity, cell: SEG });
+  group.userData.bakeLights = bakeLights;
   scene.add(group);
 }
 
@@ -187,6 +210,8 @@ function roadMaterial() {
   // 金属度压低（原 0.55/0.9），避免路面像镜子一样把所有霓虹再反射一遍
   mat.metalnessNode = mix(float(0.15), float(0.5), puddle).mul(lane.a.mul(-0.5).add(1));
   mat.envMapIntensity = 0.3;
+  mat.userData.lightmap = true;
+  mat.userData.bake = { albedoMap: diff, albedo: [0.2, 0.2, 0.2] };
   // 雨滴涟漪：水洼里满强度，普通湿沥青只留一点；远处淡出避免闪烁。
   // 法线同时写进 MRT，SSR 倒影会跟着涟漪一起晃
   const viewDist = positionView.z.negate();
@@ -235,7 +260,7 @@ function addRailing(group, s, z0, z1) {
   const brokenEnd = s === BREAK.side && z1 === BREAK.z0;
   const curbStart = z0 + (brokenStart ? 0.7 : 0);
   const curbEnd = z1 - (brokenEnd ? 0.7 : 0);
-  const curb = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, curbEnd - curbStart), concrete);
+  const curb = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, curbEnd - curbStart, 1, 1, segs(curbEnd - curbStart)), concrete);
   curb.position.set(x, DECK_Y + 0.25, (curbStart + curbEnd) / 2);
   group.add(curb);
 
@@ -243,7 +268,7 @@ function addRailing(group, s, z0, z1) {
   const railStart = z0 + (brokenStart ? 1.2 : 0);
   const railEnd = z1 - (brokenEnd ? 1.2 : 0);
   for (const y of [0.85, 1.15]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, railEnd - railStart), metal);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, railEnd - railStart, 1, 1, segs(railEnd - railStart)), metal);
     rail.position.set(x, DECK_Y + y, (railStart + railEnd) / 2);
     group.add(rail);
   }

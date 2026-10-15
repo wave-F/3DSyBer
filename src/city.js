@@ -25,6 +25,7 @@ export function buildCity(scene) {
     new THREE.MeshStandardMaterial({ color: 0x07090a, roughness: 0.4, metalness: 0.3 })
   );
   ground.rotation.x = -Math.PI / 2;
+  ground.name = 'ground';   // 烘焙时给街面加暖色上照光（scene_bake.py 按名字找）
   scene.add(ground);
 
   const kit = createBuildingKit();
@@ -49,7 +50,7 @@ export function buildCity(scene) {
   const taken = modelFootprints();
   const blocked = (x, z, w, d) => (z > NEAR_Z[0] && z < NEAR_Z[1])
     || taken.some((f) => x + w / 2 > f.x0 && x - w / 2 < f.x1 && z + d / 2 > f.z0 && z - d / 2 < f.z1);
-  loadModelBuildings(scene);
+  const modelsReady = loadModelBuildings(scene);
 
   for (const side of [-1, 1]) {
     // 第一排：紧邻高架，招牌最密
@@ -87,6 +88,7 @@ export function buildCity(scene) {
     const light = new THREE.PointLight(s.color, 100, 45, 2); // 原 260，太强会把桥面整体染色
     light.position.copy(s.pos);
     light.userData.slot = s.slot;
+    light.userData.lightmap = 'spec';   // 照在静态表面上的漫反射已按屏烘进光照图，这里只给车等动态物体和高光
     screenPoints.push(light);
     scene.add(light);
   }
@@ -100,6 +102,7 @@ export function buildCity(scene) {
   }
   update.rainSpots = rainSpots;
   update.adScreens = signs.screens;
+  update.ready = modelsReady;
   return update;
 
   function decorate(b, side, near) {

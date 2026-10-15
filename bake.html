@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>光照图导出</title>
+    <style>
+      body { margin: 24px; background: #0b0f12; color: #cfe6f0; font: 13px/1.6 Menlo, "PingFang SC", monospace; }
+    </style>
+  </head>
+  <body>
+    <!-- 开发用：npm run lightmap 用无头 Chrome 打开这一页，把静态场景导出给 Blender 烘焙。不进正式构建 -->
+    <h3>光照图导出 → art/bake/</h3>
+    <pre id="log"></pre>
+    <script type="module" src="/src/lightmap/export.js"></script>
+  </body>
+</html>

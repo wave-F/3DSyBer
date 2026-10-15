@@ -10,7 +10,8 @@
    -31.6,
    31.6
   ],
-  "range": 4.0
+  "range": 4.0,
+  "lightmap": true
  },
  "bldgM": {
   "file": "assets/bldg/bldgM.glb",
@@ -23,7 +24,8 @@
    -16.53,
    16.53
   ],
-  "range": 4.0
+  "range": 4.0,
+  "lightmap": true
  },
  "bldgS": {
   "file": "assets/bldg/bldgS.glb",
@@ -36,7 +38,8 @@
    -7.79,
    7.79
   ],
-  "range": 4.0
+  "range": 4.0,
+  "lightmap": true
  },
  "capsule": {
   "file": "assets/bldg/capsule.glb",
@@ -49,7 +52,8 @@
    -7.72,
    7.72
   ],
-  "range": 4.0
+  "range": 4.0,
+  "lightmap": true
  },
  "midrise": {
   "file": "assets/bldg/midrise.glb",
@@ -62,7 +66,8 @@
    -10.73,
    10.73
   ],
-  "range": 4.0
+  "range": 4.0,
+  "lightmap": true
  },
  "tower02": {
   "file": "assets/bldg/tower02.glb",
@@ -75,7 +80,8 @@
    -13.9,
    13.9
   ],
-  "range": 4.0
+  "range": 4.0,
+  "lightmap": true
  },
  "tower03": {
   "file": "assets/bldg/tower03.glb",
@@ -88,7 +94,8 @@
    -12.87,
    12.87
   ],
-  "range": 4.0
+  "range": 4.0,
+  "lightmap": true
  },
  "tower08": {
   "file": "assets/bldg/tower08.glb",
@@ -101,7 +108,8 @@
    -8.36,
    8.36
   ],
-  "range": 4.0
+  "range": 4.0,
+  "lightmap": true
  },
  "towerC": {
   "file": "assets/bldg/towerC.glb",
@@ -114,7 +122,8 @@
    -18.71,
    18.71
   ],
-  "range": 4.0
+  "range": 4.0,
+  "lightmap": true
  },
  "towerL": {
   "file": "assets/bldg/towerL.glb",
@@ -127,6 +136,7 @@
    -22.82,
    22.82
   ],
-  "range": 4.0
+  "range": 4.0,
+  "lightmap": true
  }
 }

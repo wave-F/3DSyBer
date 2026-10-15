@@ -32,7 +32,8 @@ import { createInvestigation } from './investigation/state.js';
 import { addLightGroup } from './debugLights.js';
 import { HURT } from './investigation/finale.js';
 import { sound } from './audio/sound.js';
-import { AD_DWELL } from './ads.js';
+import { AD_DWELL, adGlowAt } from './ads.js';
+import { applyLightmaps, updateLightmaps, loadProbes } from './lightmap/index.js';
 
 // 网页一打开就装入全部 Bank 并预备好所有循环；加载界面等声音就绪后才允许点击开始
 loading.waitFor(sound.preload(), '声音', 'AUDIO');
@@ -61,9 +62,11 @@ const moon = new THREE.DirectionalLight(0x8899cc, 0.3);
 moon.position.set(-50, 100, 30);
 scene.add(hemi, moon);
 let envOn = true;
+// 有光照图时：静态表面不吃这两盏灯；动态物体由探针照亮，半球光只留一点给探针范围外的物体，月光不在烘焙里，关掉
+const ambient = { hemi: 0.55, moon: 0.3 };
 addLightGroup('环境光（天光、月光）', (on) => {
-  hemi.intensity = on ? 0.55 : 0;
-  moon.intensity = on ? 0.3 : 0;
+  hemi.intensity = on ? ambient.hemi : 0;
+  moon.intensity = on ? ambient.moon : 0;
 });
 addLightGroup('环境反射', (on) => {
   envOn = on;
@@ -101,6 +104,13 @@ loading.onStart(() => {
   updatePlayer.controls.lock();
 });
 const intro = createIntro({ camera, police, controls: updatePlayer.controls, inv });
+// 预烘焙光照图：场景和所有实时灯都建好之后替换静态材质（缺失或过期时保持实时光照），再装上动态物体用的探针
+loading.waitFor(applyLightmaps(scene).then(async (ok) => {
+  if (!ok) return;
+  ambient.hemi = 0.2; ambient.moon = 0;
+  hemi.intensity = ambient.hemi; moon.intensity = ambient.moon;
+  await loadProbes(renderer, scene);
+}).catch((e) => console.error('[lightmap]', e)), '光照', 'LIGHTING');
 // 加载界面期间（画面被盖住）轮流摆到开场跟车的起点、终点机位，并把结局跑车放到镜头前，
 // 让这些第一次出现的物体在加载时就编译好材质。否则点击开始 / 结局开始的第一帧会现场编译、卡住主线程
 // 200 ms 左右；FMOD 的混音也跑在主线程，卡住时声音会重复上一小段，听起来就是卡顿。
@@ -249,6 +259,7 @@ renderer.setAnimationLoop(() => {
   updateCordon(step, camera.position);
   updateSky(clock.dt, clock.elapsed);
   updateCity();
+  updateLightmaps(adGlowAt);
   inv.update(step);
   sound.updateBillboards(clock.elapsed);
   sound.update(dt, camera);

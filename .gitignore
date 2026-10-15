@@ -18,6 +18,7 @@ art/tex/
 
 art/ads_src/
 art/bake_tex/
+art/bake/
 art/holo_src/
 
 # Freesound 原始素材（可用 npm run audio:fetch 按 credits.json 重新下载）

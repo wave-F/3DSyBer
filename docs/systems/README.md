@@ -20,6 +20,7 @@ index.html → src/main.js
 | [city.md](city.md) | 程序楼 + 四栋 GLB。整段 Blender 街区还没导 |
 | [investigation.md](investigation.md) | 四轮复核：取证、黑梦、报告、结局 |
 | [render.md](render.md) | WebGPU 夜景 |
+| [lightmap.md](lightmap.md) | 预烘焙光照图、探针、烘焙流程 |
 | [../design/case.md](../design/case.md) | 四份复核报告、对象索引与结局 |
 
 ```text

@@ -5,7 +5,7 @@
 #   buildings  集合「导出_近景楼」里每栋楼的楼型、位置、朝向（游戏坐标）
 #   signs      集合「招牌（导出）」里的招牌面片（父级 = 所属楼）
 #   footprints 每栋楼的占地矩形（程序楼避让用）
-# 楼型 = 网格名（关联复制共享楼体库网格，例如 tower02）；楼型网格本身改了才需要重新烘焙（city_bake.py）
+# 楼型 = 网格名（关联复制共享楼体库网格，例如 tower02）；楼型网格或摆放改了要重新烘焙光照图（npm run lightmap）
 import bpy, os, re, json, math
 from mathutils import Vector
 
