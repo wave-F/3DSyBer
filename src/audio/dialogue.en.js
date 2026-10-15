@@ -138,7 +138,7 @@ export const ENGLISH = {
     line('可他根本没切手动。报告里为什么写他切了？', 'But he never switched to manual. Why does the report say he did?', 'Disbelief hardens into accusation; no screaming or melodrama.', 'controlled anger, incredulous'),
   ],
   dream4: [
-    line('停。这时候才有让行道。', 'Stop. That is when the yield lane appears.', 'Pinpoint the moment; firm but not shouted.', 'quiet, certain'),
+    line('这时候才添加了零号保障。', 'That is when Zero Priority was added.', 'Pinpoint the moment; firm but not shouted.', 'quiet, certain'),
   ],
   dream4b: [
     line('他想取消变道。系统没让。', 'He tried to cancel the lane change. The system refused.', 'Recognize that the apparent perpetrator was also being controlled.', 'quiet, grave'),

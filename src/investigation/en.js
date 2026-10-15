@@ -204,7 +204,7 @@ export const EN = {
       line('Terminal', 'Risk prediction and pre-written reports are city emergency procedure.'),
       line('Chen Mo', 'But he never switched to manual. Why does the report say he did?'),
     ],
-    dream4: [thought('Stop. That is when the yield lane appears.')],
+    dream4: [thought('That is when Zero Priority was added.')],
     dream4b: [thought('He tried to cancel the lane change. The system refused.')],
     target: [
       line('Chen Mo', 'Just because he could check the raw records?'),
