@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { digest, readJSON } from './lib/voice.mjs';
-import { dialogueLines, spokenText } from '../src/audio/dialogue.en.js';
+import { productionLines, spokenText } from '../src/audio/dialogue.en.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 loadEnvFile(join(root, '.env.local'));
@@ -14,7 +14,7 @@ const { values } = parseArgs({ options: { take: { type: 'string', default: 'inte
 if (!/^[a-zA-Z0-9_-]+$/.test(values.take)) throw new Error('Invalid take.');
 const source = join(root, 'Fmod/voice-work.local/en', values.take);
 const staged = await readJSON(join(source, 'staged.json'));
-const lines = dialogueLines().filter((l) => !values.id || values.id.includes(l.id));
+const lines = productionLines().filter((l) => !l.nonverbal && (!values.id || values.id.includes(l.id)));
 const clips = lines.map((l) => {
   const clip = staged.find((c) => c.id === l.id);
   if (!clip) throw new Error(`Missing staged ${l.id}`);
@@ -47,7 +47,11 @@ if (!transcript) {
   transcript = await response.json();
   await writeFile(responseFile, JSON.stringify(transcript, null, 2));
 }
-const normalize = (text) => spokenText(text).toLowerCase().replace(/\bnorthbank\b/g, 'north bank').replace(/\broot key\b/g, 'rootkey').replace(/\[[^\]]*\]|\([^)]*\)/g, '').replace(/-/g, ' ').replace(/[^a-z0-9 ]/g, '').trim().split(/\s+/).filter(Boolean);
+const digits = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+const normalize = (text) => spokenText(text).toLowerCase()
+  .replace(/\b0\.(\d+)\b/g, (_, fraction) => 'zero point ' + [...fraction].map((d) => digits[Number(d)]).join(' '))
+  .replace(/\bblack dream\b/g, 'blackdream').replace(/\bnorthbank\b/g, 'north bank').replace(/\broot key\b/g, 'rootkey')
+  .replace(/\[[^\]]*\]|\([^)]*\)/g, '').replace(/-/g, ' ').replace(/[^a-z0-9 ]/g, '').trim().split(/\s+/).filter(Boolean);
 function distance(a, b) {
   let row = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 0; i < a.length; i++) {

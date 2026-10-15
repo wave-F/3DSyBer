@@ -1,28 +1,53 @@
 {
-  "take": "internal-v1",
+  "take": "recast-20261015",
   "usage": "noncommercial-internal",
   "technicalChecks": {
-    "generatedLines": 65,
-    "fmodEventsWithPositiveDuration": 65,
+    "generatedLines": 59,
+    "spokenDialogueLines": 56,
+    "replayGuideLines": 2,
+    "nonverbalImpactCues": 1,
+    "totalSeconds": 183.364,
+    "fmodEventsWithPositiveDuration": 59,
+    "fmodEventDurationsMatchStagedWavs": true,
     "browser": "Chrome with real FMOD WASM and compiled VoiceEN.bank",
     "playbackCompletion": "passed",
     "cancellation": "passed",
     "pauseAndResume": "passed",
-    "existingFmodMetadata": "unchanged compared with pre-import backup",
-    "apiKeyInWebBuild": false
+    "dispatcherRadioPlayback": "passed",
+    "femaleAIPlayback": "passed",
+    "impactCryPlayback": "passed",
+    "remainingVoiceHandles": 0,
+    "nativeWarnings": [],
+    "nativeErrors": [],
+    "existingFmodMetadata": "40 voice GUIDs retained, 19 new events, 25 obsolete events removed from VoiceEN bank without deletion; 44 nonvoice events and 5 snapshots byte-identical to pre-import backup; device dialogue effect chain authored, followed by user-requested DIALOGUE parent fader boost from 0 to +3 dB",
+    "dialogueMixRevision": { "bus": "bus:/DIALOGUE", "previousFaderDB": 0, "faderDB": 3, "scope": "All voice roles, replay guides and impact cry; child gains, effects and source WAVs unchanged" },
+    "voiceUnitTests": { "passed": 35, "failed": 0 },
+    "existingAudioSuite": {
+      "passed": 31,
+      "failed": 3,
+      "unrelatedFailures": [
+        "Two viewmodel tests have a missing ./scannerMaterial.js mock dependency",
+        "Loading UI test calls the absent loading.showTitle function"
+      ],
+      "note": "Affected production modules and these tests were not modified in this recast."
+    },
+    "webBuild": "passed (existing large-chunk warning)",
+    "webArtifactFilesScannedForApiKey": 74,
+    "apiKeyInWebBuild": false,
+    "fmodBuild": "completed successfully; first-run FSBank file-cache diagnostics were printed, followed by successful build/export/sync; real browser run had no FMOD warnings or errors"
   },
   "contentChecks": {
     "method": "ElevenLabs Scribe v2 transcription, not synthesis alignment",
-    "checkedLines": 65,
-    "lexicallyMatchedAfterNormalizationAndRepair": 62,
+    "checkedLines": 58,
+    "lexicallyMatchedAfterNormalizationAndRepair": 57,
+    "normalization": "Case, punctuation, root key/Rootkey, Black Dream/Blackdream, and 0.38/zero point three eight are equivalent; proper-name differences are not hidden",
     "repaired": [
-      { "id": "opening_02", "problem": "Unintended repetition of I'm here", "action": "Retained sigh and first complete utterance, removed repeated tail, 30 ms fade, loudness remastered; original recordings preserved.", "durationSeconds": 1.6, "postRepairTranscription": "matched" }
+      { "id": "fatalImpact_01", "problem": "176 ms leading silence would delay the impact cry", "action": "Retain original API audio from 0.156 to 4.000 seconds; 5 ms fade-in, 30 ms fade-out, remaster. Original API audio, original staged WAV and edit metadata retained.", "durationSeconds": 3.844, "trigger": "finale T.hit = 2.3 seconds, 2D Dialogue voice; clears on replay, seek and finale completion" }
     ],
     "properNameTranscriptionAmbiguities": [
-      { "id": "after3_04", "name": "Cheng Xu", "recognition": "Chengshu's", "note": "ASR spelling variation; pronunciation still needs human listening." },
-      { "id": "keyFound_01", "name": "Cheng Xu", "recognition": "Cheng Shu", "note": "ASR spelling variation; pronunciation still needs human listening." },
-      { "id": "dream4b_01", "name": "Lu Shicheng", "recognition": "Lu Xuchong", "note": "ASR spelling variation; pronunciation still needs human listening." }
+      { "id": "clueDReason_01", "name": "Lu Shicheng", "synthesisPronunciation": "Loo Shih-chung", "recognition": "Lu Xizhong", "note": "ASR cannot certify pronunciation. Human listening remains required; no claim that this spelling discrepancy is harmless." }
     ],
-    "manualActingReview": "pending; automatic checks do not certify tone, character suitability or pronunciation"
+    "nonverbalImpactCry": "Not evaluated by lexical ASR; non-silent WAV and real FMOD playback verified, perceived pain/acting still requires listening",
+    "manualActingReview": "pending; automatic checks do not certify age, tone, emotional richness, character suitability or pronunciation"
   }
 }

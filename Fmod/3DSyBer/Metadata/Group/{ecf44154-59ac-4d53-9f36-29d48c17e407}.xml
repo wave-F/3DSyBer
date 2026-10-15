@@ -21,6 +21,9 @@
 		<relationship name="effects">
 			<destination>{4dc6f971-3e87-404b-b9d8-d008179e5e96}</destination>
 			<destination>{053f4ad4-bf20-48a3-a7f5-748a35e1ae15}</destination>
+			<destination>{910fcf80-704d-4a7d-b5d4-f04b4477bbcf}</destination>
+			<destination>{78f79029-4d79-44fe-beaa-03d1cc4c5a17}</destination>
+			<destination>{938b10bd-6fcb-4905-a010-3a87bf75ed05}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusPanner" id="{28033ef9-1920-4b7a-bafa-69a7fdb031a6}" />
@@ -32,11 +35,59 @@
 		<property name="filterTypeB">
 			<value>1</value>
 		</property>
+		<property name="filterTypeC">
+			<value>9</value>
+		</property>
 		<property name="frequencyA">
-			<value>100</value>
+			<value>140</value>
 		</property>
 		<property name="frequencyB">
-			<value>10000</value>
+			<value>8500</value>
+		</property>
+		<property name="frequencyC">
+			<value>1700</value>
+		</property>
+		<property name="qualityC">
+			<value>1.29999995</value>
+		</property>
+		<property name="gainC">
+			<value>2</value>
+		</property>
+	</object>
+	<object class="FlangerEffect" id="{910fcf80-704d-4a7d-b5d4-f04b4477bbcf}">
+		<property name="rate">
+			<value>0.129999995</value>
+		</property>
+		<property name="mix">
+			<value>24</value>
+		</property>
+	</object>
+	<object class="ChorusEffect" id="{78f79029-4d79-44fe-beaa-03d1cc4c5a17}">
+		<property name="rate">
+			<value>0.349999994</value>
+		</property>
+		<property name="depth">
+			<value>1.79999995</value>
+		</property>
+		<property name="mix">
+			<value>18</value>
+		</property>
+	</object>
+	<object class="CompressorEffect" id="{938b10bd-6fcb-4905-a010-3a87bf75ed05}">
+		<property name="threshold">
+			<value>-22</value>
+		</property>
+		<property name="ratio">
+			<value>3</value>
+		</property>
+		<property name="attackTime">
+			<value>8</value>
+		</property>
+		<property name="releaseTime">
+			<value>100</value>
+		</property>
+		<property name="gain">
+			<value>1</value>
 		</property>
 	</object>
 </objects>

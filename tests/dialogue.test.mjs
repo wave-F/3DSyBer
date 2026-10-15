@@ -2,14 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { dialogueLines, productionLines } from '../src/audio/dialogue.en.js';
+import { digest } from '../scripts/lib/voice.mjs';
 import { createDialoguePlayer } from '../src/audio/dialoguePlayer.js';
 import { VOICE_LINES } from '../src/audio/voiceEvents.js';
 import { createVoiceMap } from '../src/audio/voiceMap.js';
 import { LINES } from '../src/investigation/clues.js';
 import { RAW, bi, getLang, isPlayer, setLang } from '../src/i18n.js';
-
-const script = JSON.parse(readFileSync(new URL('./fixtures/voice-source.zh.json', import.meta.url), 'utf8'));
 
 const flush = () => Promise.resolve();
 
@@ -55,14 +54,14 @@ test('中英字幕切换和重复读取 Proxy 不会丢配音，改写句不套�
       }
       assert.equal(LINES.opening[1].text, lang === 'en' ? 'I’m here.' : '到了。');
       assert.equal(voiceOf(LINES.opening[1]), 'opening_02');
-      assert.equal(voiceOf(LINES.opening[0]), undefined); // 呼号已改为 B1016，不套 B1234 的录音
-      assert.equal(voiceOf(LINES.cardRead[0]), undefined);
-      assert.equal(voiceOf(LINES.keyFound[1]), 'keyFound_03');
-      assert.equal(voiceOf(LINES.rootRead[0]), undefined);
-      assert.equal(voiceOf(LINES.dream1[0]), undefined);
+      assert.equal(voiceOf(LINES.opening[0]), 'opening_01');
+      assert.equal(voiceOf(LINES.cardRead[0]), 'cardRead_01');
+      assert.equal(voiceOf(LINES.keyFound[1]), 'keyFound_02');
+      assert.equal(voiceOf(LINES.rootRead[0]), 'rootRead_01');
+      assert.equal(voiceOf(LINES.dream1[0]), 'dream1_01');
       assert.equal(voiceOf(LINES.rootRead.at(-1)), undefined);
-      assert.equal(voiceOf(LINES.target.at(-1)), undefined);
-      assert.ok(LINES.dreamGuide('00:01.4').every((l) => !voiceOf(l)));
+      assert.equal(voiceOf(LINES.target.at(-1)), 'target_02');
+      assert.deepEqual(LINES.dreamGuide('00:01.4').map(voiceOf), ['dreamGuide_01', 'dreamGuide_02']);
       assert.ok(isPlayer(LINES.opening[1].who));
       assert.equal(isPlayer(LINES.opening[0].who), false);
     }
@@ -84,9 +83,9 @@ test('启动时已保存英文语言也能正确绑定配音', () => {
     const voiceOf = createVoiceMap(LINES, VOICE_LINES);
     assert.equal(LINES.opening[1].text, 'I’m here.');
     assert.equal(voiceOf(LINES.opening[1]), 'opening_02');
-    assert.equal(voiceOf(LINES.cardRead[0]), undefined);
-    assert.equal(voiceOf(LINES.opening[0]), undefined);
-    assert.equal(voiceOf(LINES.dream1[0]), undefined);
+    assert.equal(voiceOf(LINES.cardRead[0]), 'cardRead_01');
+    assert.equal(voiceOf(LINES.opening[0]), 'opening_01');
+    assert.equal(voiceOf(LINES.dream1[0]), 'dream1_01');
   `], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
 });
@@ -188,36 +187,37 @@ test('仪器沉默只显示原字幕；声音失败时仍能完成剧情', async
   assert.equal(await done, true);
 });
 
-test('发布的 65 条映射完整、时长有效，来源明确标记内部非商用', async () => {
-  // 已发布录音独立于待补录的新英文稿：按 manifest 和录音时的中文快照核对。
+test('本轮 59 条配音全部与当前剧本、Bank 指纹和新演员一致，保留内部非商用标签', async () => {
   const manifest = JSON.parse(await readFile(new URL('../Fmod/voice-en-manifest.json', import.meta.url), 'utf8'));
-  assert.equal(Object.keys(VOICE_LINES).length, 65);
-  assert.equal(manifest.clips.length, 65);
+  assert.equal(Object.keys(VOICE_LINES).length, 59);
+  assert.equal(manifest.clips.length, 59);
+  const script = productionLines();
   assert.deepEqual(new Set(Object.keys(VOICE_LINES)), new Set(manifest.clips.map((l) => l.id)));
   for (const l of manifest.clips) {
     const clip = VOICE_LINES[l.id];
     assert.equal(clip.path, `event:/voice/en/${l.id}`);
     assert.equal(clip.text, l.text);
     assert.equal(clip.source, l.source);
-    assert.equal(clip.source, script[l.group][Number(l.id.match(/_(\d+)$/)[1]) - 1].text);
+    assert.equal(clip.source, script.find((x) => x.id === l.id).source);
     assert.equal(clip.speaker, l.speaker);
     assert.equal(clip.channel, l.channel);
     assert.equal(clip.duration, l.wavDuration);
     assert.ok(clip.duration > 0);
   }
   assert.equal(manifest.usage, 'noncommercial-internal');
-  assert.equal(manifest.clips.length, 65);
+  assert.equal(manifest.take, 'recast-20261015');
   assert.ok(manifest.clips.every((c) => c.accountTier === 'free' && c.usage === 'noncommercial'));
-  const opening = manifest.clips.find((c) => c.id === 'opening_02');
-  assert.ok(opening.edits.some((e) => e.type === 'trim-tail'));
-  assert.ok(opening.wavDuration < opening.duration);
-  assert.equal(VOICE_LINES.opening_02.duration, opening.wavDuration);
+  assert.ok(manifest.clips.every((c) => c.review === 'unreviewed-internal-draft'));
+  for (const clip of manifest.clips) assert.equal(clip.voiceId, manifest.cast.voices[clip.speaker].id);
+  assert.equal(manifest.bankSha256, digest(await readFile(new URL('../public/fmod/VoiceEN.bank', import.meta.url))));
+  assert.ok(VOICE_LINES.fatalImpact_01.nonverbal);
+  assert.equal(VOICE_LINES.rootRead_02, undefined);
 });
 
 test('只有中文原文和录音原文一致的台词才播配音，改写过的台词不错配声音', () => {
   const voiceOf = createVoiceMap(LINES, VOICE_LINES);
   const raw = LINES[RAW];
-  assert.equal(voiceOf(raw.opening[0]), undefined); // B1016 与已录的 B1234 不一致
+  assert.equal(voiceOf(raw.opening[0]), 'opening_01');
   assert.equal(voiceOf(raw.opening[1]), 'opening_02');
   // 每个对上的 ID，原文都必须与当前台词一致
   let matched = 0;
@@ -230,10 +230,17 @@ test('只有中文原文和录音原文一致的台词才播配音，改写过�
       assert.equal(VOICE_LINES[id].source, line.text);
     });
   }
-  assert.ok(matched > 0 && matched <= Object.keys(VOICE_LINES).length);
+  assert.equal(matched, dialogueLines().length);
   // 录音原文和当前台词不同时不播
   const changed = { g: [{ text: '改写后的台词' }] };
   assert.equal(createVoiceMap(changed, { g_01: { source: '原来的台词' } })(changed.g[0]), undefined);
+});
+
+test('动态回放引导需显式 ID 和原文模板均匹配，不能任意套录音', () => {
+  const voiceOf = createVoiceMap(LINES, VOICE_LINES);
+  for (const time of ['00:01.4', '00:09.6']) assert.deepEqual(LINES.dreamGuide(time).map(voiceOf), ['dreamGuide_01', 'dreamGuide_02']);
+  assert.equal(voiceOf({ text: '改写', voiceId: 'dreamGuide_01' }), undefined);
+  assert.equal(voiceOf({ text: '新句子', voiceId: 'missing', voiceSource: '倒回 {time}，再看一遍。' }), undefined);
 });
 
 test('台词挪到别的组：全局唯一时仍播原录音，同组优先，多处相同时不播', () => {

@@ -4,7 +4,7 @@
     var path = 'bus:/DIALOGUE/radio';
     var radio = studio.project.lookup(path);
     if (!radio) throw new Error('Missing dispatcher route: ' + path);
-    var ids = ['opening_01', 'opening_03', 'call2_01', 'call2_03', 'transferred_01', 'transferred_02', 'archived_01', 'archived_02'];
+    var ids = ['opening_01', 'opening_03', 'call2_01', 'transferred_01', 'transferred_02', 'archived_01', 'archived_02'];
     ids.forEach(function (id) {
         var event = studio.project.lookup('event:/voice/en/' + id);
         if (!event || event.mixerInput.output.getPath() !== path) throw new Error('Dispatcher routing must be checked before editing: ' + id);
@@ -40,5 +40,5 @@
     saturation.level = 0.05;
 
     studio.project.save();
-    console.log('Dispatcher broadcast ready: 400–3400 Hz, presence +2 dB, 4:1 compression, subtle saturation. Only DIALOGUE/radio changed; 8 dispatcher events covered.');
+    console.log('Dispatcher radio ready: 400–3400 Hz, presence +2 dB, 4:1 compression, subtle saturation. Only DIALOGUE/radio changed; ' + ids.length + ' dispatcher events covered.');
 })();

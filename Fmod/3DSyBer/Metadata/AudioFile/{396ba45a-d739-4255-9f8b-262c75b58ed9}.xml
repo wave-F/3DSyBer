@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{396ba45a-d739-4255-9f8b-262c75b58ed9}">
+		<property name="assetPath">
+			<value>voice/en/recast-20261015/archived_03.wav</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>48</value>
+		</property>
+		<property name="channelCount">
+			<value>1</value>
+		</property>
+		<property name="length">
+			<value>1.28</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{02ffe996-e91b-42e2-ab22-7298379b7a09}</destination>
+		</relationship>
+	</object>
+</objects>

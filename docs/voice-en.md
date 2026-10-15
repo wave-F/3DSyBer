@@ -2,39 +2,43 @@
 
 ## 当前状态
 
-**当前已生成并接入 65 条英文配音，使用 Eleven v4，合计约 3 分 40 秒。** 用户确认按内部非商用用途使用 Free 额度，素材来源与限制保存在 `Fmod/voice-en-manifest.json`。这是可直接运行的内部初版；已做全量内容转写检查，剪辑修复了一条短句重复，记录见 `Fmod/voice-en-review.json`。三处中文姓名存在 ASR 拼写歧义，表演与发音仍待人工试听。内部传播并不自动授予商用许可，后续用途变化时须重新核验授权。
+**2026-10-15 全量重录：59 条 Eleven v4 音频，take `recast-20261015`。** 包含当前 56 条有声对白、2 条回放引导、1 条结局撞击痛呼；终端 `...` 保持无声。用户确认按内部非商用用途使用 Free 额度，素材来源与限制保存在 `Fmod/voice-en-manifest.json`。表演、年龄听感及姓名发音仍须人工试听，不能把自动检查当作用户已听审。后续商用必须在付费计划下重新生成。
+
+总时长约 3 分 3 秒。35 项配音测试、生产构建及真实 Chrome/FMOD 播放检查通过。58 条语言对白中 57 条归一化转写一致，`clueDReason_01` 的 Lu Shicheng 被识别为 Lu Xizhong，须实听确认。原有 `test:audio` 另有 3 个不相关失败（扫描仪测试缺 mock、加载界面旧接口）；详情记录于 `Fmod/voice-en-review.json`。
+
+响度调整：`bus:/DIALOGUE` 推子从 0 dB 提至 **+3 dB**，统一覆盖男主、派单员、女 AI、引导和撞击痛呼。保留各子总线相对电平及效果链，不改源 WAV，不重新合成；游戏和试听页使用重建后的 Master Bank。
 
 离线生成后通过 FMOD Event 播放，不在游戏内请求云接口，不用浏览器朗读。原有中文字幕、报告和剧情内容不变；字幕持续时间与 FMOD 结束状态同步。暂停/切后台会暂停声音和句间间隔，跳过会停声并取消旧剧情续接。
 
 - Event：`event:/voice/en/<group>_<两位序号>`，例如 `event:/voice/en/opening_01`。
-- Bank：`public/fmod/VoiceEN.bank`（约 1.98 MB），包含全部 65 条。
-- 源 WAV：`Fmod/3DSyBer/Assets/voice/en/internal-v1/`。
+- Bank：`public/fmod/VoiceEN.bank`，本轮仅发布 59 条；旧事件保留在工程里，但不再打入 VoiceEN。
+- 源 WAV：`Fmod/3DSyBer/Assets/voice/en/recast-20261015/`。
 - 游戏映射：`src/audio/voiceEvents.js`；试听：`npm run dev` 后打开 `/audio.html`。
-- 配音：陈墨 Roger、派单员 Matilda、仪器 River；账号可用 ID 与选角理由见 `Fmod/voice-cast.en.json`。
+- 配音：陈墨 Bill（约 50 岁、风霜沙哑）、派单员 Sarah（约 30 岁、冷漠利落）、女 AI Alice（合成感、临床式冷静）；账号可用 ID 与选角理由见 `Fmod/voice-cast.en.json`。
 
-- `src/audio/dialogue.en.js`：新版 36 组、60 条英文对应稿，逐句表演指导、角色方向、读音与 11 条试听，包含两个假结局和新增线索独白。原录音稿为 21 组、71 条，其中 65 条已发布。
-- 新版稿尚未补录；`dialogueLines()` 检查当前中文原稿的分组、句数和 `source`，不混用旧稿快照。当前没有备用 `call` 或叙述性静默，也不会恢复它们的游戏触发。
+- `src/audio/dialogue.en.js`：35 个数组组、57 条字幕，其中 56 条有声、1 条终端静默；另有 3 条 `PERFORMANCE_CUES`。`productionLines()` 返回全部 59 条制作清单，角色与逐句语气标签实际写入 TTS 输入。
+- `dialogueLines()` 检查当前中文原稿的分组、句数和 `source`，不混用旧稿快照；沉默不发送 TTS。
 - 游戏运行只按已发布的 `VOICE_LINES.source` 查录音，不按新版制作稿的编号套旧音频。字幕改写后，逐字相同的句子继续用原录音，改过的句子不套旧声音。
 
-## 待补配音（台词已改、配音未跟上）
+## 覆盖与结局同步
 
-游戏运行不受影响：`voiceMap.js` 只在 `VOICE_LINES[id].source` 与当前中文原句完全一致时才播声音，其余只显示字幕，不会错配。下面三类在下次补录时一并处理（2026-10 统计，补录前用下方命令重新核对）。
+当前有声台词已全部重录，包含新增线索独白与两个假结局。`voiceMap.js` 仍要求中文原文一致，防止剧本以后改动时套错录音。
 
-- **没有配音**：线索独白 `clueFront` `clueRail` `clueDebris` `clueScrape` `clueSkidB` `clueTrim` `clueP2car` `clueP3override` `clueP4end` `clueDMode` `clueDReason` `clueDRaw` `clueDRawOpen` `clueRTime`（各 1 句），`ready1_01`、`ready2_01`。
-- **中文改过、旧录音不再播放**：`dream1_01-02`、`call2_03`、`cardRead_01`、`dream3_01`、`question3_04`、`after3_01-02`、`keyFound_01-02`、`rootRead_01/02/04`、`dream4_01`、`target_01-03`、`transferred_04-05`。
-- **孤立录音（台词已删或句数减少）**：`dream1_03`、`call2_04-07`、`cardRead_02`、`after3_03-05`、`keyFound_03`、`after4_01`。补录后从 FMOD 和 `voiceEvents.js` 清掉。
+- 回放引导使用显式 `voiceId` 与原文模板双校验。时间码仍显示在双语字幕中，录音说 “Rewind and look again”，不念错误的固定时间。
+- `event:/voice/en/fatalImpact_01` 与男主其他对白共用 Bill。`finale.js` 在 `T.hit = 2.3 s` 首次跨帧时触发；原有撞人音效保留。痛呼去掉前 156 ms 与尾部静默，保留冲击叫声和倒地闷哼，最终约 3.844 s。暂停走原有 Dialogue 机制，重播、seek 和结局结束会清理人声句柄。
+- 本次保留 40 个同名旧事件的 GUID，新增 19 个事件；25 个过期事件退出 Bank、不删除工程对象或旧 WAV。原始 API 响应与剪辑前 WAV 均保留。
 
-新版 `ENGLISH` 已与当前 `LINES` 同步：36 组、60 条，包含新增独白，已删掉 `call` 和 `after4`。`dialogueLines()` 仍要求两边分组的**名称和顺序**完全一致、句数一致、`source` 与中文原句一致，否则报错，阻止用旧稿生成。测试已拆开验证：新版稿检查当前中文台词及制作工具链；65 条旧录音按 `Fmod/voice-en-manifest.json` 和 `tests/fixtures/voice-source.zh.json` 验证来源、映射和时长，不再拿新稿与旧稿比较而整套失败。本次合并没有生成、发布或删除任何录音；上述待补清单是历史清单，补录前须按实际 `voiceMap` 结果重新核对（编号移动但原句未改的录音仍可复用）。
+`ENGLISH` 与当前 `LINES` 的组名、顺序、句数、原文必须一致，否则制作会停止。`tests/fixtures/voice-source.zh.json` 仅用于证明旧稿会被拒绝，不再作为当前发布素材的真值。
 
-核对命令（只读，不联网）：
+核对命令（只读，不联网；覆盖、指纹和静默均由测试验证）：
 
 ```sh
-node -e "Promise.all([import('./src/investigation/clues.js'),import('./src/audio/voiceEvents.js'),import('./src/i18n.js')]).then(([{LINES},{VOICE_LINES},{RAW}])=>{const n=[],s=[],u=new Set();for(const[g,l]of Object.entries(LINES[RAW])){if(!Array.isArray(l))continue;l.forEach((x,i)=>{const id=g+'_'+String(i+1).padStart(2,'0'),c=VOICE_LINES[id];if(!c)n.push(id);else{u.add(id);if(c.source!==x.text)s.push(id)}})}console.log('无配音',n.join(' '));console.log('已过期',s.join(' '));console.log('孤立',Object.keys(VOICE_LINES).filter(k=>!u.has(k)).join(' '))})"
+npm run test:voice
 ```
 
 ## 角色与术语
 
-中性美式英语。陈墨：成熟、稍沙哑、疲惫克制，怀疑逐渐变成压住恐惧的质问；内心与外部对白共用同一音色，内心更轻、更近。派单员：干练成熟女声，催工单而非威胁玩家。仪器：独立的中性服务声线，始终平静，不提前暴露反派意味。三者都录干声；无线电与设备质感留给 Studio。
+陈墨：约 50 岁、疲惫粗粝，怀疑逐渐转为愤怒、惊骇与急迫；内心和外部对白共用同一音色，内心更轻、更近。派单员：约 30 岁女声，冷淡、短促、不耐烦，不带温柔安慰。女 AI：精准、刻意合成、冷静且隐含居高临下的礼貌；仅参考《传送门 2》的人工质感，不克隆角色或演员。三者都录干声，效果留给 Studio。
 
 正式名称：Chen Mo / Cheng Xu / Lu Shicheng / Meridian / Chengyue / Rootkey / Blackdream / Zero Priority。`B1016` 按 B + 单个数字读。剧情里不再出现 P0，保障一律说 Zero Priority。中文姓名在合成输入中使用英语近似读音，正式英文稿不改拼写；这些读音必须实听验收。
 
@@ -56,10 +60,23 @@ ELEVENLABS_VOICE_DEVICE=选定的仪器音色ID
 ```sh
 npm run voice:plan                                      # 无联网、无扣费：英文稿与待生成试听页
 npm run voice:voices                                    # 有密钥后，只读列出账号音色
-npm run voice:audition -- --confirm-cost                 # 12 条代表台词，消耗 credits
+npm run voice:audition -- --confirm-cost                 # 11 条代表台词，消耗 credits
 npm run voice:generate -- --approved-cast --confirm-cost --max-characters 10000
 npm run test:voice
 ```
+
+本次用户已明确要求直接制作的内部草稿流程：
+
+```sh
+node scripts/voice.mjs generate --take recast-20261015 --non-commercial --direct-production --confirm-cost --max-characters 7000
+node scripts/voice.mjs stage --take recast-20261015 --non-commercial --allow-unreviewed --update-existing
+# 执行生成的 import-fmod.js，然后分别执行 Fmod/dispatcher-radio.js、Fmod/device-ai.js
+npm run audio:build
+node scripts/voice.mjs publish --take recast-20261015 --non-commercial
+npm run build
+```
+
+`--direct-production` 仅明确允许内部非商用草稿跳过试听步骤，不代表用户已批准演员或听过成品。本轮合成输入共 6,575 字符（含标签），有缓存重跑不重复生成。
 
 默认模型 `eleven_v4`，会先检查账号、额度、模型和全部角色音色是否可用，不自动换演员或降级模型。默认商用流程要求付费账号；只有显式 `--non-commercial` 才允许 Free，授权属性进入指纹和来源记录，不能把免费缓存改标商用。若确需对比 v3，显式用 `--model eleven_v3 --take v3`，不要把不同模型混进同一 take。v4 不发送不存在的 speed/style 控件；语气由逐句英文 audio tags 指导。模型并不能保证每次都按标签正确表演。
 
@@ -73,7 +90,7 @@ npm run test:voice
 
 ## 验收与 FMOD
 
-先确认 12 条试听中的三套音色与情绪，再全量制作。逐句检查：没有漏字/加字/读出标签，姓名读音一致，没有多余笑声/喘息/背景声，仪器没有情绪泄露，开场对白能放进镜头时长，整段问答衔接自然。所有生成文件初始标为 `unreviewed`，自动生成成功不代表表演合格。
+正常流程先确认 11 条试听中的三套音色与情绪，再全量制作。逐句检查漏字/加字、姓名读音、意外背景声、情绪和衔接。当前内部草稿保留 `unreviewed-internal-draft`，自动生成成功不代表表演合格。
 
 全部音频听过并通过后（商用默认流程）：
 
@@ -85,13 +102,17 @@ npm run voice:stage -- --approved-audio
 
 这一步**不联网、不启动 Studio、不改现有 Bank**：验证完整 take 和音频指纹，再做双遍 -18 LUFS / -2 dBTP 响度处理，输出 `Fmod/3DSyBer/Assets/voice/en/<take>/*.wav`（单声道，48 kHz / 24-bit），生成本地 `import-fmod.js`。API 原始素材为 44.1 kHz / 128 kbps MP3；转 WAV 不会补出原本不存在的音质，保留原始文件供后续高质量替换。
 
-导入脚本只新增 `event:/voice/en/<id>`、`VoiceEN` Bank 和 `DIALOGUE/{spoken,inner,radio,device}` 路由；若同名配音事件已存在会停止，不重建旧事件、不改现有增益、Snapshot 或环境声。执行前先保存 Studio 当前工作。`Fmod/voice-mix.js` 仅首次创作新路由：内心 -2 dB、仪器 -1 dB，仪器 HP12/100 Hz + LP12/10 kHz；新增 `vca:/Dialogue`。接线员的 8 条台词统一走 `bus:/DIALOGUE/radio`，已通过 `Fmod/dispatcher-radio.js` 增强广播效果：HP24/400 Hz + LP24/3.4 kHz，中频 1.9 kHz / Q1.1 / +2 dB；压缩阈值 -20 dB、4:1、attack 4 ms、release 90 ms、补偿 +2.5 dB；Distortion 0.05 轻饱和。没有持续底噪或混响，不改变总线推子、源 WAV 或其他角色。手工调音后不要重跑创作脚本，只执行 `audio:build`。不要用 `audio:events` / `audio:mix` 重建现有混音。
+默认导入脚本仍为只新增；同名事件已存在就停止。明确重配音时加 `--update-existing`，生成 `Fmod/recast-events.js` 的受限更新脚本：先检查全部时间线必须只有一个 SingleSound，保留 GUID、增益与效果，更新素材、长度和角色路由。复杂手工时间线会停止。执行前保存并备份 Studio 工程。
 
-新 take 导入并在 Studio 保存后，`npm run audio:build` 会编译并同步包括 VoiceEN 在内的 Bank。然后运行 `npm run voice:publish -- --take <take>`（非商用追加 `--non-commercial`），验证完整素材及指纹并生成映射和来源记录；最后 `npm run build`。更新已存在的配音事件需要在 Studio 手工替换对应素材，不重复新增。
+- 派单员 7 条走 `DIALOGUE/radio`，`Fmod/dispatcher-radio.js`：HP24/400 Hz + LP24/3.4 kHz，中频 1.9 kHz / Q1.1 / +2 dB；压缩 -20 dB、4:1、attack 4 ms、release 90 ms、补偿 +2.5 dB；Distortion 0.05。无持续底噪或混响。
+- 女 AI 2 条走 `DIALOGUE/device`，`Fmod/device-ai.js`：HP12/140 Hz + LP12/8.5 kHz、1.7 kHz +2 dB；Flanger 0.13 Hz / 2.2 ms / 24%，Chorus 0.35 Hz / 1.8 ms / 18%；压缩 -22 dB、3:1、8/100 ms、补偿 +1 dB。保留可懂度，不给男主加机器人效果。
+- 两个创作脚本仅改对应效果链，重复执行不叠加效果器、不改总线推子。手工调音后日常只执行 `audio:build`，不要重建环境混音。
 
-自动验证：`npm run test:voice`、`npm run test:audio`；真实浏览器 / WASM 冒烟测试：`node scripts/verify-voice-browser.mjs`（默认使用 macOS Chrome，可用 `CHROME_BIN` 指定路径）。该测试读取真实 Bank 的全部 65 个时长，并验证播放结束、取消、暂停与恢复；不会调用云接口或消耗额度。
+新 take 导入并在 Studio 保存后，`npm run audio:build` 编译并同步 Bank。再运行 `npm run voice:publish -- --take <take>`（非商用追加 `--non-commercial`），验证素材及指纹、生成映射和来源记录，最后 `npm run build`。本轮剪辑后素材以 `staged.json` 的实际 WAV 路径为准，不要拿剪辑前路径覆盖。
 
-内容转写检查：`node scripts/verify-voice-content.mjs --take internal-v1 --confirm-cost`，会消耗 ASR 额度；同一批音频有缓存时不重复请求。单句可用 `--id opening_02`。转写不是人工听审，也不能据 ASR 的姓名拼写认定发音一定有错。`scripts/voice-edit.mjs` 可有记录地裁剪意外重复的尾句，生成新 WAV 文件名，不覆盖原始音频；更新对应 Studio instrument 后再构建和发布。
+自动验证：`npm run test:voice`、`npm run test:audio`；真实浏览器 / WASM 冒烟测试：`node scripts/verify-voice-browser.mjs`（macOS Chrome，可用 `CHROME_BIN` 指定）。读取真实 Bank 的全部发布时长并与 WAV 比较，验证结束、取消、暂停/恢复，以及派单员、女 AI 和痛呼播放；不调用云接口。
+
+内容转写检查：`node scripts/verify-voice-content.mjs --take recast-20261015 --confirm-cost`，会消耗 ASR 额度；相同音频批次命中缓存不重复请求。检查 58 条语言对白，非语言痛呼另做技术检查。转写不是人工听审，姓名拼写差异不能证明发音正确或错误。`scripts/voice-edit.mjs` 支持原始 API 音频绝对时间 `--start` / `--end`，有记录地裁剪并生成新 WAV，不覆盖原始音频；随后更新对应 FMOD instrument，再构建发布。
 
 ## 官方资料
 

@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { LINES } from '../src/investigation/clues.js';
 import { RAW } from '../src/i18n.js';
-import { AUDITION_IDS, ENGLISH, VOICE_ROLES, dialogueLines, spokenText, synthesisText } from '../src/audio/dialogue.en.js';
+import { AUDITION_IDS, ENGLISH, VOICE_ROLES, PERFORMANCE_CUES, dialogueLines, productionLines, spokenText, synthesisText } from '../src/audio/dialogue.en.js';
 import { ElevenLabs, castFromEnv, validateCast, speechRequest, generateLine, digest, auditionHTML, fmimportScript } from '../scripts/lib/voice.mjs';
 
 const cast = { chen: 'test_chen_123456', dispatch: 'test_dispatch_123456', device: 'test_device_123456' };
@@ -24,14 +24,15 @@ async function fixture(t) {
   return directory;
 }
 
-test('新版英文稿覆盖当前 36 组、60 条台词，保留中文原文，不恢复已删除的句子', () => {
+test('新版英文稿覆盖当前 35 组、56 条有声台词，终端省略号保持沉默', () => {
   const before = JSON.stringify(LINES);
   const all = dialogueLines({ includeReserve: true, includeSilent: true });
   assert.equal(Object.keys(ENGLISH).length, 35);
   assert.equal(all.length, 57);
-  assert.equal(lines.length, 57);
+  assert.equal(lines.length, 56);
   assert.equal(new Set(all.map((l) => l.id)).size, 57);
-  assert.ok(all.every((l) => !l.reserve && !l.silent));
+  assert.ok(all.every((l) => !l.reserve));
+  assert.deepEqual(all.filter((l) => l.silent).map((l) => l.id), ['rootRead_02']);
   assert.ok(lines.some((l) => l.group === 'archived'));
   assert.ok(lines.some((l) => l.group === 'transferred'));
   assert.ok(lines.every((l) => l.text.length && l.direction.length && !/[\u3400-\u9fff]/u.test(l.text)));
@@ -41,6 +42,20 @@ test('新版英文稿覆盖当前 36 组、60 条台词，保留中文原文，�
     assert.equal(l.text, ENGLISH[l.group][l.index].text);
   }
   assert.equal(JSON.stringify(LINES), before);
+});
+
+test('全量制作包含两条动态引导与同一男主的非语言撞击痛呼，不合成终端静默', () => {
+  const production = productionLines();
+  assert.equal(production.length, 59);
+  assert.equal(new Set(production.map((l) => l.id)).size, 59);
+  assert.ok(!production.some((l) => l.silent || l.text === '...'));
+  const pain = PERFORMANCE_CUES.find((l) => l.id === 'fatalImpact_01');
+  assert.equal(pain.nonverbal, true);
+  assert.equal(pain.channel, 'spoken');
+  assert.equal(speechRequest(pain, { ...options, lines: production }).voiceId, cast.chen);
+  assert.match(synthesisText(pain), /screams in pain/);
+  assert.match(synthesisText(production.find((l) => l.speaker === 'dispatch')), /cold, detached/);
+  assert.match(synthesisText(production.find((l) => l.speaker === 'device')), /robotic/);
 });
 
 test('源台词变化时阻止旧英文配音静默继续制作', () => {
@@ -259,7 +274,54 @@ test('接线员广播只处理 radio 路由，保留推子，重复执行不堆�
   assert.equal(compressor.ratio, 4);
   assert.equal(compressor.attackTime, 4);
   assert.equal(effects.find((e) => e.isOfExactType('DistortionEffect')).level, 0.05);
-  assert.equal(lookups.filter((p) => p.startsWith('event:')).length, 16); // 每次覆盖 8 条派单员台词
+  assert.equal(lookups.filter((p) => p.startsWith('event:')).length, 14); // 每次覆盖 7 条派单员台词；call2_03 已改成男主独白
+});
+
+test('女 AI 合成链仅处理 device，总线推子不变，重复执行不堆叠', async () => {
+  const effects = [{ isOfExactType: (type) => type === 'MixerBusFader' }];
+  const route = { effectChain: { effects, addEffect(type) {
+    const effect = { isOfExactType: (name) => name === type }; effects.push(effect); return effect;
+  } }, set volume(_) { assert.fail('Do not overwrite device bus gain'); } };
+  let saves = 0;
+  const studio = { project: { lookup(path) {
+    if (path === 'bus:/DIALOGUE/device') return route;
+    assert.ok(['event:/voice/en/question2_02', 'event:/voice/en/question3_03'].includes(path));
+    return { mixerInput: { output: { getPath: () => 'bus:/DIALOGUE/device' } } };
+  }, save() { saves++; } } };
+  const script = await readFile(new URL('../Fmod/device-ai.js', import.meta.url), 'utf8');
+  for (let i = 0; i < 2; i++) runInNewContext(script, { studio, console: { log() {} } });
+  assert.equal(saves, 2);
+  assert.equal(effects.length, 5);
+  assert.equal(effects.find((e) => e.isOfExactType('FlangerEffect')).mix, 24);
+  assert.equal(effects.find((e) => e.isOfExactType('ChorusEffect')).mix, 18);
+});
+
+test('重配音更新保留事件 GUID 和手工增益，旧事件只退出 Bank，复杂时间线先拦截', async () => {
+  const script = await readFile(new URL('../Fmod/recast-events.js', import.meta.url), 'utf8');
+  const bank = { id: 'voice-bank' }, route = {}, file = { length: 4.2 };
+  let saves = 0, retired = 0;
+  const instrument = { isOfExactType: (type) => type === 'SingleSound', volume: -3 };
+  const current = { id: 'keep-guid', name: 'opening_01', timeline: { modules: [instrument] }, mixerInput: {}, banks: [{ id: bank.id }], getPath: () => 'event:/voice/en/opening_01' };
+  const old = { name: 'obsolete_01', banks: [{ id: bank.id }], getPath: () => 'event:/voice/en/obsolete_01', relationships: { banks: { remove(b) { assert.equal(b, bank); retired++; } } } };
+  const folder = { getItem: () => folder };
+  const studio = { project: { workspace: { masterEventFolder: folder },
+    lookup(path) { return path === 'bank:/VoiceEN' ? bank : path === 'bus:/DIALOGUE/radio' ? route : path === 'event:/voice/en/opening_01' ? current : null; },
+    importAudioFile: () => file, save() { saves++; },
+    model: { Event: { findInstances: () => [current, old, { getPath: () => 'event:/amb/rain' }] } },
+    create() { assert.fail('Existing event must not be rebuilt'); },
+  } };
+  const context = { studio, console: { log() {} }, voiceEntries: [{ id: 'opening_01', channel: 'radio', file: '/new.wav' }] };
+  runInNewContext(script, context);
+  assert.equal(current.id, 'keep-guid');
+  assert.equal(instrument.volume, -3);
+  assert.equal(instrument.audioFile, file);
+  assert.equal(instrument.length, 4.2);
+  assert.equal(current.mixerInput.output, route);
+  assert.equal(saves, 1);
+  assert.equal(retired, 1);
+  current.timeline.modules.push(instrument);
+  assert.throws(() => runInNewContext(script, context), /Inspect manually authored/);
+  assert.equal(saves, 1);
 });
 
 test('CLI 默认不收费；参数无效、未确认试听或未批准音频时停止', () => {

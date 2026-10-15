@@ -291,8 +291,8 @@ const LINES_ZH = {
   ],
   // 第一次黑梦：完整看完一遍后，倒回第一个异常时刻前说的话。time 为倒回的时刻文字，如 00:01.4
   dreamGuide: (time) => [
-    { text: '等等，前轮。' },
-    { text: `倒回 ${time}，再看一遍。` },
+    { text: '等等，前轮。', voiceId: 'dreamGuide_01' },
+    { text: `倒回 ${time}，再看一遍。`, voiceId: 'dreamGuide_02', voiceSource: '倒回 {time}，再看一遍。' },
   ],
   // 每条线索分析完的内心独白（state.js 的 CLUE_LINES 按线索 id 对应）
   // 第 1 轮现场：先接受「单车事故」的表象
