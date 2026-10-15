@@ -192,8 +192,6 @@ const CSS = `
 #inv-fin .t1 { font-size: 46px; font-weight: 300; letter-spacing: .6em; text-indent: .6em; color: #d8e2ea; }
 #inv-fin .t2 { font-size: 22px; font-weight: 300; letter-spacing: .6em; text-indent: .6em; color: #ffcf4a; opacity: 0; transition: opacity 1.6s ease 1.4s; }
 #inv-fin.on .t2 { opacity: 1; }
-#inv-fin .go { margin-top: 48px; font-size: 15px; letter-spacing: .42em; color: rgba(238,246,255,.72); opacity: 0; transition: opacity 1.2s ease 2.8s; }
-#inv-fin.on .go { opacity: 1; }
 #inv-ending { inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; opacity: 0; transition: opacity 1.2s; }
 #inv-ending.on { opacity: 1; }
 #inv-ending h1 { margin: 0 0 22px; font-size: 30px; font-weight: 400; letter-spacing: .18em; color: #d8e2ea; }
@@ -273,7 +271,7 @@ export function createUI() {
     <div class="row"><b>R</b><span></span></div>`);
   const cine = el('inv-cine');
   const black = el('inv-black');
-  const fin = el('inv-fin', '', '<div class="t1"></div><div class="t2"></div><div class="go"></div>');
+  const fin = el('inv-fin', '', '<div class="t1"></div><div class="t2"></div>');
   let finaleArmed = false;
   let onFinaleClick = null;
   fin.addEventListener('pointerdown', () => {
@@ -311,7 +309,6 @@ export function createUI() {
     rite.querySelector('.t2').textContent = tx('黑梦 · 现场重建', 'BLACK DREAM · REBUILD');
     fin.querySelector('.t1').textContent = tx('序章', 'PROLOGUE');
     fin.querySelector('.t2').textContent = tx('完', 'END');
-    fin.querySelector('.go').textContent = tx('点击任意位置', 'CLICK ANYWHERE');
     const rows = tip.querySelectorAll('.row span');
     tip.querySelector('.tag').textContent = tx('BLACKDREAM · 操作', 'BLACKDREAM · CONTROLS');
     tip.querySelector('h3').textContent = tx('在回放里找出异常', 'Find what does not fit');

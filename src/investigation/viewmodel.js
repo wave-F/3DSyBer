@@ -2,8 +2,11 @@ import * as THREE from 'three/webgpu';
 import { mrt, float } from 'three/tsl';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { sound } from '../audio/sound.js';
+import { applyScannerLook } from './scannerMaterial.js';
+import { createScannerScreen } from './scannerScreen.js';
 
-// 第一人称一体模型：扫描枪、手套和前臂
+// 第一人称右手：带骨骼的手套前臂 + 扫描枪（fps-arm.glb）
+// 插卡 / 拔卡的手不在这里：在车模下按 Blender 烘焙的动画播放（cardArm.js），插卡期间扫描枪收在画面外
 // 手和设备放在叠加场景（与平板同一个），单独渲染，不会插进场景物体
 
 const NO_MASK = mrt({ mask: float(0) });   // 加法发光物不遮挡背后的世界
@@ -17,24 +20,15 @@ const glowMat = (hex, k = 1) => {
 // 相机空间中的几个持握姿态（握把位置 + 朝向）
 const POSE = {
   // 待机：比扫描姿态更低，枪口朝下，不像一直端着
-  idle: { pos: new THREE.Vector3(0.21, -0.24, -0.42), rot: new THREE.Euler(-0.34, 0.12, -0.08) },
-  scan: { pos: new THREE.Vector3(0.12, -0.15, -0.45), rot: new THREE.Euler(0.035, 0.05, -0.03) },
+  // fps-arm.glb 是原始尺寸（比旧 Tripo 模型大），握点收近、往画面中间靠
+  idle: { pos: new THREE.Vector3(0.16, -0.19, -0.36), rot: new THREE.Euler(-0.2, 0.12, -0.08) },
+  scan: { pos: new THREE.Vector3(0.11, -0.13, -0.38), rot: new THREE.Euler(0.035, 0.05, -0.03) },
   // 分析沿用扫描的举起，手再往前伸一截
-  reach: { pos: new THREE.Vector3(0.12, -0.15, -0.55), rot: new THREE.Euler(0.035, 0.05, -0.03) },
+  reach: { pos: new THREE.Vector3(0.11, -0.13, -0.41), rot: new THREE.Euler(0.035, 0.05, -0.03) },
   hidden: { pos: new THREE.Vector3(0.24, -0.55, -0.3), rot: new THREE.Euler(-0.9, 0.2, 0.3) },
 };
 
-// 拿取证卡的手：姿态以卡头为原点（相机空间）。插卡时卡头推到卡槽位置
-const CARD_POSE = {
-  hidden: { pos: new THREE.Vector3(0.3, -0.5, -0.3), rot: new THREE.Euler(-0.9, 0.35, 0.4) },
-  ready: { pos: new THREE.Vector3(0.05, -0.06, -0.36), rot: new THREE.Euler(0, 0.25, 0) },
-};
-const CARD_INSERT_DEPTH = 0.03;   // 卡头越过卡槽口的深度
-const CARD_PULLBACK = 0.16;       // 推入前卡头停在卡槽外的距离
-const CARD_TINT = 0.5;
-const CARD_T = { lower: 0.3, raise: 0.45, push: 0.42, pull: 0.38, drop: 0.35 };
-
-const dbg = { on: false, pos: new THREE.Vector3(0, 0, -0.4), rot: new THREE.Euler(), card: CARD_POSE };
+const dbg = { on: false, pos: new THREE.Vector3(0, 0, -0.4), rot: new THREE.Euler() };
 if (import.meta.env.DEV) window.__vm = dbg;
 
 export function createViewmodel(overlayScene, camera, gait = { phase: 0, amplitude: 0 }) {
@@ -55,80 +49,7 @@ export function createViewmodel(overlayScene, camera, gait = { phase: 0, amplitu
 
   const device = buildDevice();
   holder.add(device.group);
-
-  // 拿取证卡的手（另一个模型）：扫描枪放下到画面外后换上，插卡、拔卡后再换回
-  const cardHolder = new THREE.Group();
-  cardHolder.visible = false;
-  rig.add(cardHolder);
-  new GLTFLoader().load(`${import.meta.env.BASE_URL}assets/card-arm.glb`, (gltf) => {
-    const model = gltf.scene;
-    // 卡头朝 -Z；模型平移到卡头位于原点（卡头在模型中约为 (0.072, 0.526, 0.490)）
-    const S = 0.45;
-    model.rotation.y = Math.PI;
-    model.scale.setScalar(S);
-    model.position.set(0.072, -0.526, 0.490).multiplyScalar(S);
-    // 贴图比扫描枪手套亮，压暗到同一档
-    model.traverse((o) => { if (o.isMesh) o.material.color.multiplyScalar(CARD_TINT); });
-    cardHolder.add(model);
-  }, undefined, (error) => console.error('Failed to load card arm:', error));
-  // phase：null | lower | raise | push | hold | pull | drop
-  const card = { phase: null, t: 0, target: new THREE.Vector3(), cb: null, hide: false };
-  const cpA = new THREE.Vector3(), cpB = new THREE.Vector3(), cqA = new THREE.Quaternion(), cqB = new THREE.Quaternion();
-  const insertPos = new THREE.Vector3();
-  const insertRot = new THREE.Euler();
-
-  // target：卡槽口在相机空间的位置；dir：插入方向（相机空间，指向车身内）；up：相机空间的竖直方向
-  // 插到底时回调 onInserted。准备姿态停在卡槽外，沿插入方向推进
-  const _lm = new THREE.Matrix4();
-  function insertCard(target, dir, up, onInserted) {
-    card.target.copy(target);
-    insertPos.copy(target).addScaledVector(dir, CARD_INSERT_DEPTH);
-    insertRot.setFromRotationMatrix(_lm.lookAt(new THREE.Vector3(), dir, up));
-    CARD_POSE.ready.pos.copy(target).addScaledVector(dir, -CARD_PULLBACK);
-    CARD_POSE.ready.rot.copy(insertRot);
-    card.phase = 'lower'; card.t = 0; card.cb = onInserted;
-  }
-  // 倒放：拔出、放下到画面外，再换回扫描枪
-  function removeCard(onDone) {
-    card.phase = 'pull'; card.t = 0; card.cb = onDone;
-  }
-  function poseCard(a, b, u) {
-    const e = THREE.MathUtils.smootherstep(u, 0, 1);
-    cpA.lerpVectors(a.pos, b.pos, e);
-    cqA.setFromEuler(a.rot).slerp(cqB.setFromEuler(b.rot), e);
-    cardHolder.position.copy(cpA);
-    cardHolder.quaternion.copy(cqA);
-  }
-  function updateCard(dt) {
-    if (!card.phase) { cardHolder.visible = false; return; }
-    card.t += dt;
-    const P = card.phase;
-    const ins = { pos: insertPos, rot: insertRot };
-    const next = (n) => { card.phase = n; card.t = 0; };
-    const fire = () => { const f = card.cb; card.cb = null; f?.(); };
-    if (P === 'lower') {
-      // 扫描枪先收到画面外（st.hide 走满）
-      cardHolder.visible = false;
-      if (st.hide >= 1 && card.t >= CARD_T.lower) next('raise');
-    } else if (P === 'raise') {
-      cardHolder.visible = true;
-      poseCard(CARD_POSE.hidden, CARD_POSE.ready, card.t / CARD_T.raise);
-      if (card.t >= CARD_T.raise) next('push');
-    } else if (P === 'push') {
-      poseCard(CARD_POSE.ready, ins, card.t / CARD_T.push);
-      if (card.t >= CARD_T.push) { next('hold'); fire(); }
-    } else if (P === 'hold') {
-      poseCard(ins, ins, 1);
-    } else if (P === 'pull') {
-      poseCard(ins, CARD_POSE.ready, card.t / CARD_T.pull);
-      if (card.t >= CARD_T.pull) next('drop');
-    } else if (P === 'drop') {
-      poseCard(CARD_POSE.ready, CARD_POSE.hidden, card.t / CARD_T.drop);
-      if (card.t >= CARD_T.drop) { card.phase = null; cardHolder.visible = false; fire(); }
-    }
-    // 平板举起时手被挡在后面，直接隐藏，避免前臂压在平板边框上
-    if (card.hide) cardHolder.visible = false;
-  }
+  if (import.meta.env.DEV) Object.assign(dbg, { rig, holder });
 
   const st = {
     hide: 1,                 // 0 显示，1 收起
@@ -167,8 +88,7 @@ export function createViewmodel(overlayScene, camera, gait = { phase: 0, amplitu
   }
 
   function update(dt, visible) {
-    // 插卡期间扫描枪收在画面外。衣物声只在拿出、收起、举枪、放下时响一次。
-    visible = visible && !card.phase;
+    // 衣物声只在拿出、收起、举枪、放下时响一次。
     const aiming = !!st.target;
     if (dt > 0 && (visible !== st.shown || (visible && aiming !== st.aiming))) sound.cloth();
     st.shown = visible;
@@ -176,7 +96,7 @@ export function createViewmodel(overlayScene, camera, gait = { phase: 0, amplitu
     // 收起/显示
     st.hide = THREE.MathUtils.clamp(st.hide + (visible ? -dt * 3 : dt * 5), 0, 1);
     holder.visible = st.hide < 1;
-    rig.visible = holder.visible || !!card.phase;
+    rig.visible = holder.visible;
     camera.updateMatrixWorld();
     rig.position.copy(camera.position);
     rig.quaternion.copy(camera.quaternion);
@@ -249,15 +169,14 @@ export function createViewmodel(overlayScene, camera, gait = { phase: 0, amplitu
     if (dbg.on) { holder.position.copy(dbg.pos); holder.quaternion.setFromEuler(dbg.rot); }
 
     device.flash = Math.max(0, device.flash - dt * 4);
-    device.update(dt, visible && !!st.target, st.progress);
-    updateCard(dt);
+    device.update(dt, visible && !!st.target, st.progress, {
+      visible: holder.visible, scanT: st.scanT, raise: RAISE, target: st.target, camPos: camera.position,
+    });
   }
 
   return {
-    update, scan, analyze, emitterWorld, insertCard, removeCard,
-    setCardHidden(on) { card.hide = on; },
+    update, scan, analyze, emitterWorld,
     get scanning() { return st.scanT >= 0; },
-    get cardPhase() { return card.phase; },
   };
 }
 
@@ -276,20 +195,51 @@ function buildDevice() {
   spill.position.z = 0.025;
   emitter.add(glow, ring, spill);
   g.add(emitter);
+  // 背面小屏幕：模型加载完再显示
+  const screen = createScannerScreen();
+  screen.group.visible = false;
+  g.add(screen.group);
   let ready = false;
-  new GLTFLoader().load(`${import.meta.env.BASE_URL}assets/scanner-arm.glb?v=3`, (gltf) => {
+  let mixer = null;
+  // 带骨骼的右手 + 扫描枪（tools/blender/export_fps_arm.py 从 art/fps_arm_rig.blend 导出）
+  // 单位米，原始尺寸。glTF 里手的前方是 +Z，绕 Y 转 180° 变成 -Z
+  // Grip / Emitter 是挂在 prop 骨上的定位点：Grip 对齐到握把原点，Emitter 放发光圈
+  new GLTFLoader().load(`${import.meta.env.BASE_URL}assets/fps-arm.glb?v=1`, (gltf) => {
     const model = gltf.scene;
-    // Align this asset's diagonal barrel with -Z, pivoting about its grip.
-    model.rotation.set(-0.19, -2.61, 0);
-    model.scale.setScalar(0.45);
-    model.position.set(0, 0.32, 0.27).multiplyScalar(-0.45).applyQuaternion(model.quaternion);
+    model.rotation.y = Math.PI;
+    let scannerMesh = null;
+    model.traverse((o) => {
+      if (o.isSkinnedMesh) o.frustumCulled = false;
+      if (o.isMesh && o.material?.name === 'Scanner_Mat') scannerMesh = o;
+    });
+    mixer = new THREE.AnimationMixer(model);
+    const grip = THREE.AnimationClip.findByName(gltf.animations, 'Grip_Scanner');
+    if (grip) {
+      const act = mixer.clipAction(grip);
+      act.setLoop(THREE.LoopOnce, 1);
+      act.clampWhenFinished = true;
+      act.play();
+    }
+    mixer.update(0);
     g.add(model);
-    emitter.position.set(-0.10, 0.59, 0.47).multiplyScalar(0.45).applyQuaternion(model.quaternion).add(model.position);
+    g.updateMatrixWorld(true);
+    const p = g.worldToLocal(model.getObjectByName('Grip').getWorldPosition(new THREE.Vector3()));
+    model.position.sub(p);
+    g.updateMatrixWorld(true);
+    g.worldToLocal(model.getObjectByName('Emitter').getWorldPosition(emitter.position));
+    // 扫描枪换成 金属机头 + 橡胶握把 + 霓虹反射 的材质（scannerMaterial.js）。握把按对齐后的高度区分
+    if (scannerMesh) {
+      const mat = applyScannerLook(scannerMesh, g);
+      if (import.meta.env.DEV) dbg.scannerMat = mat;
+    }
     ready = true;
-  }, undefined, (error) => console.error('Failed to load scanner arm:', error));
+    screen.group.visible = true;
+  }, undefined, (error) => console.error('Failed to load fps arm:', error));
   const dev = {
     group: g, emitter, flash: 0, power: 0,
-    update(dt, analyzing, progress) {
+    update(dt, analyzing, progress, info) {
+      if (mixer) mixer.update(dt);
+      if (ready && info) screen.update(dt, { ...info, analyzing, progress, flash: dev.flash });
       const target = analyzing ? (progress >= 1 ? 0.28 : 0.7) : 0;
       dev.power = THREE.MathUtils.damp(dev.power, target, analyzing ? 12 : 22, dt);
       const power = ready ? Math.min(1, dev.power + dev.flash) : 0;

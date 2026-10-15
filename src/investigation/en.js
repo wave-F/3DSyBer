@@ -11,23 +11,23 @@ export const EN = {
     skidB: { name: 'Second tire mark', lines: ['Tread 265 mm, not the crashed car’s 245 mm', 'The mark reaches the wreck, then fades north', 'No braking stop'], result: 'A second car scraped past and drove north' },
     trim: { name: 'Torn trim', lines: ['Torn off, not thrown by braking', 'Paint NC-Y08, same as the door flakes', 'It landed on the northbound path'], result: 'The second car kept going north' },
     dMode: { name: 'Takeover log', lines: ['Drive mode: automatic. No mods, no manual handover', 'Driver input: hold the lane', 'Overridden by URSA road coordination', '23:17:08.460 forced steer, before contact'], result: 'He did not turn. The system ordered it' },
-    dReason: { name: 'Zero Priority', lines: ['Reason: conflict avoidance, protect the yellow car', 'Yellow car cover: P0 (Zero Priority)', 'User: Lu Shicheng (Chengyue Group)', 'Protocol: that life comes first, always'], result: 'To shield Chengyue’s car, the system shoved this one out' },
+    dReason: { name: 'Zero Priority', lines: ['Reason: conflict avoidance, protect the yellow car', 'Yellow car cover: Zero Priority', 'User: Lu Shicheng (Chengyue Group)', 'Protocol: that life comes first, always'], result: 'To shield Chengyue’s car, the system shoved this one out' },
     dRaw: {
       name: 'Port log',
       lines: ['23:14:52 Cheng Xu’s root key (ROOTKEY) logged in here', 'Holder: Cheng Xu · Meridian City Systems · Raw Data Audit Engineer', 'This car kept a copy of the yellow car’s raw record', 'Raw fields: access denied'],
       result: 'Raw fields unreadable. Needs the root key',
       raw: {
         name: 'Yellow car raw record',
-        lines: ['P0 (temporary) granted by URSA. The user never asked', '23:17:07.940 the yellow car entered URSA takeover', 'Driver asked to cancel the lane change. Denied'],
+        lines: ['Zero Priority (temporary) granted by URSA. The user never asked', '23:17:07.940 the yellow car entered URSA takeover', 'Driver asked to cancel the lane change. Denied'],
         result: 'Zero Priority and the cut-in were both arranged by the system',
         src: 'Raw field · root key',
       },
     },
     rTime: {
       name: 'Timeline overlay', src: 'Raw field · root key',
-      lines: ['Initial report signed: 23:17:08.080', 'Temporary P0 on the yellow car: 23:17:08.220', 'Forced steer: 23:17:08.460', 'Rail impact: 23:17:09.660'],
+      lines: ['Initial report signed: 23:17:08.080', 'Temporary Zero Priority on the yellow car: 23:17:08.220', 'Forced steer: 23:17:08.460', 'Rail impact: 23:17:09.660'],
       result: 'The preliminary was written before the steer happened',
-      timeline: [{ label: 'Report signed', tone: 'red' }, { label: 'Temp P0' }, { label: 'Forced steer' }, { label: 'Impact' }],
+      timeline: [{ label: 'Report signed', tone: 'red' }, { label: 'Zero Priority' }, { label: 'Forced steer' }, { label: 'Impact' }],
     },
   },
   probes: {
@@ -35,8 +35,8 @@ export const EN = {
     p2gap: { name: 'Crashed car front wheel', lines: ['0.3 s before contact, the crashed car is already yawing', 'The cars are still about 1 m apart', 'Yaw points away from the yellow car'], result: 'It turned first, then they touched' },
     p2car: { name: 'Yellow car', lines: ['Shape rebuilt from 265 mm tread and NC-Y08 paint', 'Contact swapped a crash packet: summary only, raw fields locked', 'It does not slow down. It leaves north'], result: 'A second car was in it, then left' },
     p3override: { name: 'Crashed car taken over', lines: ['When the yaw starts, driver input is still “hold lane”', 'Steer source: URSA road coordination', 'The yaw clears the yellow car’s line'], result: 'The system took the crashed car’s wheel' },
-    p3halo: { name: 'Zero Priority lane', lines: ['A P0 yield lane runs ahead of the yellow car', 'Anything inside it yields', 'Inside this replay, the lane is always there'], result: 'The yellow car is under Zero Priority' },
-    p4halo: { name: 'Lane appears', lines: ['Before 0.8 s there is no yield lane ahead of the yellow car', 'It is laid down as the cars close', 'Source URSA. Trigger request: none'], result: 'P0 was not already on the yellow car' },
+    p3halo: { name: 'Zero Priority lane', lines: ['A Zero Priority yield lane runs ahead of the yellow car', 'Anything inside it yields', 'Inside this replay, the lane is always there'], result: 'The yellow car is under Zero Priority' },
+    p4halo: { name: 'Lane appears', lines: ['Before 0.8 s there is no yield lane ahead of the yellow car', 'It is laid down as the cars close', 'Source URSA. Trigger request: none'], result: 'Zero Priority was not already on the yellow car' },
     p4cut: { name: 'Yellow car cuts in', lines: ['Lane-change source: URSA road coordination', 'The driver asks to cancel. Denied', 'The cut-in and the crashed car’s yaw are written together'], result: 'The yellow car was driven in' },
     p4end: { name: 'Where the crashed car goes', lines: ['The report is written first, then the privilege, then the steer', 'Each step has a rule that excuses it', 'On one timeline there is only one outcome'], result: 'The crashed car had to hit the rail' },
   },
@@ -78,7 +78,7 @@ export const EN = {
         suspended: 'Handover held · raw fields denied　TAB close',
       },
       revised: {
-        add: 'When the yellow car’s P0 was written cannot be checked: raw fields denied.',
+        add: 'When the yellow car’s Zero Priority was written cannot be checked: raw fields denied.',
         verdict: 'Handover held: cover source unverified',
         note: 'The yellow car’s raw record needs a higher key.',
       },
@@ -127,7 +127,7 @@ export const EN = {
   target: {
     title: 'Object index on the temporary grant',
     steps: [
-      { text: 'Grant P0-T-0417 · subject: yellow car' },
+      { text: 'Zero Priority grant T-0417 · subject: yellow car' },
       { text: 'Linked object: Cheng Xu' },
       { text: 'Class: can check raw records against the official report alone' },
       { text: 'Disposition: revoke' },
@@ -190,7 +190,7 @@ export const EN = {
     question3: [
       line('Chen Mo', 'The raw records are still locked. How do you know that lane was there from the start?'),
       line('Terminal', 'The reconstruction is based on the available summary.'),
-      line('Chen Mo', 'I want to see when P0 took effect.'),
+      line('Chen Mo', 'I want to see when Zero Priority took effect.'),
       line('Terminal', 'Current permissions are insufficient.', 2400),
     ],
     revised3: [],

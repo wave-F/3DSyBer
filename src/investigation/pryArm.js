@@ -1,8 +1,10 @@
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-// 第 3 轮撬门：手握撬棍 + 撬门镜头
-// 在 Blender 里制作：tools/blender/build_pry_anim.py 搭镜头和动画，export_pry_anim.py 导出 pry-arm.glb
+// 第 3 轮撬门：骨骼右手握撬棍 + 撬门镜头
+// 在 Blender 里制作（后台跑，工程 art/pry_arm_anim.blend）：
+//   tools/blender/build_pry_arm_anim.py 搭镜头、撬棍、握持和动画，export_pry_arm.py 导出 pry-arm.glb
+//   （旧版 Tripo 手+撬棍：build_pry_anim.py / export_pry_anim.py）
 // GLB 和 supercar_door.glb 是同一套坐标，直接挂在车模根节点下就能对齐门缝；放在主场景，会被车门正常遮挡
 // 动画时间轴：0 开始举起撬棍 → PRY_INSERT 秒插稳 → 之后和 PRY_KEYS 的撬门时间 t 一一对应（动画时间 = PRY_INSERT + t）
 export const PRY_INSERT = 0.35 + 0.18 + 0.2;   // 与 build_pry_anim.py 的 T0 一致
@@ -20,10 +22,13 @@ export function createPryArm(carRoot) {
     camNode = gltf.scene.getObjectByName('PryCamRest');
     gltf.scene.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
     mixer = new THREE.AnimationMixer(gltf.scene);
-    const action = mixer.clipAction(gltf.animations[0]);
-    action.setLoop(THREE.LoopOnce, 1);
-    action.clampWhenFinished = true;
-    action.play();
+    // 撬棍（Pry_Lever）和手的骨骼各一条动画，时间轴相同，一起播放、一起按时间定位
+    for (const clip of gltf.animations) {
+      const action = mixer.clipAction(clip);
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
+      action.play();
+    }
     mixer.setTime(FRAME0);
     ready = true;
   }, undefined, (error) => console.error('Failed to load pry arm:', error));

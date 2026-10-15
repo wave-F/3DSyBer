@@ -20,7 +20,6 @@ export const VOICE_ROLES = {
 // 读音在送入 TTS 前替换，不改变显示稿或剧情中的正式写法。
 export const PRONUNCIATIONS = [
   ['B1016', 'B one zero one six'],
-  ['P0', 'P zero'],
   ['Cheng Xu', 'Chung Shyu'],
   ['Lu Shicheng', 'Loo Shih-chung'],
 ];
@@ -121,7 +120,7 @@ export const ENGLISH = {
   question3: [
     line('原始记录还锁着，你怎么知道这条道从一开始就有？', 'The raw records are still locked. How do you know that lane was there from the start?', 'Question the evidence behind the reconstruction, not a theory he already knows.', 'questioning, controlled'),
     line('回放依据现有摘要生成。', 'The reconstruction is based on the available summary.', 'A smooth procedural answer. Do not emphasize the evasion.', 'measured, neutral'),
-    line('我要看 P0 的生效时间。', 'I want to see when P0 took effect.', 'Ask for the underlying record without raising his voice.', 'firm, clipped'),
+    line('我要看零号保障的生效时间。', 'I want to see when Zero Priority took effect.', 'Ask for the underlying record without raising his voice.', 'firm, clipped'),
     line('当前权限不足。', 'Current permissions are insufficient.', 'A routine permissions notice, neither apologetic nor threatening.', 'measured, neutral'),
   ],
   revised3: [],

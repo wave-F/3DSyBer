@@ -19,7 +19,7 @@ const FADE_MS = 3600;        // 黑场淡出（与 index.html 的 .fading 一致
 // 文件名 → 状态文字
 const LABELS = [
   [/supercar/, '事故车辆', 'VEHICLE'], [/police/, '警车', 'POLICE CAR'], [/bldg|building/, '城市建筑', 'BUILDINGS'], [/mannequin/, '人物', 'FIGURE'],
-  [/\.hdr/, '环境光照', 'LIGHTING'], [/scanner|card-arm/, '调查设备', 'TOOLS'], [/draco/, '模型解码器', 'DECODER'], [/\.(jpe?g|png|webp)/, '材质贴图', 'TEXTURES'],
+  [/\.hdr/, '环境光照', 'LIGHTING'], [/scanner|fps-arm|card-insert|pry-arm/, '调查设备', 'TOOLS'], [/draco/, '模型解码器', 'DECODER'], [/\.(jpe?g|png|webp)/, '材质贴图', 'TEXTURES'],
 ];
 const COPY = {
   zh: { init: '正在载入程序', load: '正在加载', prep: '正在准备画面', ready: '准备就绪', fallback: '场景资源' },
