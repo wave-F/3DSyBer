@@ -150,7 +150,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   let started = false;
   let intro = false;   // 开场下车镜头播放中（src/intro.js 控制）
   let holdR = false, dreamHold = 0;   // 按住 R 构建黑梦的进度（0~1）
-  let firstDream = true;              // 第一次进入黑梦有完整过场
+  let firstDream = true;              // 第 1 轮黑梦还没走过引导。跳到后面的黑梦不消耗它，也不播引导
   // 进入黑梦的过场：on 期间锁定视角与操作，镜头从 (yaw0, pitch0) 转到 A 车起点
   // phase：turn | wait | watch | end | talk | scrub（后五个只在第一次黑梦的引导里出现）
   const enter = { on: false, phase: null, guide: false, t: 0, yaw0: 0, pitch0: 0, dYaw: 0, pitch1: 0, back1: 0 };
@@ -368,10 +368,11 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
 
   // 切到黑梦，镜头缓慢转向 A 车起点
   // 之后的黑梦：回放立即开始播放，转完交还操作
-  // 第一次黑梦（引导）：转向 → 稍等 → 播放，镜头全程跟车 → 播完陈墨说有问题 → 玩家滚滚轮倒回第一个异常时刻 → 暂停、弹出操作说明、交还操作
+  // 第 1 轮黑梦（引导）：转向 → 稍等 → 播放，镜头全程跟车 → 播完陈墨说有问题 → 玩家滚滚轮倒回第一个异常时刻 → 暂停、弹出操作说明、交还操作
+  // 测试跳到第 2 轮及以后再进黑梦：和正常后续黑梦一样，回放立刻播放，转完交还操作
   function enterDream() {
     setMode('recon');
-    const first = firstDream;
+    const first = firstDream && round === 1;
     rt = 0; playing = !first;
     recon.setTime(0);
     recon.startPos(_look).sub(camera.position).normalize();
@@ -392,7 +393,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       ui.setRite(0, 0, `RECONSTRUCTION ${String(round).padStart(2, '0')}`);
       fx.pulse(camera.position);
     }
-    firstDream = false;
+    if (first) firstDream = false;
   }
 
   function endEnter() {
