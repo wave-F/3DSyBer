@@ -101,6 +101,9 @@
       @keyframes ld-wave { 0% { transform: scale(.75); opacity: .8; } 100% { transform: scale(2.3); opacity: 0; } }
       .ld-phones .zh { font-size: clamp(18px, 1.45vw, 26px); font-weight: 500; letter-spacing: .32em; color: #f4f9ff; text-shadow: 0 2px 12px rgba(0,0,0,.8); }
       .ld-phones .en2 { margin-top: -8px; font: 400 clamp(10px, .78vw, 13px) "SF Mono", Menlo, monospace; letter-spacing: .3em; color: rgba(191,228,255,.7); }
+      /* 全屏提示：耳机提示下面一行小字 */
+      .ld-phones .ld-note { margin-top: 2px; max-width: 84vw; text-align: center; font-size: clamp(12px, .95vw, 16px); letter-spacing: .16em; line-height: 1.6; color: rgba(225,240,255,.8); text-shadow: 0 2px 10px rgba(0,0,0,.85); }
+      .ld-phones .ld-note.en { font: 400 clamp(10px, .78vw, 13px) "SF Mono", Menlo, monospace; letter-spacing: .2em; }
 
       /* 进度条 */
       .ld-bar { position: absolute; left: 8vw; right: 8vw; bottom: 7.5vh; transition: opacity .6s; animation: ld-fade 1s ease-out 1.2s both; }
@@ -136,6 +139,7 @@
       .ld-title .en-title { display: none; margin: 0; font-size: clamp(40px, 5.2vw, 92px); font-weight: 600; letter-spacing: .12em; line-height: 1.05; color: #f4f9ff; text-shadow: 0 0 28px rgba(160,210,255,.25); animation: ld-title 2.2s cubic-bezier(.2,.7,.2,1) .4s both, ld-glitch 9s steps(1) 3s infinite; }
       #loading[data-lang="en"] .ld-title h1,
       #loading[data-lang="en"] .ld-phones .zh,
+      #loading[data-lang="zh"] .ld-phones .ld-note.en,
       #loading[data-lang="en"] .ld-start .zh,
       #loading[data-lang="en"] .ld-title .en { display: none; }
       #loading[data-lang="en"] .ld-title .en-title { display: block; }
@@ -167,6 +171,8 @@
         </div>
         <div class="zh">佩戴耳机，获得最佳游戏体验</div>
         <div class="en2">HEADPHONES RECOMMENDED</div>
+        <div class="ld-note zh">请先点击屏幕触发全屏界面，分辨率调整会导致游戏重新渲染，请耐心等待</div>
+        <div class="ld-note en">CLICK THE SCREEN FIRST TO GO FULLSCREEN · CHANGING RESOLUTION RE-RENDERS THE GAME, PLEASE WAIT</div>
       </div>
       <div class="ld-bar">
         <div class="row"><span class="st">正在载入程序</span><span class="pc">0%</span></div>
