@@ -466,7 +466,7 @@ export const VOICE_LINES = {
   },
   "fatalImpact_01": {
     "path": "event:/voice/en/fatalImpact_01",
-    "duration": 3.844,
+    "duration": 1.824,
     "source": "[撞击痛呼]",
     "text": "Aah! Ugh...",
     "speaker": "chen",

@@ -5,12 +5,58 @@ import { spawnSync } from 'node:child_process';
 import { dialogueLines, productionLines } from '../src/audio/dialogue.en.js';
 import { digest } from '../scripts/lib/voice.mjs';
 import { createDialoguePlayer } from '../src/audio/dialoguePlayer.js';
+import { createImpactVoice } from '../src/audio/impactVoice.js';
 import { VOICE_LINES } from '../src/audio/voiceEvents.js';
 import { createVoiceMap } from '../src/audio/voiceMap.js';
 import { LINES } from '../src/investigation/clues.js';
 import { RAW, bi, getLang, isPlayer, setLang } from '../src/i18n.js';
 
 const flush = () => Promise.resolve();
+
+test('结局痛呼只在撞击时触发一次，重复跨帧、暂停、倒带不再次喊叫', () => {
+  const calls = [];
+  let stopped = 0;
+  const voice = createImpactVoice((id) => { calls.push(id); return { stop() { stopped++; } }; }, 2.3);
+  voice.update(0, 2.2);
+  voice.update(2.2, 2.2);
+  assert.equal(calls.length, 0);
+  voice.update(2.2, 2.3);
+  voice.update(2.2, 2.3); // 重复跨帧
+  voice.update(2.3, 2.3); // 暂停
+  voice.update(2.3, 4);
+  voice.stop(); // seek 停声，但不重新允许触发
+  voice.update(1, 2.4);
+  assert.deepEqual(calls, ['fatalImpact_01']);
+  assert.equal(stopped, 1);
+  voice.stop();
+  assert.equal(stopped, 1);
+  voice.reset(); // 新的一次结局可以正常喊一声
+  voice.update(0, 3);
+  assert.deepEqual(calls, ['fatalImpact_01', 'fatalImpact_01']);
+  voice.reset();
+  assert.equal(stopped, 2);
+});
+
+test('声音尚未就绪或返回空句柄时也不反复补播结局痛呼', () => {
+  let calls = 0;
+  const voice = createImpactVoice(() => { calls++; return null; }, 2.3);
+  voice.update(0, 2.4);
+  voice.update(0, 2.4);
+  voice.stop();
+  assert.equal(calls, 1);
+  assert.doesNotThrow(() => voice.reset());
+});
+
+test('发布的痛呼素材在第二段叫声开始前结束，只保留第一声', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../Fmod/voice-en-manifest.json', import.meta.url), 'utf8'));
+  const clip = manifest.clips.find((c) => c.id === 'fatalImpact_01');
+  const edit = clip.edits.at(-1);
+  assert.equal(edit.startSeconds, 0.156);
+  assert.equal(edit.keepUntilSeconds, 1.98);
+  assert.equal(clip.wavDuration, 1.824);
+  assert.ok(edit.keepUntilSeconds < 2.2885); // 原始素材中第二段叫声的起点
+  assert.equal(VOICE_LINES.fatalImpact_01.duration, clip.wavDuration);
+});
 
 test('配音按未改写的中文绑定，不修改原稿，保留动态引导和静默', () => {
   const source = {

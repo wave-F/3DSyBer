@@ -26,7 +26,7 @@
       }
     }
   },
-  "bankSha256": "d14c0ab7c2094d0e6ed8c696fe81b7ad957b51baf06b4f14b00c2af89ac62b06",
+  "bankSha256": "fa2dff105c61779745aab5f44327ca75866ff6c7d0308d2d8a18581d1f1421cf",
   "clips": [
     {
       "id": "opening_01",
@@ -2310,24 +2310,24 @@
       "review": "unreviewed-internal-draft",
       "createdAt": "2026-10-15T15:30:15.977Z",
       "event": "event:/voice/en/fatalImpact_01",
-      "wavDuration": 3.844,
+      "wavDuration": 1.824,
       "mastering": {
         "targetLUFS": -18,
         "truePeakLimitDB": -2,
         "input": {
-          "input_i": "-21.86",
+          "input_i": "-21.72",
           "input_tp": "-6.14",
-          "input_lra": "0.90",
-          "input_thresh": "-32.26",
-          "output_i": "-17.95",
-          "output_tp": "-2.36",
+          "input_lra": "0.00",
+          "input_thresh": "-31.72",
+          "output_i": "-18.01",
+          "output_tp": "-2.42",
           "output_lra": "0.00",
-          "output_thresh": "-28.31",
-          "normalization_type": "dynamic",
-          "target_offset": "-0.05"
+          "output_thresh": "-28.01",
+          "normalization_type": "linear",
+          "target_offset": "0.01"
         }
       },
-      "wavSha256": "8d64bf01a36e8151d495ce12d91e38853efe3c7dc4efa46c593ec66694fb2921",
+      "wavSha256": "b0de99d3a7ab6591daae6e0adf54b6e9d1c2042dbd4eab5b110f4177eaaf70ba",
       "edits": [
         {
           "type": "trim-head-tail",
@@ -2335,6 +2335,14 @@
           "keepUntilSeconds": 4,
           "reason": "Remove measured 176 ms leading silence for impact-frame sync; preserve the cry and collapsing groan, trim trailing silence.",
           "previousWavSha256": "d0fa6fc70cda9a7e68bdf87daf3291cc0bd84b75f7530dd7ef07b51515e88a71",
+          "originalAudioSha256": "9dd149997a020bc82c9f65260121b78fb238d8ebfc747718ee03038b09e49930"
+        },
+        {
+          "type": "trim-head-tail",
+          "startSeconds": 0.156,
+          "keepUntilSeconds": 1.98,
+          "reason": "User requested one impact cry only. Keep the first vocalization, end in the measured silent gap before the second vocalization (original audio second onset 2.2885 s). Preserve original recordings.",
+          "previousWavSha256": "8d64bf01a36e8151d495ce12d91e38853efe3c7dc4efa46c593ec66694fb2921",
           "originalAudioSha256": "9dd149997a020bc82c9f65260121b78fb238d8ebfc747718ee03038b09e49930"
         }
       ]

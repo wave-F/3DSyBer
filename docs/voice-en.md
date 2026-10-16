@@ -4,7 +4,7 @@
 
 **2026-10-15 全量重录：59 条 Eleven v4 音频，take `recast-20261015`。** 包含当前 56 条有声对白、2 条回放引导、1 条结局撞击痛呼；终端 `...` 保持无声。用户确认按内部非商用用途使用 Free 额度，素材来源与限制保存在 `Fmod/voice-en-manifest.json`。表演、年龄听感及姓名发音仍须人工试听，不能把自动检查当作用户已听审。后续商用必须在付费计划下重新生成。
 
-总时长约 3 分 3 秒。35 项配音测试、生产构建及真实 Chrome/FMOD 播放检查通过。58 条语言对白中 57 条归一化转写一致，`clueDReason_01` 的 Lu Shicheng 被识别为 Lu Xizhong，须实听确认。原有 `test:audio` 另有 3 个不相关失败（扫描仪测试缺 mock、加载界面旧接口）；详情记录于 `Fmod/voice-en-review.json`。
+总时长约 3 分 1 秒。配音测试、生产构建及真实 Chrome/FMOD 播放检查见 `Fmod/voice-en-review.json`。58 条语言对白中 57 条归一化转写一致，`clueDReason_01` 的 Lu Shicheng 被识别为 Lu Xizhong，须实听确认。此前 `test:audio` 另有 3 个不相关失败（扫描仪测试缺 mock、加载界面旧接口）。
 
 响度调整：`bus:/DIALOGUE` 推子从 0 dB 提至 **+3 dB**，统一覆盖男主、派单员、女 AI、引导和撞击痛呼。保留各子总线相对电平及效果链，不改源 WAV，不重新合成；游戏和试听页使用重建后的 Master Bank。
 
@@ -25,7 +25,7 @@
 当前有声台词已全部重录，包含新增线索独白与两个假结局。`voiceMap.js` 仍要求中文原文一致，防止剧本以后改动时套错录音。
 
 - 回放引导使用显式 `voiceId` 与原文模板双校验。时间码仍显示在双语字幕中，录音说 “Rewind and look again”，不念错误的固定时间。
-- `event:/voice/en/fatalImpact_01` 与男主其他对白共用 Bill。`finale.js` 在 `T.hit = 2.3 s` 首次跨帧时触发；原有撞人音效保留。痛呼去掉前 156 ms 与尾部静默，保留冲击叫声和倒地闷哼，最终约 3.844 s。暂停走原有 Dialogue 机制，重播、seek 和结局结束会清理人声句柄。
+- `event:/voice/en/fatalImpact_01` 与男主其他对白共用 Bill。`finale.js` 在 `T.hit = 2.3 s` 首次跨帧时触发；原有撞人音效保留。2026-10-16 按用户要求只保留第一声：从原始素材截取 0.156–1.980 s，最终 **1.824 s**，剪掉中间停顿后的第二段叫声。`createImpactVoice` 每次结局仅允许触发一次，暂停、重复跨帧、seek 倒带都不会再次喊叫；只有重新播放结局才重置。暂停沿用 Dialogue 机制，seek 和结束会清理句柄。之前的 +3 dB 保持不变。
 - 本次保留 40 个同名旧事件的 GUID，新增 19 个事件；25 个过期事件退出 Bank、不删除工程对象或旧 WAV。原始 API 响应与剪辑前 WAV 均保留。
 
 `ENGLISH` 与当前 `LINES` 的组名、顺序、句数、原文必须一致，否则制作会停止。`tests/fixtures/voice-source.zh.json` 仅用于证明旧稿会被拒绝，不再作为当前发布素材的真值。

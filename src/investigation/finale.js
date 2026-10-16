@@ -7,6 +7,7 @@ import { DECK_Y } from '../bridge.js';
 import { CAR_POS } from '../crash.js';
 import { DEATH_REPORT } from './clues.js';
 import { sound } from '../audio/sound.js';
+import { createImpactVoice } from '../audio/impactVoice.js';
 import { PEAK } from '../audio/events.js';
 
 // 结局：陈墨被跑车撞飞（第一人称，全程是动画，玩家不能操作）
@@ -425,7 +426,7 @@ export function createFinale({ scene, camera, tablet, ui }) {
 
   // ---------- 播放 ----------
   let t = 0, playing = false, onDone = null, faded = false, blacked = false, frozen = false;
-  let painVoice = null;
+  const painVoice = createImpactVoice((id) => sound.voice(id), T.hit);
   function apply(dt) {
     cameraAt(t);
     carAt(t, dt);
@@ -437,7 +438,7 @@ export function createFinale({ scene, camera, tablet, ui }) {
   }
 
   function play(done) {
-    painVoice?.stop(); painVoice = null;
+    painVoice.reset();
     t = 0; playing = true; onDone = done; faded = false; blacked = false; frozen = false;
     padPlaced = false; padOn = false;
     ui.black(1, 0);
@@ -471,11 +472,11 @@ export function createFinale({ scene, camera, tablet, ui }) {
         // 撞人声提前触发，素材峰值正好落在撞击那一帧；声源在车头撞上来的位置（转头后的正前方）
         if (before < HIT_SOUND_AT && t >= HIT_SOUND_AT) sound.play('vehicle/hit_body', { position: HIT_POS });
         // 第一人称人声走 Dialogue：与撞击帧同步，随游戏暂停，不套车体的 3D 衰减。
-        if (before < T.hit && t >= T.hit) painVoice = sound.voice('fatalImpact_01');
+        painVoice.update(before, t);
       }
       apply(go ? dt : 0);
       if (t >= T.end) {
-        painVoice?.stop(); painVoice = null;
+        painVoice.stop();
         playing = false;
         car.visible = false;
         body.visible = false;
@@ -489,7 +490,7 @@ export function createFinale({ scene, camera, tablet, ui }) {
     seek(time) {
       if (!playing) return;
       frozen = true;
-      painVoice?.stop(); painVoice = null;
+      painVoice.stop();
       // 往回跳时重新放置终端
       if (time < t) { padPlaced = false; padOn = false; tablet.release(); }
       t = time;

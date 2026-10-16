@@ -6,7 +6,7 @@
     "spokenDialogueLines": 56,
     "replayGuideLines": 2,
     "nonverbalImpactCues": 1,
-    "totalSeconds": 183.364,
+    "totalSeconds": 181.344,
     "fmodEventsWithPositiveDuration": 59,
     "fmodEventDurationsMatchStagedWavs": true,
     "browser": "Chrome with real FMOD WASM and compiled VoiceEN.bank",
@@ -17,11 +17,17 @@
     "femaleAIPlayback": "passed",
     "impactCryPlayback": "passed",
     "remainingVoiceHandles": 0,
-    "nativeWarnings": [],
+    "nativeWarnings": [
+      "[WRN] FMOD_OS_CriticalSection_Enter : cannot enter NULL critical section",
+      "[WRN] FMOD_OS_CriticalSection_Leave : cannot leave NULL critical section"
+    ],
+    "nativeWarningCount": 7562,
+    "browserRevisionNote": "2026-10-16 single-cry revision: playback, 59 durations, cancellation and pause/resume passed with no native errors. Current runtime emitted NULL critical-section warnings; the existing smoke script does not fail on these warnings. They are not fixed or suppressed by this change.",
     "nativeErrors": [],
     "existingFmodMetadata": "40 voice GUIDs retained, 19 new events, 25 obsolete events removed from VoiceEN bank without deletion; 44 nonvoice events and 5 snapshots byte-identical to pre-import backup; device dialogue effect chain authored, followed by user-requested DIALOGUE parent fader boost from 0 to +3 dB",
     "dialogueMixRevision": { "bus": "bus:/DIALOGUE", "previousFaderDB": 0, "faderDB": 3, "scope": "All voice roles, replay guides and impact cry; child gains, effects and source WAVs unchanged" },
-    "voiceUnitTests": { "passed": 35, "failed": 0 },
+    "voiceUnitTests": { "passed": 38, "failed": 0 },
+    "impactCrySingleTrigger": { "durationMilliseconds": 1824, "oncePerFinale": true, "regressionChecks": "Duplicate crossings, pause, rewind, missing audio handle, new-play reset and the second vocalization being outside the published crop" },
     "existingAudioSuite": {
       "passed": 31,
       "failed": 3,
@@ -34,7 +40,7 @@
     "webBuild": "passed (existing large-chunk warning)",
     "webArtifactFilesScannedForApiKey": 74,
     "apiKeyInWebBuild": false,
-    "fmodBuild": "completed successfully; first-run FSBank file-cache diagnostics were printed, followed by successful build/export/sync; real browser run had no FMOD warnings or errors"
+    "fmodBuild": "Single-cry VoiceEN rebuild/export/sync completed successfully; one FSBank file-cache diagnostic was printed. Browser playback passed with the current runtime warnings recorded above."
   },
   "contentChecks": {
     "method": "ElevenLabs Scribe v2 transcription, not synthesis alignment",
@@ -42,7 +48,7 @@
     "lexicallyMatchedAfterNormalizationAndRepair": 57,
     "normalization": "Case, punctuation, root key/Rootkey, Black Dream/Blackdream, and 0.38/zero point three eight are equivalent; proper-name differences are not hidden",
     "repaired": [
-      { "id": "fatalImpact_01", "problem": "176 ms leading silence would delay the impact cry", "action": "Retain original API audio from 0.156 to 4.000 seconds; 5 ms fade-in, 30 ms fade-out, remaster. Original API audio, original staged WAV and edit metadata retained.", "durationSeconds": 3.844, "trigger": "finale T.hit = 2.3 seconds, 2D Dialogue voice; clears on replay, seek and finale completion" }
+      { "id": "fatalImpact_01", "problem": "Original file contained two vocalizations separated by about 360 ms of silence; user requested only the first cry", "action": "2026-10-16: shorten the previous 0.156–4.000 s crop to original API audio 0.156–1.980 s, before the second onset at 2.2885 s. 5 ms fade-in, 30 ms fade-out and remaster. All original audio and prior crops retained; no new synthesis.", "durationSeconds": 1.824, "trigger": "finale T.hit = 2.3 seconds, 2D Dialogue voice; once per finale with no retrigger on repeated crossings or seek. New play alone resets the guard; +3 dB parent mix retained." }
     ],
     "properNameTranscriptionAmbiguities": [
       { "id": "clueDReason_01", "name": "Lu Shicheng", "synthesisPronunciation": "Loo Shih-chung", "recognition": "Lu Xizhong", "note": "ASR cannot certify pronunciation. Human listening remains required; no claim that this spelling discrepancy is harmless." }
