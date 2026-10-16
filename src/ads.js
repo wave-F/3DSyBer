@@ -19,7 +19,7 @@ const CELL = [ADS.h.cell[0] / ADS.h.cell[1], ADS.v.cell[0] / ADS.v.cell[1]];
 let atlas = null;
 const atlasTex = () => {
   if (!atlas) {
-    atlas = loadTexture('gen/ads_atlas.jpg');
+    atlas = loadTexture('gen/ads_atlas.ktx2');
     atlas.wrapS = atlas.wrapT = THREE.ClampToEdgeWrapping;
   }
   return atlas;

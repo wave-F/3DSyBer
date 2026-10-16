@@ -1,5 +1,5 @@
-# 广告图集：art/ads_src/h*.png（横版 16:9）+ v*.png（竖版 2:3）→ public/assets/gen/ads_atlas.jpg + src/data/ads.json
-# 用法：python3 tools/make_ad_atlas.py
+# 广告图集：art/ads_src/h*.png（横版 16:9）+ v*.png（竖版 2:3）→ art/textures/gen/ads_atlas.jpg + src/data/ads.json
+# 用法：python3 tools/make_ad_atlas.py && npm run assets:ktx2（游戏加载的是转好的 public/assets/gen/ads_atlas.ktx2）
 # 原图是 1024 方图（生成工具只出方图），按内容重心裁成目标比例；白边先切掉
 import json, os, glob
 import numpy as np
@@ -66,7 +66,9 @@ for i, f in enumerate(vs):
     im = crop_aspect(trim_white(Image.open(f)), VW / VH).resize((VW, VH), Image.LANCZOS)
     atlas.paste(im, ((i % VC) * VW, HH * hrows + (i // VC) * VH))
     meta['glow'].append(glow(im)); meta['names'].append(os.path.basename(f))
-out = os.path.join(ROOT, 'public', 'assets', 'gen', 'ads_atlas.jpg')
+out = os.path.join(ROOT, 'art', 'textures', 'gen', 'ads_atlas.jpg')
+os.makedirs(os.path.dirname(out), exist_ok=True)
 atlas.save(out, quality=85, optimize=True)
 json.dump(meta, open(os.path.join(ROOT, 'src', 'data', 'ads.json'), 'w'), indent=1)
 print(out, atlas.size, os.path.getsize(out) // 1024, 'KB')
+print('接着运行 npm run assets:ktx2 生成游戏用的 KTX2')

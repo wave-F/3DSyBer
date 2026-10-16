@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { gltfLoader } from '../gltf.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { hologramMaterial } from './hologram.js';
 
@@ -11,7 +11,7 @@ const BLEND = 0.25; // 相邻动作之间的混合过渡秒数
 
 let loading = null;
 export function loadMannequin() {
-  if (!loading) loading = new Promise((res, rej) => new GLTFLoader().load(URL, res, undefined, rej));
+  if (!loading) loading = new Promise((res, rej) => gltfLoader().load(URL, res, undefined, rej));
   return loading;
 }
 

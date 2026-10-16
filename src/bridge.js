@@ -173,9 +173,9 @@ export function puddleAt(x, z) {
 
 // 湿沥青：PBR 贴图 + 车道线 + 水洼。水洼处更暗、更光滑、反射更强（metalness 同时驱动 SSR 反射强度）
 function roadMaterial() {
-  const diff = loadTexture('clean_asphalt_diff_2k.jpg');
-  const nor = loadTexture('clean_asphalt_nor_gl_2k.jpg', false);
-  const rough = loadTexture('clean_asphalt_rough_2k.jpg', false);
+  const diff = loadTexture('clean_asphalt_diff_2k.ktx2');
+  const nor = loadTexture('clean_asphalt_nor_gl_2k.ktx2', false);
+  const rough = loadTexture('clean_asphalt_rough_2k.ktx2', false);
   const lanes = laneTexture();
   const puddles = puddleTexture();
   puddleMask = puddles.image;

@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "assets:ktx2": "node scripts/ktx2.mjs",
     "test:audio": "node --experimental-vm-modules --test tests/foley.test.js",
     "test:voice": "node --test tests/voice.test.mjs tests/dialogue.test.mjs",
     "test:lighting": "node --test tests/globalIllumination.test.mjs",
@@ -29,6 +30,12 @@
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@gltf-transform/cli": "^4.5.1",
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
+    "draco3dgltf": "^1.5.7",
+    "sharp": "^0.35.5",
     "vite": "^8.3.4"
   }
 }

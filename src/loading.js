@@ -19,11 +19,11 @@ const FADE_MS = 3600;        // 黑场淡出（与 index.html 的 .fading 一致
 // 文件名 → 状态文字
 const LABELS = [
   [/supercar/, '事故车辆', 'VEHICLE'], [/police/, '警车', 'POLICE CAR'], [/bldg|building/, '城市建筑', 'BUILDINGS'], [/mannequin/, '人物', 'FIGURE'],
-  [/\.hdr/, '环境光照', 'LIGHTING'], [/scanner|fps-arm|card-insert|pry-arm/, '调查设备', 'TOOLS'], [/draco/, '模型解码器', 'DECODER'], [/\.(jpe?g|png|webp)/, '材质贴图', 'TEXTURES'],
+  [/\.hdr/, '环境光照', 'LIGHTING'], [/scanner|fps-arm|card-insert|pry-arm/, '调查设备', 'TOOLS'], [/draco|basis/, '模型解码器', 'DECODER'], [/\.ktx2/, '材质贴图', 'TEXTURES'], [/\.(jpe?g|png|webp)/, '材质贴图', 'TEXTURES'],
 ];
 const COPY = {
-  zh: { init: '正在载入程序', load: '正在加载', prep: '正在准备画面', ready: '准备就绪', fallback: '场景资源' },
-  en: { init: 'LOADING', load: 'LOADING', prep: 'PREPARING', ready: 'READY', fallback: 'ASSETS' },
+  zh: { init: '正在载入程序', load: '正在加载', prep: '正在准备画面', ready: '准备就绪', fallback: '场景资源', resize: '分辨率修改，重新加载' },
+  en: { init: 'LOADING', load: 'LOADING', prep: 'PREPARING', ready: 'READY', fallback: 'ASSETS', resize: 'RESOLUTION CHANGED, RELOADING' },
 };
 const t = (k) => COPY[getLang()][k];
 const labelOf = (url) => {
@@ -35,6 +35,7 @@ const paintStatus = (kind, url) => {
   else if (kind === 'load') stEl.textContent = `${t('load')} · ${labelOf(url)}`;
   else if (kind === 'extra') stEl.textContent = `${t('load')} · ${tx(extraLabel, extraLabelEN)}`;
   else if (kind === 'prep') stEl.textContent = t('prep');
+  else if (kind === 'resize') stEl.textContent = t('resize');
   else stEl.textContent = t('ready');
 };
 
@@ -50,6 +51,10 @@ const t0 = performance.now();
 let lastChange = t0;
 let assetsDone = false, warmStart = 0, good = 0, lastFrame = 0;
 let shown = 0, ready = false, started = false;
+let viewW = innerWidth, viewH = innerHeight;
+let rewinding = false;
+let readyArmed = false;
+let readyBarTimer = 0, readyTimer = 0;
 let startFn = null, wakeFn = null, denyFn = null;
 let fadeAt = 0;
 let phase = 'init';
@@ -82,28 +87,54 @@ function frame(now) {
   }
   lastFrame = now;
 
+  if (rewinding) {
+    shown += (0 - shown) * 0.18;
+    if (shown < 0.008) {
+      shown = 0;
+      rewinding = false;
+      good = 0;
+      warmStart = now;
+      if (assetsDone) { phase = 'prep'; paintStatus('prep'); }
+    }
+  }
   const target = !assetsDone
     ? ASSET_SHARE * (total + extraTotal ? (loaded + extraDone) / (total + extraTotal) : 0)
     : ASSET_SHARE + (1 - ASSET_SHARE) * Math.max(Math.min(1, good / WARM_FRAMES), Math.min(1, (now - warmStart) / WARM_MAX_MS));
-  // 只增不减（新文件加入时 loaded / total 会回落），平滑追赶；最后一小段直接补满
-  if (target > shown) shown += (target - shown) * 0.12;
-  if (target >= 1 && shown > 0.995) shown = 1;
+  // 平时只增不减。分辨率倒退时上面单独把进度拉回 0。
+  if (!rewinding && target > shown) shown += (target - shown) * 0.12;
+  if (!rewinding && target >= 1 && shown > 0.995) shown = 1;
   fillEl.style.width = `${(shown * 100).toFixed(2)}%`;
   pcEl.textContent = `${Math.floor(shown * 100)}%`;
 
-  if (assetsDone && shown >= 0.999) {
+  if (!rewinding && assetsDone && shown >= 0.999 && !ready && !readyArmed) {
+    readyArmed = true;
     shown = 1;
     fillEl.style.width = '100%';
     pcEl.textContent = '100%';
     phase = 'ready';
     paintStatus('ready');
     // 先让 100% 停一下，再藏进度条，藏完才允许点击并显示开始提示
-    setTimeout(() => root.classList.add('hide-bar'), 400);
-    setTimeout(() => { ready = true; root.classList.add('ready'); }, 400 + 650);
-    return;
+    readyBarTimer = setTimeout(() => root.classList.add('hide-bar'), 400);
+    readyTimer = setTimeout(() => { ready = true; root.classList.add('ready'); }, 400 + 650);
   }
-  requestAnimationFrame(frame);
+  if (!started) requestAnimationFrame(frame);
 }
+// 外层网站在加载时把页面切成全屏。进度倒退到 0，写明正在按新分辨率重新加载，完成后再允许开始。
+addEventListener('resize', () => {
+  if (started) return;
+  if (Math.abs(innerWidth - viewW) < 64 && Math.abs(innerHeight - viewH) < 64) return;
+  viewW = innerWidth;
+  viewH = innerHeight;
+  rewinding = true;
+  good = 0;
+  ready = false;
+  readyArmed = false;
+  phase = 'resize';
+  paintStatus('resize');
+  clearTimeout(readyBarTimer);
+  clearTimeout(readyTimer);
+  root.classList.remove('hide-bar', 'ready');
+});
 requestAnimationFrame(frame);
 
 // 加载期间的任意点击 / 按键都是用户手势：交给 wakeFn 启动音频（菜单音乐）

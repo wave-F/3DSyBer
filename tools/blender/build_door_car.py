@@ -8,7 +8,7 @@ from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
 
 ROOT = Path(__file__).resolve().parents[2]
-GLB = ROOT / 'public' / 'assets' / 'supercar.glb'
+GLB = ROOT / 'art' / 'supercar.glb'   # 源车身；游戏里不再直接加载，结局车也用 supercar_door.glb
 SRC = ROOT / 'art' / 'door_r_src.blend'
 OUT = ROOT / 'art' / 'supercar_door.blend'
 RENDERS = ROOT / 'art' / 'renders' / 'door_r_k042'

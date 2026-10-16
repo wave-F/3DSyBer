@@ -1,7 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { uniform } from 'three/tsl';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { gltfLoader } from '../gltf.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { loadMannequin } from './actors.js';
 import { DECK_Y } from '../bridge.js';
@@ -79,9 +78,11 @@ export function createFinale({ scene, camera, tablet, ui }) {
   const beam = new THREE.PointLight(0xeef4ff, 0, 32, 2);
   scene.add(beam);
 
-  const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
-  new GLTFLoader().setDRACOLoader(draco).loadAsync(`${import.meta.env.BASE_URL}assets/supercar.glb`).then((gltf) => {
+  // 和事故车共用 supercar_door.glb（同一个 URL，浏览器只下载一次）；导出时车门带撞后外翻，这里关上
+  gltfLoader().loadAsync(`${import.meta.env.BASE_URL}assets/supercar_door.glb`).then((gltf) => {
     const model = gltf.scene;   // 车头 +Z，地面 y=0
+    const door = model.getObjectByName('Door_R');
+    if (door) door.rotation.set(0, 0, 0);
     const paint = new THREE.MeshPhysicalMaterial({ color: 0x0b0d12, roughness: 0.22, metalness: 0.5, clearcoat: 1, clearcoatRoughness: 0.08 });
     const lamp = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 1, 1).multiplyScalar(9) });
     model.traverse((o) => {
@@ -119,7 +120,7 @@ export function createFinale({ scene, camera, tablet, ui }) {
     tail.position.set(0, 0.82, box.min.z + 0.05);
     car.add(tail);
     ready = true;
-  }).catch((e) => console.error('Failed to load the finale car', e)).finally(() => draco.dispose());
+  }).catch((e) => console.error('Failed to load the finale car', e));
 
   // 陈墨的尸体：只在切到全景后出现（第一人称时镜头就在这个位置，模型会穿进眼睛）
   // 用全息人偶同一个模型（mannequin.glb），从 Death01 最后一帧（平躺）出发，翻成脸朝下、头朝终端，

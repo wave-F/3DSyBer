@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { loadKTX2 } from './gltf.js';
 
 // 可复现的伪随机数
 export function rng(seed) {
@@ -222,10 +223,28 @@ export function idTexture(text, color) {
   return toTexture(c);
 }
 
-// 加载 public/assets 下的贴图
+// 加载 public/assets 下的贴图。同步返回贴图对象，数据到了自动更新（和 TextureLoader 用法一致）
+// .ktx2（scripts/ktx2.mjs 生成，已预先上下翻转，等效 flipY = true）：先返回空的压缩纹理，
+// 转码完成后把 mipmap 和格式填进同一个对象；在那之前渲染器用默认贴图顶着
 const loader = new THREE.TextureLoader();
 export function loadTexture(name, srgb = true) {
-  const t = loader.load(`${import.meta.env.BASE_URL}assets/${name}`);
+  const url = `${import.meta.env.BASE_URL}assets/${name}`;
+  let t;
+  if (name.endsWith('.ktx2')) {
+    t = new THREE.CompressedTexture([], 4, 4);
+    loadKTX2(url).then((src) => {
+      t.image = src.image;
+      t.mipmaps = src.mipmaps;
+      t.format = src.format;
+      t.type = src.type;
+      t.minFilter = src.minFilter;
+      t.magFilter = src.magFilter;
+      t.generateMipmaps = false;
+      t.needsUpdate = true;
+    }, (e) => console.error(`Failed to load ${name}`, e));
+  } else {
+    t = loader.load(url);
+  }
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.anisotropy = 8;

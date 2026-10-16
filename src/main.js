@@ -34,6 +34,7 @@ import { HURT } from './investigation/finale.js';
 import { sound } from './audio/sound.js';
 import { AD_DWELL } from './ads.js';
 import { createStaticGI } from './globalIllumination.js';
+import { initGLTF } from './gltf.js';
 
 // 网页一打开就装入全部 Bank 并预备好所有循环；加载界面等声音就绪后才允许点击开始
 loading.waitFor(sound.preload(), '声音', 'AUDIO');
@@ -42,6 +43,7 @@ loading.onWake(() => sound.unlock());
 loading.onDeny(() => sound.play('ui/deny'));
 
 const renderer = new THREE.WebGPURenderer();
+initGLTF(renderer);   // KTX2 贴图要等 WebGPU 初始化后才知道显卡支持的压缩格式
 // Forward+ 分簇光照：每个像素只计算真正照到它的点光源（灯一盏不少，开销按覆盖范围算）
 renderer.lighting = new ClusteredLighting(64, 32, 24, 16);
 // 画质：像素比、体积雾、屏幕反射（原版 1.5 / 雾 0.5·6 步·24 灯 / 反射 80·0.5，帧率对比后定为下面这套）
@@ -87,7 +89,16 @@ const staticWorld = new THREE.Group();
 staticWorld.name = '桥与城市';
 scene.add(staticWorld);
 buildBridge(staticWorld);
+// AO 只在事故现场附近看得出来（半径 0.65 m）：城市、天空只放 FAR_LAYER，主相机照画，AO 预渲染（只看 layer 0）跳过它们
+const FAR_LAYER = 2;
+camera.layers.enable(FAR_LAYER);
+const farOnly = (root) => root.traverse((o) => { if (o.isMesh || o.isLine || o.isPoints || o.isSprite) o.layers.set(FAR_LAYER); });
+const bridgeParts = new Set(staticWorld.children);
 const updateCity = buildCity(staticWorld);
+// 模型楼是异步加进来的，加载完再标一遍
+const markCity = () => { for (const o of staticWorld.children) if (!bridgeParts.has(o)) farOnly(o); };
+markCity();
+updateCity.ready.then(markCity, markCity);
 // 静态探针先停用：不创建、不采集、不等待。实现仍在 globalIllumination.js，改回 true 即恢复。
 const USE_STATIC_GI = false;
 const gi = USE_STATIC_GI ? createStaticGI({
@@ -129,7 +140,9 @@ if (gi) {
 }
 const crash = buildCrash(scene);
 const police = buildPoliceCar(scene);
+const beforeSky = new Set(scene.children);
 const updateSky = buildSky(scene);
+for (const o of scene.children) if (!beforeSky.has(o)) farOnly(o);
 const updateRain = buildRain(scene, camera);
 const updateCordon = buildCordon(scene);
 const playArea = { x: [-HALF_W, HALF_W], z: [CORDON.z0, CORDON.z1], y: DECK_Y + 1.7 };
@@ -161,18 +174,29 @@ if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; wind
 
 // ---------- 后期 ----------
 // Separate pre-pass avoids feeding the shaded scene back into its own AO.
-const aoPrePass = pass(scene, camera);
+// AO 预渲染只画 layer 0（车、碎片、桥面护栏等近景），用独立相机：它是在 scenePass 画物体的途中被触发的，
+// 同一 scene + camera 共用一份渲染列表，物体数不同会把 scenePass 正在遍历的列表改短。每帧渲染前从主相机同步
+const aoCamera = new THREE.PerspectiveCamera();
+function syncAoCamera() {
+  camera.updateMatrixWorld();
+  aoCamera.copy(camera, false);
+  camera.matrixWorld.decompose(aoCamera.position, aoCamera.quaternion, aoCamera.scale);
+  aoCamera.updateMatrixWorld();
+  aoCamera.layers.set(0);
+}
+syncAoCamera();
+const aoPrePass = pass(scene, aoCamera);
 aoPrePass.setResolutionScale(0.5);
 aoPrePass.transparent = false;
 aoPrePass.setMRT(mrt({ output: normalView }));
 const aoDepth = aoPrePass.getTextureNode('depth');
 const aoNormal = aoPrePass.getTextureNode('output');
-const aoPass = ao(aoDepth, aoNormal, camera);
+const aoPass = ao(aoDepth, aoNormal, aoCamera);
 aoPass.resolutionScale = 0.5;
 aoPass.radius.value = 0.65;
 aoPass.thickness.value = 0.35;
 aoPass.samples.value = 16;
-const aoFiltered = denoise(aoPass.getTextureNode(), aoDepth, aoNormal, camera);
+const aoFiltered = denoise(aoPass.getTextureNode(), aoDepth, aoNormal, aoCamera);
 aoFiltered.radius.value = 3;
 const aoTexture = rtt(aoFiltered).setResolutionScale(0.5);
 const aoAmount = uniform(0.65);
@@ -304,5 +328,6 @@ renderer.setAnimationLoop(() => {
   sound.update(dt, camera);
   volFog.update(clock.dt);
   tabletAmt.value = Math.min(1, inv.tablet.amount * 1.4);
+  syncAoCamera();
   pipeline.render();
 });

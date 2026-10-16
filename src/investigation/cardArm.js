@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { gltfLoader } from '../gltf.js';
 
 // 第 3 轮插卡 / 拔卡：骨骼右手 + 取证卡 + 插卡镜头
 // 在 Blender 里制作（后台跑，工程 art/card_arm_anim.blend）：
@@ -19,7 +19,7 @@ export function createCardArm(carRoot) {
   group.visible = false;
   carRoot.add(group);
   let mixer = null, camNode = null, ready = false;
-  new GLTFLoader().load(`${import.meta.env.BASE_URL}assets/card-insert.glb`, (gltf) => {
+  gltfLoader().load(`${import.meta.env.BASE_URL}assets/card-insert.glb`, (gltf) => {
     group.add(gltf.scene);
     camNode = gltf.scene.getObjectByName('CardCamRest');
     gltf.scene.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });

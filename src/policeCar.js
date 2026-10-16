@@ -1,6 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { gltfLoader } from './gltf.js';
 import { DECK_Y } from './bridge.js';
 import { addLightGroup } from './debugLights.js';
 
@@ -34,8 +33,7 @@ export function buildPoliceCar(scene) {
 
   let door = null;
   let doorAmount = 0;
-  const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
-  new GLTFLoader().setDRACOLoader(draco).loadAsync(URL).then((gltf) => {
+  gltfLoader().loadAsync(URL).then((gltf) => {
     const model = gltf.scene;
     model.scale.setScalar(POLICE_SCALE);
     model.position.y = 0.05 * POLICE_SCALE;
@@ -48,7 +46,7 @@ export function buildPoliceCar(scene) {
     group.add(model);
   }).catch((error) => {
     console.error('Failed to load the police cruiser', error);
-  }).finally(() => draco.dispose());
+  });
 
   // 驾驶门开合：0 关闭，1 全开
   function setDoor(amount) {

@@ -1,6 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { gltfLoader } from './gltf.js';
 import { texture, uv, vertexColor, uniform, vec3, float, mix, smoothstep, mx_noise_float, bumpMap, normalWorld, positionWorld } from 'three/tsl';
 import { adGlowNode } from './ads.js';
 import { NEON } from './signs.js';
@@ -208,8 +207,7 @@ if (import.meta.env.DEV) {
 }
 
 export function loadModelBuildings(scene) {
-  const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
-  const loader = new GLTFLoader().setDRACOLoader(draco);
+  const loader = gltfLoader();
   const mats = new Map();
   const byType = new Map();
   LAYOUT.buildings.forEach((b, i) => {
@@ -243,5 +241,5 @@ export function loadModelBuildings(scene) {
       scene.add(root);
     }
   }));
-  return Promise.all(jobs).finally(() => draco.dispose());
+  return Promise.all(jobs);
 }

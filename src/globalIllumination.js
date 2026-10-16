@@ -49,6 +49,8 @@ function captureWorld(world, ambientLights) {
   copies.forEach((o, i) => {
     // Object3D.clone 会把 userData JSON 化；楼体的 object uniform 必须仍拿到 Color / Vector4。
     o.userData = originals[i].userData;
+    // 城市在主场景里只放 FAR_LAYER（跳过 AO 预渲染），探针的 CubeCamera 只看 layer 0
+    o.layers.enable(0);
     if (o.isInstancedMesh) instances.push(o);
     if (!o.isMesh) return;
     const list = Array.isArray(o.material) ? o.material : [o.material];

@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { mrt, float } from 'three/tsl';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { gltfLoader } from '../gltf.js';
 import { sound } from '../audio/sound.js';
 import { applyScannerLook } from './scannerMaterial.js';
 import { createScannerScreen } from './scannerScreen.js';
@@ -205,7 +205,7 @@ function buildDevice() {
   // 带骨骼的右手 + 扫描枪（tools/blender/export_fps_arm.py 从 art/fps_arm_rig.blend 导出）
   // 单位米，原始尺寸。glTF 里手的前方是 +Z，绕 Y 转 180° 变成 -Z
   // Grip / Emitter 是挂在 prop 骨上的定位点：Grip 对齐到握把原点，Emitter 放发光圈
-  new GLTFLoader().load(`${import.meta.env.BASE_URL}assets/fps-arm.glb?v=1`, (gltf) => {
+  gltfLoader().load(`${import.meta.env.BASE_URL}assets/fps-arm.glb?v=1`, (gltf) => {
     const model = gltf.scene;
     model.rotation.y = Math.PI;
     let scannerMesh = null;

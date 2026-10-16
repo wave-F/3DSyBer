@@ -1,8 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { float, mx_noise_float, positionLocal, positionWorld, vec3, smoothstep } from 'three/tsl';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { gltfLoader } from './gltf.js';
 import { rng } from './textures.js';
 import { DECK_Y, HALF_W, BREAK, WALL, concrete as concreteBase, metal as metalBase } from './bridge.js';
 import { mergeStatic } from './merge.js';
@@ -100,8 +99,7 @@ function buildCar(onReady) {
   const group = new THREE.Group();
   const hazardMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffa020, emissiveIntensity: 0 });
 
-  const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
-  const loader = new GLTFLoader().setDRACOLoader(draco);
+  const loader = gltfLoader();
   Promise.all([loader.loadAsync(CAR_URL), loader.loadAsync(CAR_GLASS_URL)]).then(([gltf, glass]) => {
     const model = gltf.scene;
     model.rotation.y = Math.PI / 2; // 车头 +Z → 组内 +X
@@ -165,7 +163,7 @@ function buildCar(onReady) {
     onReady({ pristine, crashed: model, paintMeshes, door: model.getObjectByName('Door_R') });
   }).catch((error) => {
     console.error('Failed to load the crash vehicle and replacement glazing', error);
-  }).finally(() => draco.dispose());
+  });
 
   return { group, hazardMat };
 }
