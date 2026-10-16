@@ -3,8 +3,20 @@
   "model": "eleven_v4",
   "usage": "noncommercial-internal",
   "voices": {
-    "chen": { "id": "pqHfZKP75CvOlQylNhV4", "name": "Bill", "reason": "Mature American male; directed as a weathered man around fifty, with escalating emotional stakes and a matching nonverbal impact cry." },
-    "dispatch": { "id": "EXAVITQu4vr4xnSDxMaL", "name": "Sarah", "reason": "Adult American female; directed around thirty, cold, clipped and impatient. Walkie-talkie processing in FMOD only." },
-    "device": { "id": "Xb7hH8MSUJpSbSDYk0k2", "name": "Alice", "reason": "Clearly female, precise British diction; clinical synthetic performance plus electronic doubling in FMOD, inspired by Portal 2 texture without cloning its character or actor." }
+    "chen": {
+      "id": "iP95p4xoKVk53GoZ742B",
+      "name": "Chris",
+      "reason": "Natural, down-to-earth American male chosen by user audition (2026-10-16). Spoken lines directed theatrically with interjections; inner monologue calm, steady and soft."
+    },
+    "dispatch": {
+      "id": "EXAVITQu4vr4xnSDxMaL",
+      "name": "Sarah",
+      "reason": "Adult American female; directed around thirty, cold, clipped and impatient. Walkie-talkie processing in FMOD only."
+    },
+    "device": {
+      "id": "Xb7hH8MSUJpSbSDYk0k2",
+      "name": "Alice",
+      "reason": "Clearly female, precise British diction; clinical synthetic performance plus electronic doubling in FMOD, inspired by Portal 2 texture without cloning its character or actor."
+    }
   }
 }

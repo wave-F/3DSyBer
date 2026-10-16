@@ -4,8 +4,9 @@ import { LINES } from '../investigation/clues.js';
 
 export const VOICE_ROLES = {
   chen: {
-    name: 'Chen Mo', env: 'ELEVENLABS_VOICE_CHEN', stability: 0.5, similarity: 0.8,
-    acting: 'mature, weathered, gravelly',
+    // 对白偏舞台剧、情绪外放（低 stability 更有起伏）；内心独白沉稳、轻声，用 innerStability 收住。
+    name: 'Chen Mo', env: 'ELEVENLABS_VOICE_CHEN', stability: 0.3, innerStability: 0.55, similarity: 0.8,
+    acting: 'mature, weathered, theatrical, emotionally rich',
     brief: 'Man around fifty. Neutral American English, weathered low register, tired breath and textured chest resonance. Intimate, emotionally present screen acting: investigative curiosity grows into disbelief, bitter anger, then urgent fear. Never a trailer narrator or superhero. The impact cry is involuntary, raw pain, not a heroic battle shout.',
   },
   dispatch: {
@@ -33,28 +34,29 @@ export const GLOSSARY = {
   '根钥': 'Rootkey', '黑梦': 'Blackdream', '零号保障': 'Zero Priority',
 };
 
-const line = (source, text, direction, tag) => ({ source, text, direction, tag });
+// perform：只送进 TTS 的表演稿，可加语气词和行内 audio tag（[sighs]、[exhales] 等）；字幕仍用 text。
+const line = (source, text, direction, tag, perform) => ({ source, text, direction, tag, ...(perform ? { perform } : {}) });
 
 export const ENGLISH = {
   opening: [
      line('B1016，到场没有？', 'B1016, are you on scene?', 'Cold check-in, a clipped question with no personal interest.', 'cold, questioning'),
-    line('到了。', 'I’m here.', 'Short, tired acknowledgement. No enthusiasm.', 'weary, matter-of-fact'),
+    line('到了。', 'I’m here.', 'Short, tired acknowledgement. No enthusiasm.', 'weary, matter-of-fact', '[exhales heavily] Yeah... yeah. I’m here.'),
      line('一场简单事故。核完赶紧交单，北岸还有两件。', 'A simple accident. File it and move. Two more on the north bank.', 'Dismiss the incident. Cut off each instruction; impatient, emotionally uninvolved.', 'cold, impatient, authoritative'),
   ],
   start1: [
-    line('先看撞哪儿了。', 'Check the impact first.', 'To himself, after putting the terminal away. Short, ready to work.', 'quiet, matter-of-fact'),
+    line('先看撞哪儿了。', 'Check the impact first.', 'To himself, after putting the terminal away. Short, ready to work.', 'quiet, matter-of-fact', '[sighs] Alright... check the impact first.'),
   ],
   clueFront: [
-    line('车头都压进去了。', 'The whole front end is crushed in.', 'Observe the damage plainly.', 'quiet, focused'),
+    line('车头都压进去了。', 'The whole front end is crushed in.', 'Observe the damage plainly.', 'quiet, focused', 'Hm... the whole front end is crushed in.'),
   ],
   clueRail: [
-    line('不是擦过去，是对着护栏冲的。', 'It did not graze the barrier. It went straight at it.', 'Trace the impact path to himself.', 'quiet, focused'),
+    line('不是擦过去，是对着护栏冲的。', 'It did not graze the barrier. It went straight at it.', 'Trace the impact path to himself.', 'quiet, focused', 'No... it did not graze the barrier. [short pause] It went straight at it.'),
   ],
   clueDebris: [
-    line('这几块都是车头掉的。', 'These pieces all came off the front end.', 'Identify the debris without drama.', 'quiet, matter-of-fact'),
+    line('这几块都是车头掉的。', 'These pieces all came off the front end.', 'Identify the debris without drama.', 'quiet, matter-of-fact', 'Mm. These pieces... all came off the front end.'),
   ],
   ready1: [
-    line('构建黑梦，看看发生了什么。', 'Build Blackdream. See what happened.', 'A quiet decision to himself after the last scene clue. Not a tutorial.', 'quiet, curious'),
+    line('构建黑梦，看看发生了什么。', 'Build Blackdream. See what happened.', 'A quiet decision to himself after the last scene clue. Not a tutorial.', 'quiet, curious', 'Okay. [breathes in] Build Blackdream... let’s see what happened.'),
   ],
   clueScrape: [
     line('黄漆。这辆车可不是黄的。', 'Yellow paint. This car is not yellow.', 'Notice the mismatch; restrained curiosity.', 'quiet, curious'),
@@ -90,8 +92,8 @@ export const ENGLISH = {
     line('早了 0.38 秒。那时候车还没转。', '0.38 seconds early. The car had not turned yet.', 'Read the timing precisely; contained unease.', 'low, troubled'),
   ],
   dream1: [
-    line('轮子现在就转向了。', 'The wheel is turning now.', 'Watching the replay. The turn is happening at this moment. Keep it short.', 'quiet, focused'),
-    line('像是发生了碰撞。', 'Looks like there was a collision.', 'A tentative working theory, not a solution.', 'quiet, curious'),
+    line('轮子现在就转向了。', 'The wheel is turning now.', 'Watching the replay. The turn is happening at this moment. Keep it short.', 'quiet, focused', 'Huh? The wheel is turning... now.'),
+    line('像是发生了碰撞。', 'Looks like there was a collision.', 'A tentative working theory, not a solution.', 'quiet, curious', 'Looks like... there was a collision.'),
   ],
   after1: [
     line('看看车身，有没有别的碰痕。', 'Check the body for other impact marks.', 'A practical instruction to himself, not a tutorial voice.', 'quiet, resolved'),
@@ -101,9 +103,9 @@ export const ENGLISH = {
     line('那时候黄车还没碰到它。', 'The yellow car had not touched it yet.', 'Questioning the causal chain, not expressing shock.', 'quiet, skeptical'),
   ],
   question2: [
-     line('你说刮擦让它转向。可胎痕在刮擦点之前就弯了。', 'You said the scrape made it turn. But the tire marks curve before the contact point.', 'Challenge the lie. Frustration builds; stress BEFORE, then leave a pointed silence.', 'accusing, frustrated, controlled'),
+     line('你说刮擦让它转向。可胎痕在刮擦点之前就弯了。', 'You said the scrape made it turn. But the tire marks curve before the contact point.', 'Challenge the lie. Frustration builds; stress BEFORE, then leave a pointed silence.', 'accusing, frustrated, rising', 'You said the scrape made it turn. [scoffs] But the tire marks... they curve BEFORE the contact point!'),
      line('接触可能影响了判断轨迹。', 'Contact may have affected the assessed trajectory.', 'Synthetic corporate reassurance. Deliberate, precise, calmly evasive with an artificial falling cadence.', 'robotic, measured, coolly dismissive'),
-     line('可能？', 'May have?', 'A sharp incredulous echo, containing anger rather than an innocent question.', 'incredulous, bitter, clipped'),
+     line('可能？', 'May have?', 'A sharp incredulous echo, containing anger rather than an innocent question.', 'incredulous, bitter, clipped', '[bitter laugh] May have?!'),
   ],
   revised2: [],
   call2: [
@@ -203,6 +205,8 @@ export function spokenText(text) {
 
 export function synthesisText(l) {
   if (l.silent) throw new Error(`Do not synthesize narrative silence: ${l.id}`);
-  const inner = l.channel === 'inner' ? '[quiet, close, internal monologue] ' : '';
-  return `[${VOICE_ROLES[l.speaker].acting}] ${inner}[${l.tag}] ${spokenText(l.text)}`;
+  // 内心独白：沉稳、贴耳、音量明显低于对白，不带舞台腔。
+  const inner = l.channel === 'inner' ? '[inner monologue, calm, soft, low] ' : '';
+  const acting = l.channel === 'inner' && l.speaker === 'chen' ? 'weathered, restrained' : VOICE_ROLES[l.speaker].acting;
+  return `[${acting}] ${inner}[${l.tag}] ${spokenText(l.perform ?? l.text)}`;
 }

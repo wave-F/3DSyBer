@@ -20,6 +20,21 @@
 - `dialogueLines()` 检查当前中文原稿的分组、句数和 `source`，不混用旧稿快照；沉默不发送 TTS。
 - 游戏运行只按已发布的 `VOICE_LINES.source` 查录音，不按新版制作稿的编号套旧音频。字幕改写后，逐字相同的句子继续用原录音，改过的句子不套旧声音。
 
+## 陈墨换演员 Chris（进行中）
+
+2026-10-16 用户试听后选定 Chris（`iP95p4xoKVk53GoZ742B`）替换 Bill。对白走舞台剧式、情绪外放（stability 0.3），可用 `line()` 第 5 个参数 `perform` 写只送 TTS 的表演稿（语气词、行内 `[sighs]` 等 audio tag），字幕仍用 `text`；内心独白沉稳轻声（`innerStability` 0.55），WAV 再降 5 dB。
+
+已生成 take `chris-a` 前 10 句（`opening_02`、`start1_01`、`clueFront_01`、`clueRail_01`、`clueDebris_01`、`ready1_01`、`dream1_01`、`dream1_02`、`question2_01`、`question2_03`），WAV 与 `patch.json` 在 `Fmod/3DSyBer/Assets/voice/en/chris-a/`。其余句子仍是 Bill，等额度恢复后补录。
+
+**待办（需要装了 FMOD Studio 2.03.14 的电脑）**：先关掉 Studio 里打开的工程，然后
+
+```sh
+node scripts/voice-patch.mjs apply --take chris-a
+npm run test:voice && npm run build
+```
+
+只更新这 10 个事件的音频（保留 GUID、增益、效果器），构建并同步 Bank，更新 `src/audio/voiceEvents.js` 时长和 `Fmod/voice-en-manifest.json`。完成后提交 `Fmod/3DSyBer`、`public/fmod`、上面两个文件。
+
 ## 覆盖与结局同步
 
 当前有声台词已全部重录，包含新增线索独白与两个假结局。`voiceMap.js` 仍要求中文原文一致，防止剧本以后改动时套错录音。

@@ -109,7 +109,11 @@ test('API 只接收英文，表演标签不改显示稿，编号按字母数字�
     assert.equal(request.voice_settings.speed, undefined); // v4 没有 speed/style 控件
   }
   const inner = lines.find((l) => l.channel === 'inner');
-  assert.match(synthesisText(inner), /internal monologue/);
+  assert.match(synthesisText(inner), /inner monologue, calm, soft/);
+  // perform 只进 TTS，字幕仍是 text
+  const performed = lines.find((l) => l.perform);
+  assert.ok(synthesisText(performed).includes(spokenText(performed.perform)));
+  assert.ok(!performed.text.includes('['));
   assert.throws(() => synthesisText({ id: 'silent-caption', silent: true }), /narrative silence/);
 });
 

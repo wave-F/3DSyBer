@@ -32,7 +32,7 @@ export function speechRequest(l, { cast, model, seed, lines, nonCommercial = fal
   const role = VOICE_ROLES[l.speaker];
   const request = {
     text: synthesisText(l), model_id: model, language_code: 'en',
-    voice_settings: { stability: role.stability, similarity_boost: role.similarity },
+    voice_settings: { stability: l.channel === 'inner' ? role.innerStability ?? role.stability : role.stability, similarity_boost: role.similarity },
     seed: (seed + Number.parseInt(digest(l.id).slice(0, 8), 16)) >>> 0,
   };
   // 只借用同一段里相邻、同一人的英文，绝不把中文或叙述性静默送入 TTS。

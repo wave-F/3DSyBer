@@ -208,7 +208,9 @@ test('本轮 59 条配音全部与当前剧本、Bank 指纹和新演员一致�
   assert.equal(manifest.take, 'recast-20261015');
   assert.ok(manifest.clips.every((c) => c.accountTier === 'free' && c.usage === 'noncommercial'));
   assert.ok(manifest.clips.every((c) => c.review === 'unreviewed-internal-draft'));
-  for (const clip of manifest.clips) assert.equal(clip.voiceId, manifest.cast.voices[clip.speaker].id);
+  // 局部重录（voice-patch.mjs）的句子用 patch 记录的新演员，其余仍是原 take 的演员
+  const patched = Object.fromEntries((manifest.patches || []).flatMap((p) => p.ids.map((id) => [id, p.voiceId])));
+  for (const clip of manifest.clips) assert.equal(clip.voiceId, patched[clip.id] || manifest.cast.voices[clip.speaker].id);
   assert.equal(manifest.bankSha256, digest(await readFile(new URL('../public/fmod/VoiceEN.bank', import.meta.url))));
   assert.ok(VOICE_LINES.fatalImpact_01.nonverbal);
   assert.equal(VOICE_LINES.rootRead_02, undefined);
