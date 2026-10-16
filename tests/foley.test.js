@@ -645,7 +645,7 @@ function runtimeStub(calls) {
 
 const flush = () => new Promise((resolve) => setTimeout(resolve));
 
-test('页面打开就装入 Bank 并预备好全部循环（暂停）；加载界面有手势才放菜单音乐', async () => {
+test('页面打开就装入 Bank 并预备好全部循环（暂停）；加载界面的手势不放菜单音乐', async () => {
   const calls = [];
   const { sound } = await load('src/audio/sound.js', {
     './fmodRuntime.js': { FmodRuntime: runtimeStub(calls) }, './events.js': events,
@@ -658,7 +658,7 @@ test('页面打开就装入 Bank 并预备好全部循环（暂停）；加载�
   assert.ok(!calls.some(([a]) => a === 'start' || a === 'unpause'));   // 加载期间什么都不出声
   sound.unlock();
   await flush();
-  assert.deepEqual(calls.filter(([a]) => a === 'unpause').map(([, path]) => path), ['event:/music/menu']);
+  assert.ok(!calls.some(([a, path]) => (a === 'unpause' || a === 'start') && path === 'event:/music/menu'));
 });
 
 test('点击开始只做轻量操作：音乐淡出、进入音效、取消暂停已开好的环境循环，不装 Bank 也不新建实例', async () => {
@@ -800,23 +800,12 @@ test('预备好的循环保持暂停，第一次 startLoop / moveLoop 才取消�
   assert.equal(fmod.prepared.size, 0);
 });
 
-test('FMOD pthread 启动前检查跨源隔离，缺响应头时明确失败而不是退回无线程库', async () => {
-  const { FmodRuntime } = await load('src/audio/fmodRuntime.js', { './events.js': events }, {
-    window: { crossOriginIsolated: false },
-    document: { createElement() { assert.fail('不应请求不兼容的 SDK'); } },
-    fetch: async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) }),
-  });
-  const fmod = new FmodRuntime();
-  await assert.rejects(fmod.preload(), /Cross-Origin-Opener-Policy/);
-  await assert.rejects(fmod.loaded, /Cross-Origin-Embedder-Policy/);
-  assert.equal(fmod.ready, false);
-});
-
-test('SDK 使用官方 pthread 日志版与配套 WASM，开发 / 预览 / 静态部署声明隔离头', async () => {
+test('SDK 使用官方单线程日志版，不因缺少跨源隔离而拒绝启动', async () => {
   const code = await readFile(new URL('../src/audio/fmodRuntime.js', import.meta.url), 'utf8');
-  assert.match(code, /script\.src = `\$\{BASE\}fmodstudioPL\.js`/);
+  assert.match(code, /script\.src = `\$\{BASE\}fmodstudioL\.js`/);
+  assert.doesNotMatch(code, /crossOriginIsolated/);
   assert.doesNotMatch(code, /Debug_Initialize|console\.(log|warn|error)\s*=/);
-  for (const name of ['fmodstudioPL.js', 'fmodstudioPL.wasm']) {
+  for (const name of ['fmodstudioL.js', 'fmodstudioL.wasm']) {
     assert.ok((await readFile(new URL(`../public/fmod/${name}`, import.meta.url))).length > 0);
   }
   const { default: config } = await import('../vite.config.js');

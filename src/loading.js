@@ -51,7 +51,7 @@ const t0 = performance.now();
 let lastChange = t0;
 let assetsDone = false, warmStart = 0, good = 0, lastFrame = 0;
 let shown = 0, ready = false, started = false;
-let viewW = innerWidth, viewH = innerHeight;
+let viewW = globalThis.innerWidth || 0, viewH = globalThis.innerHeight || 0;
 let rewinding = false;
 let readyArmed = false;
 let readyBarTimer = 0, readyTimer = 0;
@@ -122,9 +122,10 @@ function frame(now) {
 // 外层网站在加载时把页面切成全屏。进度倒退到 0，写明正在按新分辨率重新加载，完成后再允许开始。
 addEventListener('resize', () => {
   if (started) return;
-  if (Math.abs(innerWidth - viewW) < 64 && Math.abs(innerHeight - viewH) < 64) return;
-  viewW = innerWidth;
-  viewH = innerHeight;
+  const w = globalThis.innerWidth || 0, h = globalThis.innerHeight || 0;
+  if (Math.abs(w - viewW) < 64 && Math.abs(h - viewH) < 64) return;
+  viewW = w;
+  viewH = h;
   rewinding = true;
   good = 0;
   ready = false;

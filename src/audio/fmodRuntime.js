@@ -6,13 +6,10 @@ let modulePromise;
 
 function loadModule() {
   if (modulePromise) return modulePromise;
-  if (!window.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined') {
-    return Promise.reject(new Error('FMOD 多线程音频需要 HTTPS/localhost 和响应头 Cross-Origin-Opener-Policy: same-origin、Cross-Origin-Embedder-Policy: require-corp'));
-  }
   modulePromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    // 使用官方 pthread 日志版：真正创建 Studio 临界区和后台流线程，不过滤日志。
-    script.src = `${BASE}fmodstudioPL.js`;
+    // 单线程日志版：当前网站没有跨源隔离响应头，多线程版起不来。控制台会有空临界区报警。
+    script.src = `${BASE}fmodstudioL.js`;
     script.async = true;
     script.onerror = () => { script.remove(); reject(new Error(`无法加载 ${script.src}`)); };
     script.onload = () => {

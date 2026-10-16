@@ -92,7 +92,7 @@ export const sound = {
   // 返回的 Promise 在全部就绪（或失败 / 超时）时完成，加载界面等它；永远不会 reject。
   preload() {
     audioReady ??= Promise.race([
-      // Frontend 一装好就预备菜单音乐：加载界面的第一次点击只取消暂停
+      // 菜单音乐只预备、不播放。加载会卡，播出来会跟着断。
       fmod.preload().then(() => guard(() => { if (musicWanted) fmod.prepareLoop(MUSIC); }))
         .then(() => fmod.loaded).then(() => guard(() => {
         fmod.setMuted(document.hidden);
@@ -104,12 +104,10 @@ export const sound = {
     return audioReady;
   },
 
-  // 加载界面的任意点击 / 按键（浏览器要先有用户手势才允许出声）：恢复音频输出，开始菜单音乐
+  // 加载界面的任意点击 / 按键：只恢复音频输出。菜单音乐不在这里播。
   unlock() {
     fmod.initialize();   // 已初始化时在手势里同步恢复输出
-    booting ??= fmod.preload().then(() => guard(() => {
-      if (musicWanted) fmod.startLoop(MUSIC);
-    })).catch((e) => { booting = null; console.warn('[audio] init', e.message); });
+    booting ??= fmod.preload().catch((e) => { booting = null; console.warn('[audio] init', e.message); });
   },
 
   // 点击开始（用户手势里调用）：音乐淡出 + 进入游戏音效 + 取消暂停已预备好的环境循环。

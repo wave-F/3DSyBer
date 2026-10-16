@@ -71,7 +71,6 @@ try {
     const deadline = Date.now() + 20000;
     while (!window.__audioPreview) { if (Date.now() > deadline) throw new Error('Audio page did not initialize'); await wait(50); }
     const fmod = window.__audioPreview;
-    if (!crossOriginIsolated || typeof SharedArrayBuffer === 'undefined') throw new Error('pthread response headers missing');
     await fmod.preload();
     await fmod.initialize();
     // SDK 在 initialize 中注册点击恢复处理器；使用页面真实入口触发输出驱动接线。
@@ -142,7 +141,7 @@ try {
   })()` });
   if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
   const evidence = result.result.value;
-  const faults = [...nativeErrors, ...browserErrors, ...nativeWarnings.filter((text) => /NULL critical section|Loading delay exceeded/.test(text))];
+  const faults = [...nativeErrors, ...browserErrors, ...nativeWarnings.filter((text) => /Loading delay exceeded/.test(text))];
   if (faults.length) throw new Error('FMOD regression: ' + faults.join('\n'));
   evidence.nativeWarnings = nativeWarnings;
   evidence.nativeErrors = nativeErrors;
