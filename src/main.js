@@ -155,7 +155,6 @@ const inv = createInvestigation(scene, camera, crash, updatePlayer.controls, upd
 let started = false;
 loading.onStart(() => {
   started = true;
-  asyncPipelines = false;   // 游戏开始后恢复同步创建管线（见下方「加载期间异步编译着色器」）
   inv.warmFinale(false);
   sound.start();
   updatePlayer.controls.lock();
@@ -288,52 +287,6 @@ const lidEdge = float(1).sub(HURT.lid).mul(0.62).sub(0.1);
 ldr = ldr.mul(float(1).sub(smoothstep(lidEdge, lidEdge.add(0.1), screenUV.y.sub(0.5).abs())));
 pipeline.outputNode = film(ldr, uniform(0.12));
 
-// ---------- 加载期间异步编译着色器 ----------
-// 第一次打开（显卡还没缓存着色器）时，200 多个渲染管线在 Metal 上要编译约 30 秒。three.js 默认在渲染时同步创建管线，
-// GPU 进程忙着编译，主线程就跟着卡死，进度条和加载动画整段停住。
-// 加载期间（点击开始前）改成异步创建：照常渲染，遇到新管线只发起异步编译，编好之前这个物体先不画（画面被加载界面盖着）。
-// 渲染状态与正式渲染完全一致，编出来的管线正式渲染直接复用。点击开始后恢复同步创建，保证游戏里物体第一次出现就画出来。
-let asyncPipelines = true;
-let pendingPipelines = 0, createdPipelines = 0, donePipelines = 0;
-let patchedPipelines = null;
-// renderer._pipelines 是渲染器内部对象，初始化后才有，所以每帧检查一次
-function patchPipelines() {
-  const target = renderer._pipelines;
-  if (!target || patchedPipelines === target) return;
-  patchedPipelines = target;
-  const original = target.getForRender.bind(target);
-  target.getForRender = (renderObject, promises = null) => {
-    if (promises !== null || !asyncPipelines) return original(renderObject, promises);
-    const queued = [];
-    const result = original(renderObject, queued);
-    for (const p of queued) {
-      pendingPipelines++;
-      createdPipelines++;
-      p.finally(() => { pendingPipelines--; donePipelines++; });
-    }
-    return result;
-  };
-}
-// 加载界面的预热阶段：等异步编译全部完成，且连续若干帧（覆盖一整轮开场 / 结局机位轮换）没有新管线
-const IDLE_FRAMES = 30;
-let idleFrames = 0, prepResolve = null;
-loading.prepare((progress) => new Promise((resolve) => {
-  const t0 = performance.now();
-  prepResolve = () => {
-    console.info(`[loading] 着色器异步编译完成：${createdPipelines} 个管线，预热阶段 ${(performance.now() - t0).toFixed(0)} ms`);
-    resolve();
-  };
-  prepProgress = progress;
-}));
-let prepProgress = null, lastCreated = 0;
-function trackPipelines() {
-  if (!prepResolve) return;
-  prepProgress?.(createdPipelines ? donePipelines / createdPipelines : 0);
-  idleFrames = pendingPipelines === 0 && lastCreated === createdPipelines ? idleFrames + 1 : 0;
-  lastCreated = createdPipelines;
-  if (idleFrames >= IDLE_FRAMES) { const r = prepResolve; prepResolve = null; r(); }
-}
-
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
@@ -376,7 +329,5 @@ renderer.setAnimationLoop(() => {
   volFog.update(clock.dt);
   tabletAmt.value = Math.min(1, inv.tablet.amount * 1.4);
   syncAoCamera();
-  patchPipelines();
   pipeline.render();
-  trackPipelines();
 });
