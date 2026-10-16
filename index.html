@@ -85,7 +85,7 @@
 
       /* 卡顿提示：静态首屏直接显示，不依赖脚本、加载进度或入场动画 */
       .ld-notice {
-        position: absolute; top: 28px; left: 8vw; right: calc(8vw + 90px); max-width: 860px;
+        position: absolute; top: 28px; left: 8vw; width: max-content; max-width: calc(84vw - 90px);
         display: flex; align-items: flex-start; gap: 12px; box-sizing: border-box;
         margin: 0; padding: 14px 18px; border: 1px solid rgba(255,207,106,.65); border-left: 4px solid #ffcf6a;
         background: rgba(24,16,5,.92); color: #ffe1a3; box-shadow: 0 4px 24px rgba(0,0,0,.45);
@@ -167,8 +167,8 @@
       <div class="ld-scan"></div>
       <p class="ld-notice" role="note">
         <span class="mark" aria-hidden="true">!</span>
-        <span class="zh" lang="zh-CN">电脑在加载和切换网页分辨率的时候会卡住，这是正常的，请耐心等待</span>
-        <span class="en" lang="en">Your computer may freeze while loading or changing the webpage resolution. This is normal. Please be patient.</span>
+        <span class="zh" lang="zh-CN">电脑在加载和切换网页分辨率的时候会卡住，这是正常的，请耐心等待。<br>可以先点击屏幕触发全屏界面</span>
+        <span class="en" lang="en">Your computer may freeze while loading or changing the webpage resolution. This is normal. Please be patient.<br>Click the screen to enter fullscreen.</span>
       </p>
       <div class="ld-title">
         <h1>零号事故</h1>
