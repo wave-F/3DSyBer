@@ -12,6 +12,7 @@ const IDLE_MS = 5000;        // 一直没有任何文件开始加载时，也视
 const WARM_FRAMES = 15;      // 预热：连续这么多帧都不卡
 const WARM_DT = 50;          // 不卡：帧间隔小于这个毫秒数
 const WARM_MAX_MS = 10000;   // 预热最长等待
+const PREP_SHARE = 0.8;      // 有预编译任务时：预热段里预编译占的比例，剩下的给「连续不卡」检测
 const BLACK_MS = 700;        // 点击后黑场盖满
 const HOLD_MS = 450;         // 全黑再停一下，再开始露出开场
 const FADE_MS = 3600;        // 黑场淡出（与 index.html 的 .fading 一致）
@@ -59,6 +60,20 @@ let startFn = null, wakeFn = null, denyFn = null;
 let fadeAt = 0;
 let phase = 'init';
 let lastUrl = '';
+// 预编译任务（main.js 注册）：资源到齐后异步编译全部着色器，编译期间不统计「连续不卡」帧
+let prepFn = null, prepState = 'none', prepProgress = 0;   // prepState: none | run | done
+function startPrep() {
+  prepState = 'run';
+  Promise.resolve()
+    .then(() => prepFn((p) => { prepProgress = Math.min(1, Math.max(prepProgress, p)); }))
+    .catch((e) => console.warn('[loading] 预编译失败', e))
+    .finally(() => {
+      prepState = 'done';
+      prepProgress = 1;
+      good = 0;
+      warmStart = performance.now();
+    });
+}
 
 const m = THREE.DefaultLoadingManager;
 m.onStart = m.onProgress = (url, l, t) => {
@@ -80,9 +95,10 @@ function frame(now) {
       warmStart = now;
       phase = 'prep';
       paintStatus('prep');
+      if (prepFn) startPrep();
     }
-  } else if (!ready) {
-    // 预热：统计连续不卡的帧
+  } else if (!ready && prepState !== 'run') {
+    // 预热：统计连续不卡的帧（预编译期间不渲染场景，帧一定不卡，不能算数）
     good = lastFrame && now - lastFrame < WARM_DT ? good + 1 : 0;
   }
   lastFrame = now;
@@ -97,9 +113,13 @@ function frame(now) {
       if (assetsDone) { phase = 'prep'; paintStatus('prep'); }
     }
   }
+  const warmed = Math.max(Math.min(1, good / WARM_FRAMES), Math.min(1, (now - warmStart) / WARM_MAX_MS));
+  const prepared = !prepFn ? warmed
+    : prepState === 'done' ? PREP_SHARE + (1 - PREP_SHARE) * warmed
+    : PREP_SHARE * prepProgress;
   const target = !assetsDone
     ? ASSET_SHARE * (total + extraTotal ? (loaded + extraDone) / (total + extraTotal) : 0)
-    : ASSET_SHARE + (1 - ASSET_SHARE) * Math.max(Math.min(1, good / WARM_FRAMES), Math.min(1, (now - warmStart) / WARM_MAX_MS));
+    : ASSET_SHARE + (1 - ASSET_SHARE) * prepared;
   // 平时只增不减。分辨率倒退时上面单独把进度拉回 0。
   if (!rewinding && target > shown) shown += (target - shown) * 0.12;
   if (!rewinding && target >= 1 && shown > 0.995) shown = 1;
@@ -189,6 +209,8 @@ export const loading = {
   onStart(fn) { startFn = fn; },
   onWake(fn) { wakeFn = fn; },
   onDeny(fn) { denyFn = fn; },
+  // 资源到齐后执行一次的异步准备任务（预编译着色器）：fn(progress)，progress(0..1) 汇报进度
+  prepare(fn) { prepFn = fn; },
   // 资源阶段额外等一个任务完成（成功或失败都算完成）
   waitFor(promise, label, en = label) {
     extraTotal++;
