@@ -151,7 +151,8 @@ export function createIntro({ camera, police, controls, inv }) {
 
   addEventListener('keydown', (e) => {
     if (!playing) return;
-    if (e.code === 'Space' && (controls.isLocked || phase === 'brief')) finish();
+    // 正式包不能按空格跳过开场。开发态保留，方便反复看后面的流程。
+    if (import.meta.env.DEV && e.code === 'Space' && (controls.isLocked || phase === 'brief')) finish();
     if (phase === 'brief' && e.code === 'Tab' && !e.repeat) finish();
   });
 
