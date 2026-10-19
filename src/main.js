@@ -157,6 +157,7 @@ loading.onStart(() => {
   started = true;
   asyncPipelines = false;   // 游戏开始后恢复同步创建管线（见下方「加载期间异步编译着色器」）
   inv.warmFinale(false);
+  inv.magazine.warm(false);
   sound.start();
   updatePlayer.controls.lock();
 });
@@ -170,8 +171,9 @@ function warmTransitions() {
   const k = Math.floor(warmFrame++ / 6) % 3;
   intro.warm(k === 1);
   inv.warmFinale(k === 2);
+  inv.magazine.warm(k === 0);   // 杂志手持状态（uiScene）的材质
 }
-if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; window.__renderer = renderer; window.__scene = scene; window.__police = police; window.__intro = intro; } // 开发时截图调机位用
+if (import.meta.env.DEV) { window.__cam = camera; window.__inv = inv.debug; window.__renderer = renderer; window.__scene = scene; window.__police = police; window.__intro = intro; window.__controls = updatePlayer.controls; } // 开发时截图调机位用
 
 // ---------- 后期 ----------
 // Separate pre-pass avoids feeding the shaded scene back into its own AO.
@@ -254,6 +256,8 @@ uiPass.getTexture('mask').type = THREE.UnsignedByteType;
 const uiMask = uiPass.getTextureNode('mask').r;
 const blurred = gaussianBlur(hdr, null, 4, { resolutionScale: 0.25 });
 hdr = mix(hdr, blurred.rgb.mul(0.16), tabletAmt);
+const readAmt = uniform(0);   // 看杂志：背景虚化、轻微压暗（景深感，比平板亮）
+hdr = mix(hdr, blurred.rgb.mul(0.45), readAmt);
 hdr = mix(hdr, blurred.rgb, HURT.blur);   // 结局：被撞后视线模糊（终端在后面单独叠加，不受影响）
 hdr = hdr.mul(float(1).sub(uiMask)).add(uiPass.getTextureNode('output').rgb);
 
@@ -378,6 +382,7 @@ renderer.setAnimationLoop(() => {
   sound.update(dt, camera);
   volFog.update(clock.dt);
   tabletAmt.value = Math.min(1, inv.tablet.amount * 1.4);
+  readAmt.value = inv.magazine.amount * 0.85;
   syncAoCamera();
   patchPipelines();
   pipeline.render();

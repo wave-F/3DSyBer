@@ -6,6 +6,7 @@ import { createRecon } from './recon.js';
 import { buildTwistProps } from './props.js';
 import { createTablet } from './tablet.js';
 import { createViewmodel } from './viewmodel.js';
+import { createMagazine } from './magazine.js';
 import { createPryArm, PRY_INSERT, PRY_HIT } from './pryArm.js';
 import { createCardArm, CARD_HIT, CARD_INSERT_END, CARD_PULL0, CARD_PULL_END } from './cardArm.js';
 import { CLUES, CLUES_ZH, PROBES_ZH, clueEN, probeEN, ROUNDS, REPORTS, LINES, ENDINGS, CARD_HACK, ROOT_HACK, TARGET_INDEX } from './clues.js';
@@ -75,6 +76,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   const tablet = createTablet(camera);
   tablet.onBlank = closeTabletFromBlank;
   const vm = createViewmodel(tablet.uiScene, camera, gait);
+  const mag = createMagazine({ scene, uiScene: tablet.uiScene, camera });   // 地上的电子杂志（世界观补充）
+  let magAimed = false;
   const slot = buildCardSlot(crash);
   const rootKey = buildRootKey(crash);
   // 右侧车门：开局外翻 7°，第 3 轮撬到 55°
@@ -330,6 +333,9 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     ui.setMode(m, m === 'recon' ? tx('黑梦回放 · 找出异常', 'BLACK DREAM · FIND THE BREAK') : tx('现场调查', 'SCENE'));
     ui.setPrompt(null);
     ui.setCinema(m === 'ending');
+    // 正在看杂志时切换模式（剧情推进、跳关）：杂志直接放回地上
+    if (mag.busy) { mag.reset(); ui.setReading(false); }
+    magAimed = false;
     controls.enabled = m !== 'ending' && m !== 'insert' && m !== 'death';
     if (m !== 'recon') clearTimeout(dreamExit);
     holdR = false; setDreamHold(0);
@@ -521,6 +527,12 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     // 平板打开时鼠标已释放，按键照常处理
     if (!locked() && !tablet.open) return;
 
+    // 看杂志：翻页 / 放下，其余按键（TAB、Q、R、移动）全部不响应
+    if (mag.busy) {
+      if (!e.repeat) mag.key(e.code);
+      return;
+    }
+
     // 报告页：待确认时按住 E 确认、TAB 暂不确认；质询对话中 TAB 跳过；没有确认或已挂起时 TAB / Esc 收起
     // 接入画面（根钥、对象索引）播放期间不响应
     if (mode === 'report') {
@@ -560,6 +572,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       } else if (mode === 'explore' && !e.repeat && doorAimed) { holdKey = false; startPry(); }
       else if (mode === 'explore' && !e.repeat && portAimed) { holdKey = false; startInsert(); }
       else if (mode === 'explore' && !e.repeat && keyAimed) { holdKey = false; startKeyGrab(); }
+      else if (mode === 'explore' && !e.repeat && magAimed) { holdKey = false; startRead(); }
       else if (mode === 'explore' && !e.repeat && aimed && aimed.done) ui.showClue(aimed, evIndex(aimed));
     }
     if (e.code === 'KeyR' && mode === 'explore' && !e.repeat) holdR = true;
@@ -1450,6 +1463,9 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     // 第 4 轮：驾驶舱里的根钥
     const keyOn = round === 4 && !root.picked && rootKey.ready;
     keyAimed = keyOn && !aimed && aimAt([keyTarget()], AIM_RANGE) != null;
+    // 地上的杂志：走近、准星对准时按 E 拾起
+    const magT = mag.target;
+    magAimed = !!magT && !aimed && !doorAimed && !portAimed && !keyAimed && aimAt([magT], mag.range) != null;
     tickFinished(dt);
     holdAnalyze(aimed, dt, finishClue);
     const analysisClue = showAnalysis(aimed);
@@ -1464,6 +1480,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     const tap = doorAimed ? { ...project(doorTarget().p), name: tx('右侧车门', 'Right door') }
       : portAimed ? { ...project(portTarget().p), name: tx('检修接口', 'Service port') }
       : keyAimed ? { ...project(keyTarget().p), name: tx('根钥', 'Root key') }
+      : magAimed ? { ...project(magT.p), name: tx('电子杂志 · 拾起', 'E-zine · pick up') }
       : null;
     if (!analysisClue && tap) ui.setAnalysis(tap, 0, 'tap');
     if (analysisClue || tap || ui.panelOn) ui.setPrompt(null);
@@ -1484,6 +1501,27 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     list.push({ id: 'rootkey', x: ks.x, y: ks.y, front: ks.front, show: keyOn && ks.front && kd < 18, done: false, aim: keyAimed, label: keyAimed ? keyName : `${keyName} ${kd.toFixed(0)} m` });
     ui.updateMarkers(list);
   }
+  // ---------- 杂志 ----------
+  // 拾起：视角固定、不能走动（controls.enabled = false，鼠标移动不响应）；放回原位后恢复
+  let reading = false;
+  function startRead() {
+    if (!mag.pickUp()) return;
+    reading = true;
+    magAimed = false;
+    holdT = 0; finishedAnalysis = null;
+    controls.enabled = false;
+    ui.setPrompt(null);
+    ui.setAnalysis(null);
+    ui.hidePanel();
+    ui.setReading(true);
+  }
+  function tickRead() {
+    if (!reading || mag.busy) return;
+    reading = false;
+    ui.setReading(false);
+    if (mode === 'explore' && !enter.on) controls.enabled = true;
+  }
+
   const _port = { p: new THREE.Vector3(), radius: 0.55 };
   function portTarget() { _port.p.copy(slot.world); return _port; }
   const _door = { p: new THREE.Vector3(), radius: 0.8 };
@@ -1588,13 +1626,16 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     },
     // 加载界面期间预热结局跑车的材质（见 finale.warm）
     warmFinale(on) { death.warm(on); },
-    get moveScale() { return intro || enter.on ? 0 : mode === 'report' || mode === 'ending' || mode === 'insert' || mode === 'death' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
+    magazine: mag,
+    get moveScale() { return intro || enter.on || mag.busy ? 0 : mode === 'report' || mode === 'ending' || mode === 'insert' || mode === 'death' || tablet.open ? 0 : mode === 'recon' ? 0.5 : 1; },
     setFps(dt) { ui.setFps(dt); },
     update(realDt) {
       ui.updateDialogue(realDt);
       tablet.update(realDt);
+      mag.update(realDt);
+      tickRead();
       if (!intro) { updateRootHold(realDt); tickCardRead(); tickDataLine(); tickPendingSay(realDt); }
-      ui.setTabletOpen(tablet.amount > 0.05);
+      ui.setTabletOpen(tablet.amount > 0.05 || mag.amount > 0.05);
       ui.updateHud(realDt);
       sound.setTablet(tablet.open);
       // 接入画面（插卡读取 / 根钥 / 对象索引）期间循环科技扫描声：插卡时在检修接口，其余在平板位置
@@ -1632,7 +1673,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
         fx.update(realDt, null);
         return;
       }
-      const available = !tablet.open && tablet.amount <= 0.05;
+      const available = !tablet.open && tablet.amount <= 0.05 && !mag.busy;
       if (mode === 'recon' && enter.on) {
         vm.analyze(null, 0);
         fx.analyze(null);
@@ -1647,7 +1688,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       if (mode === 'explore') updateDreamHold(realDt);
       updateRite(realDt);
       syncAnalyzeSound();
-      vm.update(realDt, mode === 'explore' && !tablet.open && tablet.amount < 0.02);
+      // 拿着杂志时扫描枪收起（两只手都在杂志上）
+      vm.update(realDt, mode === 'explore' && !tablet.open && tablet.amount < 0.02 && !mag.busy);
       fx.update(realDt, vm.emitterWorld(emitter));
     },
     // 开发调试：直接切换状态 / 设置时间轴
@@ -1685,6 +1727,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       deathResume() { death.resume(); },
       deathT: death.T,
       get round() { return round; },
+      mag,
+      read() { startRead(); },
     },
   };
 }

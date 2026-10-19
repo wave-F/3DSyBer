@@ -75,6 +75,9 @@ const CSS = `
 #inv-prompt { left: 50%; bottom: 190px; transform: translateX(-50%); font-size: 14px; letter-spacing: .12em; padding: 8px 18px; border: 1px solid rgba(108,200,255,.5); background: rgba(4,12,20,.55); opacity: 0; transition: opacity .2s; white-space: nowrap; }
 #inv-prompt.on { opacity: 1; }
 #inv-prompt.gold { border-color: rgba(255,179,92,.7); color: #ffd9a8; }
+#inv-read { left: 50%; bottom: 36px; transform: translateX(-50%); font-size: 13px; letter-spacing: .1em; white-space: nowrap; opacity: 0; transition: opacity .3s; }
+#inv-read.on { opacity: .8; transition-delay: .45s; }
+#inv-read b { display: inline-block; min-width: 18px; padding: 0 5px; margin: 0 6px 0 18px; border: 1px solid rgba(223,242,255,.5); text-align: center; font-weight: 400; }
 #inv-analysis { inset: 0; opacity: 0; transition: opacity .18s; z-index: 2; }
 #inv-analysis.on { opacity: 1; }
 #inv-analysis .target { position: absolute; width: 176px; height: 140px; transform: translate(-50%, -50%); color: #ffe08a; filter: drop-shadow(0 0 6px rgba(255,207,74,.75)); transition: width .2s, height .2s; }
@@ -230,6 +233,7 @@ export function createUI() {
   const skipFill = skip.querySelector('.fill');
   const markers = el('inv-markers');
   const prompt = el('inv-prompt');
+  const readHint = el('inv-read');   // 看杂志时底部的操作提示
   const analysis = el('inv-analysis', '', `<div class="target"><i class="corner a"></i><i class="corner b"></i><i class="corner c"></i><i class="corner d"></i></div>
     <div class="readout"><div class="heading"><div><div class="percent inv-mono"></div><div class="status"></div></div></div>
     <div class="track" role="progressbar" aria-label="${tx('线索分析', 'Clue analysis')}" aria-valuemin="0" aria-valuemax="100"><i class="fill"></i></div><div class="caption"></div></div>`);
@@ -315,6 +319,7 @@ export function createUI() {
     rows[3].textContent = tx('按住分析', 'Hold to analyze');
     rows[4].textContent = tx('退出黑梦', 'Leave the dream');
     if (thisMode) hint.innerHTML = hints()[thisMode] ?? '';
+    readHint.innerHTML = tx('<b>A</b><b>D</b>翻页　<b>E</b>放下', '<b>A</b><b>D</b> turn page　<b>E</b> put down');
   }
   let thisMode = '';
   paintStatic();
@@ -536,6 +541,7 @@ export function createUI() {
         if (m) placePanel(m.x, m.y, m.front);
       }
     },
+    setReading(on) { readHint.classList.toggle('on', on); },
     setPrompt(text, gold = false) {
       if (text) prompt.textContent = text;
       prompt.classList.toggle('on', !!text);

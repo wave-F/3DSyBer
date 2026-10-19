@@ -41,6 +41,7 @@
 | `src/investigation/ui.js` | HUD、线索卡、时间轴、字幕、跳过提示、黑边 |
 | `src/investigation/recon.js` | 黑梦回放、全息车与人，按轮次切换出场物体 |
 | `src/investigation/tablet.js` | 平板 UI：线索、报告与确认归档、接入画面 |
+| `src/investigation/magazine.js` | 地上的电子杂志：拾起阅读、翻页、放回原位，4 页程序绘制 |
 | `src/investigation/finale.js` | 结局：陈墨被撞、终端自动写报告并归档、黑屏 |
 | `src/investigation/viewmodel.js` | 第一人称手与袖 |
 | `src/investigation/pryArm.js` | 第 3 轮撬门的手和撬棍（`public/assets/pry-arm.glb`，Blender 做的动画 + 撬门机位）；源脚本 `tools/blender/build_pry_anim.py`、`export_pry_anim.py` |
