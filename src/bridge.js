@@ -185,7 +185,7 @@ function roadMaterial() {
   const lane = texture(lanes, uv().mul(vec2(1, L / 14)));
   const puddle = smoothstep(0.15, 0.7, texture(puddles, uv()).r);
 
-  const mat = new THREE.MeshStandardNodeMaterial();
+  const mat = new THREE.MeshStandardNodeMaterial({ name: 'Road' });
   const base = mix(texture(diff, aUV).rgb.mul(0.5), lane.rgb.mul(0.7), lane.a);
   // 贴墙脚一圈接触阴影。路面不再铺灯槽青光。
   const ax = abs(positionWorld.x);

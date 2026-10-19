@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { gltfLoader } from './gltf.js';
+import { applySurfaceRain } from './surfaceRain.js';
 import { DECK_Y } from './bridge.js';
 import { addLightGroup } from './debugLights.js';
 
@@ -41,6 +42,7 @@ export function buildPoliceCar(scene) {
       if (!o.isMesh) return;
       o.material = fixMaterial(o.material, { red, blue });
     });
+    applySurfaceRain(model);
     door = model.getObjectByName('Door_FL');
     door.rotation.y = DOOR_OPEN * doorAmount;
     group.add(model);

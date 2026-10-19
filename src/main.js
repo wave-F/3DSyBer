@@ -35,6 +35,7 @@ import { sound } from './audio/sound.js';
 import { AD_DWELL } from './ads.js';
 import { createStaticGI } from './globalIllumination.js';
 import { initGLTF } from './gltf.js';
+import { applySurfaceRain, mountSurfaceRainPanel, updateSurfaceRain } from './surfaceRain.js';
 
 // 网页一打开就装入全部 Bank 并预备好所有循环；加载界面等声音就绪后才允许点击开始
 loading.waitFor(sound.preload(), '声音', 'AUDIO');
@@ -164,6 +165,7 @@ if (gi) {
     syncGiButton();
   }
 }
+mountSurfaceRainPanel();
 const crash = buildCrash(scene);
 const police = buildPoliceCar(scene);
 const beforeSky = new Set(scene.children);
@@ -171,6 +173,7 @@ const updateSky = buildSky(scene);
 for (const o of scene.children) if (!beforeSky.has(o)) farOnly(o);
 const updateRain = buildRain(scene, camera);
 const updateCordon = buildCordon(scene);
+applySurfaceRain(scene);
 const playArea = { x: [-HALF_W, HALF_W], z: [CORDON.z0, CORDON.z1], y: DECK_Y + 1.7 };
 sound.setRainSpots(updateCity.rainSpots, playArea);
 sound.setBillboards(updateCity.adScreens, playArea, AD_DWELL);
@@ -398,6 +401,7 @@ renderer.setAnimationLoop(() => {
   if (!started) warmTransitions();
   if (intro.playing) intro.update(step);
   else updatePlayer(step, inv.moveScale);
+  updateSurfaceRain(step);
   crash.update(clock.dt, clock.elapsed);
   police.update(clock.dt, clock.elapsed);
   updateRain(clock.dt);

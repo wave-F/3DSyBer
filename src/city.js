@@ -18,7 +18,7 @@ export function buildCity(scene) {
   };
 
   // 桥下地面不参与屏幕反射，也不吃贴地雾。否则看下去会有一条绿边，下面像倒影
-  const groundMat = new THREE.MeshStandardMaterial({ color: 0x07090a, roughness: 1, metalness: 0 });
+  const groundMat = new THREE.MeshStandardMaterial({ color: 0x07090a, roughness: 1, metalness: 0, name: 'Ground' });
   groundMat.fog = false;
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), groundMat);
   ground.rotation.x = -Math.PI / 2;

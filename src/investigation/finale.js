@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { uniform } from 'three/tsl';
 import { gltfLoader } from '../gltf.js';
+import { applySurfaceRain } from '../surfaceRain.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { loadMannequin } from './actors.js';
 import { DECK_Y } from '../bridge.js';
@@ -84,7 +85,7 @@ export function createFinale({ scene, camera, tablet, ui }) {
     const model = gltf.scene;   // 车头 +Z，地面 y=0
     const door = model.getObjectByName('Door_R');
     if (door) door.rotation.set(0, 0, 0);
-    const paint = new THREE.MeshPhysicalMaterial({ color: 0x0b0d12, roughness: 0.22, metalness: 0.5, clearcoat: 1, clearcoatRoughness: 0.08 });
+    const paint = new THREE.MeshPhysicalNodeMaterial({ color: 0x0b0d12, roughness: 0.22, metalness: 0.5, clearcoat: 1, clearcoatRoughness: 0.08, name: 'CarPaint_Main' });
     const lamp = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 1, 1).multiplyScalar(9) });
     model.traverse((o) => {
       if (!o.isMesh) return;
@@ -98,6 +99,7 @@ export function createFinale({ scene, camera, tablet, ui }) {
         o.material.roughness = 0.45;
       }
     });
+    applySurfaceRain(model);
     car.add(model);
     for (const n of ['Wheel_FL', 'Wheel_FR', 'Wheel_RL', 'Wheel_RR']) {
       const w = model.getObjectByName(n);
