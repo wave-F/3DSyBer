@@ -155,6 +155,7 @@ export const EN = {
     ],
     start1: [thought('Check the impact first.')],
     dreamGuide: (time) => [thought('Wait. The front wheel.'), thought(`Rewind to ${time} and look again.`)],
+    afterRewind: [thought('Go over and see if there is a new lead.')],
     clueFront: [thought('The whole front end is crushed in.')],
     clueRail: [thought('It did not graze the barrier. It went straight at it.')],
     clueDebris: [thought('These pieces all came off the front end.')],

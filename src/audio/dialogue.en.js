@@ -44,6 +44,10 @@ export const ENGLISH = {
   start1: [
     line('先看撞哪儿了。', 'Check the impact first.', 'To himself, after putting the terminal away. Short, ready to work.', 'quiet, matter-of-fact'),
   ],
+  // 倒回完成后的字幕。还没有录音，不送去合成。
+  afterRewind: [
+    { ...line('过去看看有什么新线索', 'Go over and see if there is a new lead.', 'After the rewind stops on the anomaly. A short nudge to walk over and look.', 'quiet, focused'), silent: true },
+  ],
   clueFront: [
     line('车头都压进去了。', 'The whole front end is crushed in.', 'Observe the damage plainly.', 'quiet, focused'),
   ],

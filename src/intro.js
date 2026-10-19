@@ -91,6 +91,7 @@ export function createIntro({ camera, police, controls, inv }) {
   function placeCar(z) {
     g.position.set(POLICE_POS.x, POLICE_POS.y, z);
     g.rotation.y = POLICE_YAW;
+    police.setRoll(z - Z0);
   }
 
   function sample(time) {

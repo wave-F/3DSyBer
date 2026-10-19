@@ -6,7 +6,7 @@ import { sound } from '../audio/sound.js';
 import { tx, onLang } from '../i18n.js';
 
 // 地上的电子杂志（世界观补充，参考《底特律：变人》的杂志平板）
-// 平时躺在桥面上，封面一直在动；按 E 拾起 → 飞到镜头前阅读（不能走动、视角固定）→ A / D 翻页 → E 放回原位
+// 平时躺在事故车旁的玻璃渣里，屏幕待机调暗，隔一会儿亮一下推送；按 E 拾起 → 飞到镜头前阅读（不能走动、视角固定）→ A / D 翻页 → E 放回原位
 // 在地上时属于主场景（受灯光、雾、屏幕反射影响）；拿起期间挪进平板的 uiScene（不会插进别的物体，背景虚化）
 
 const W = 0.2, H = 0.2667;            // 屏幕尺寸（米），3:4 竖版
@@ -19,11 +19,17 @@ const CROUCH = 0.3;                   // 下蹲多少米
 const LEAN = 0.08;                    // 下蹲时身体往杂志方向探
 const SLIDE = 0.12;                   // 拾起前先贴地往脚边拖一下的距离
 const PICK_RANGE = 3;                 // 准星多远内可以拾起（眼睛到杂志）
-const GLOW_GROUND = 1.7;              // 地上：屏幕亮过辉光阈值，雨夜里远远能看到一团光
+// 地上：平时自动调暗待机；隔一会儿像收到推送一样亮起一两秒再暗下去（不超过辉光阈值，不泛光）
+const GLOW_DIM = 0.2;
+const GLOW_PING = 0.9;
+const PING_T = 2.2;                   // 一次推送亮多久（含淡入淡出）
+const PING_GAP = [9, 16];             // 两次推送间隔（秒）
 const GLOW_HAND = 1.0;                // 手里：白字不泛光，保证能读
-// 摆放：桥面上、出生点往事故车走的路上，屏幕朝上，随手丢下的角度
-const GROUND_POS = new THREE.Vector3(-0.2, DECK_Y + 0.0135 + DEPTH / 2, -8.2);   // 路面比 DECK_Y 高约 1 厘米
-const GROUND_YAW = 0.55;
+// 摆放：事故车左侧（朝护栏那一侧）车门后方的玻璃渣里，像是撞击时从碎掉的车窗滑出来的；屏幕朝上，落地时转了个随意的角度
+// 车在 CAR_POS (5.5, 0.2)，偏航 -0.75；这里约为车本地 (x -1.2, z -1.5)，在车身外约 0.35 m；
+// 离脱落的左前轮（车本地 -1.9, -1.9）约 0.8 m，离"断裂护栏"线索约 1.4 m，玩家站在车尾左后方就能拾起
+const GROUND_POS = new THREE.Vector3(5.64, DECK_Y + 0.0135 + DEPTH / 2, -1.72);   // 路面比 DECK_Y 高约 1 厘米
+const GROUND_YAW = -0.9;
 const HELD = { pos: new THREE.Vector3(0, -0.004, -0.32), pitch: -0.07 };
 
 const SANS = '"PingFang SC", "Helvetica Neue", sans-serif';
@@ -68,7 +74,7 @@ export function createMagazine({ scene, uiScene, camera }) {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
   // 屏幕：页面 × 亮度 + 一道固定的玻璃反光
-  const glow = uniform(GLOW_GROUND);
+  const glow = uniform(GLOW_DIM);
   const flicker = uniform(1);
   const suv = uv();
   const diag = suv.x.mul(0.7).add(suv.y);
@@ -104,6 +110,10 @@ export function createMagazine({ scene, uiScene, camera }) {
   const _e2 = new THREE.Euler(), _m = new THREE.Matrix4(), _ax = new THREE.Vector3();
   const UP = new THREE.Vector3(0, 1, 0);
   let time = 0, flickT = 0;
+  // 推送：ping 为本次亮起的计时（-1 = 待机中），pingWait 为距下一次的秒数
+  let ping = -1, pingWait = 4, fromGlow = GLOW_DIM;
+  const pingEnv = () => ping < 0 ? 0 : smooth(clamp01(ping / 0.15)) * (1 - smooth(clamp01((ping - (PING_T - 0.45)) / 0.45)));
+  const groundGlow = () => THREE.MathUtils.lerp(GLOW_DIM, GLOW_PING, pingEnv());
 
   // 拾起 / 放下途中的关键姿态
   // 拾起：地上 → P1（贴地滑到脚边，略转一点）→ P2（翻起、离地，屏幕朝人）→ 手持
@@ -207,6 +217,7 @@ export function createMagazine({ scene, uiScene, camera }) {
     if (st.phase !== 'ground') return false;
     st.phase = 'up'; st.t = 0;
     st.page = 0; st.flip = 1;
+    fromGlow = glow.value; ping = -1;   // 从当前亮度（待机或推送中）过渡到手持亮度
     fromPos.copy(pad.position); fromQuat.copy(pad.quaternion);
     uiScene.attach(pad);
     beginCam();
@@ -223,6 +234,7 @@ export function createMagazine({ scene, uiScene, camera }) {
   function putDown() {
     if (st.phase !== 'held') return false;
     st.phase = 'down'; st.t = 0;
+    pingWait = PING_GAP[0];
     fromPos.copy(pad.position); fromQuat.copy(pad.quaternion);
     beginCam();
     // 落点还是原处；朝向不转回去，顺着拿在手里的方向往前放平（顶边朝外），带一点随手的偏差
@@ -250,6 +262,11 @@ export function createMagazine({ scene, uiScene, camera }) {
     // 屏幕偶尔闪一下（泡了雨水的旧屏）：只在地上闪
     if (st.phase === 'ground' && flickT <= 0 && Math.random() < dt * 0.18) flickT = 0.05 + Math.random() * 0.08;
     flicker.value = flickT > 0 ? 0.35 + Math.random() * 0.4 : 1;
+    // 地上待机时隔一会儿亮一次推送
+    if (st.phase === 'ground') {
+      if (ping >= 0) { ping += dt; if (ping >= PING_T) ping = -1; }
+      else if ((pingWait -= dt) <= 0) { ping = 0; pingWait = PING_GAP[0] + Math.random() * (PING_GAP[1] - PING_GAP[0]); st.redraw = 1; }
+    }
 
     if (st.phase === 'up' || st.phase === 'down') {
       const up = st.phase === 'up';
@@ -281,7 +298,7 @@ export function createMagazine({ scene, uiScene, camera }) {
         )));
         keepAboveGround();
         applyCam(c, l, 0.025 * c, gw);
-        glow.value = THREE.MathUtils.lerp(GLOW_GROUND, GLOW_HAND, w3);
+        glow.value = THREE.MathUtils.lerp(fromGlow, GLOW_HAND, w3);
       } else {
         // 镜头：蹲下低头放好，停一下再起身；途中视线追着杂志
         const c = ramp(u, 0, 0.35) - ramp(u, 0.62, 1);
@@ -297,7 +314,7 @@ export function createMagazine({ scene, uiScene, camera }) {
         pad.quaternion.multiply(_q.setFromEuler(_e2.set(Math.sin(k * Math.PI * 2) * (1 - k) * 0.03, 0, 0)));
         keepAboveGround();
         applyCam(c, l, -0.02 * c, gw);
-        glow.value = THREE.MathUtils.lerp(GLOW_HAND, GLOW_GROUND, w2);
+        glow.value = THREE.MathUtils.lerp(GLOW_HAND, GLOW_DIM, w2);
       }
       if (u >= 1) {
         endCam();
@@ -307,14 +324,14 @@ export function createMagazine({ scene, uiScene, camera }) {
     } else if (st.phase === 'held') {
       heldPose(pad.position, pad.quaternion);
       glow.value = GLOW_HAND;
-    } else glow.value = GLOW_GROUND;
+    } else glow.value = groundGlow();
 
     // 翻页过渡
     if (st.flip < 1) st.flip = Math.min(1, st.flip + dt / 0.42);
 
     // 重绘：拿在手里 30 帧 / 秒；地上走近（15 米内）12 帧 / 秒，远了不画
     const near = st.phase !== 'ground' || _v.copy(GROUND_POS).distanceTo(camera.position) < 15;
-    const fps = st.phase === 'ground' ? 12 : 30;
+    const fps = st.phase === 'ground' && ping < 0 ? 12 : 30;   // 推送横幅滑动时也用 30 帧
     st.drawT -= dt;
     if (near && (st.drawT <= 0 || st.redraw)) {
       st.drawT = 1 / fps;
@@ -760,6 +777,22 @@ export function createMagazine({ scene, uiScene, camera }) {
         const y = Math.random() * CH, h = 6 + Math.random() * 40;
         g.drawImage(cvs, 0, y, CW, h, (Math.random() - 0.5) * 80 * amt, y, CW, h);
       }
+    }
+    // 推送横幅：地上亮起时从顶部滑下来
+    const pe = st.phase === 'ground' ? pingEnv() : 0;
+    if (pe > 0) {
+      const bh = 168, by = 36 - (1 - pe) * (bh + 40);
+      g.save();
+      g.globalAlpha = pe;
+      g.fillStyle = 'rgba(18,22,30,0.92)';
+      g.beginPath(); g.roundRect(40, by, CW - 80, bh, 28); g.fill();
+      g.fillStyle = C.gold;
+      g.beginPath(); g.roundRect(72, by + 36, 56, 56, 14); g.fill();
+      text('M', 100, by + 78, 34, '#0c0f16', 800, 'center', SANS);
+      text(tx('城脉 · 新一期已送达', 'METRO PULSE · New issue'), 152, by + 62, 30, C.ink, 700);
+      text(tx('零号保障：世界为你让路。', 'Zero Priority: the world makes way for you.'), 152, by + 108, 26, C.dim, 400);
+      text(tx('刚刚', 'now'), CW - 72, by + 62, 22, C.dim, 500, 'right', MONO);
+      g.restore();
     }
     // 页脚：页码（拿在手里才显示）
     if (st.phase !== 'ground') {

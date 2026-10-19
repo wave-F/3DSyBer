@@ -294,6 +294,10 @@ const LINES_ZH = {
     { text: '等等，前轮。', voiceId: 'dreamGuide_01' },
     { text: `倒回 ${time}，再看一遍。`, voiceId: 'dreamGuide_02', voiceSource: '倒回 {time}，再看一遍。' },
   ],
+  // 第一次黑梦：玩家把时间倒回异常时刻后
+  afterRewind: [
+    { text: '过去看看有什么新线索' },
+  ],
   // 每条线索分析完的内心独白（state.js 的 CLUE_LINES 按线索 id 对应）
   // 第 1 轮现场：先接受「单车事故」的表象
   clueFront: [

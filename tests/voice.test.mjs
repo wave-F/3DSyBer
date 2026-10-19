@@ -24,15 +24,15 @@ async function fixture(t) {
   return directory;
 }
 
-test('新版英文稿覆盖当前 35 组、56 条有声台词，终端省略号保持沉默', () => {
+test('新版英文稿覆盖当前 36 组、56 条有声台词，终端省略号保持沉默', () => {
   const before = JSON.stringify(LINES);
   const all = dialogueLines({ includeReserve: true, includeSilent: true });
-  assert.equal(Object.keys(ENGLISH).length, 35);
-  assert.equal(all.length, 57);
+  assert.equal(Object.keys(ENGLISH).length, 36);
+  assert.equal(all.length, 58);
   assert.equal(lines.length, 56);
-  assert.equal(new Set(all.map((l) => l.id)).size, 57);
+  assert.equal(new Set(all.map((l) => l.id)).size, 58);
   assert.ok(all.every((l) => !l.reserve));
-  assert.deepEqual(all.filter((l) => l.silent).map((l) => l.id), ['rootRead_02']);
+  assert.deepEqual(all.filter((l) => l.silent).map((l) => l.id), ['afterRewind_01', 'rootRead_02']);
   assert.ok(lines.some((l) => l.group === 'archived'));
   assert.ok(lines.some((l) => l.group === 'transferred'));
   assert.ok(lines.every((l) => l.text.length && l.direction.length && !/[\u3400-\u9fff]/u.test(l.text)));

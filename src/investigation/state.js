@@ -480,7 +480,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
         const hit = Math.abs(rt - enter.back1) <= PROBE_WINDOW;
         const goal = timedProbes().findIndex((c) => c.t === enter.back1);
         ui.setGuide(hit ? null : tx(`滚动<b>滚轮</b>，把时间倒回 <b class="inv-mono">${clockText(enter.back1)}</b>`, `Scroll the <b>wheel</b> back to <b class="inv-mono">${clockText(enter.back1)}</b>`), goal);
-        if (hit) { playing = false; endEnter(); showTip(); }
+        if (hit) { playing = false; endEnter(); showTip(); ui.say(LINES.afterRewind); }
         break;
       }
     }
