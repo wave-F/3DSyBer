@@ -9,7 +9,8 @@ import { gameTime } from './investigation/clock.js';
 import { DECK_Y } from './bridge.js';
 import { addLightGroup } from './debugLights.js';
 
-export const FOG_HEX = 0x1b2726;
+// 地平线、远雾、桥面雾共用。冷灰，不再用以前的灰绿 0x1b2726。
+export const FOG_HEX = 0x161a1e;
 
 // ---------- 可调参数 ----------
 // 开发态右下角「测试 · 雾」面板能实时拖动，调好后点「复制参数」把数值贴回这里
