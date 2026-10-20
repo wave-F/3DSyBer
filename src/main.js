@@ -95,6 +95,9 @@ camera.layers.enable(FAR_LAYER);
 const farOnly = (root) => root.traverse((o) => { if (o.isMesh || o.isLine || o.isPoints || o.isSprite) o.layers.set(FAR_LAYER); });
 const bridgeParts = new Set(staticWorld.children);
 const updateCity = buildCity(staticWorld);
+// GLB 在文件下完后还要解析、建实例。加载进度只数文件，预热若提前开始，这些网格会在开场里第一次画到，
+// 而点击开始后管线改回同步编译，主线程会顿一下。等它们进场景，预热才能编到开场真正会看见的材质。
+loading.waitFor(updateCity.ready, '城市建筑', 'BUILDINGS');
 // 模型楼是异步加进来的，加载完再标一遍
 const markCity = () => { for (const o of staticWorld.children) if (!bridgeParts.has(o)) farOnly(o); };
 markCity();
@@ -140,6 +143,8 @@ if (gi) {
 }
 const crash = buildCrash(scene);
 const police = buildPoliceCar(scene);
+loading.waitFor(crash.ready, '事故车辆', 'VEHICLE');
+loading.waitFor(police.ready, '警车', 'POLICE CAR');
 const beforeSky = new Set(scene.children);
 const updateSky = buildSky(scene);
 for (const o of scene.children) if (!beforeSky.has(o)) farOnly(o);

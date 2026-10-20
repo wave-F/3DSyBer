@@ -41,6 +41,8 @@ export function buildPoliceCar(scene) {
     const angle = roll / (WHEEL_RADIUS * POLICE_SCALE);
     for (const wheel of wheels) wheel.rotation.x = angle;
   }
+  let markReady;
+  const ready = new Promise((resolve) => { markReady = resolve; });
   gltfLoader().loadAsync(URL).then((gltf) => {
     const model = gltf.scene;
     model.scale.setScalar(POLICE_SCALE);
@@ -57,8 +59,10 @@ export function buildPoliceCar(scene) {
     }
     applyRoll();
     group.add(model);
+    markReady();
   }).catch((error) => {
     console.error('Failed to load the police cruiser', error);
+    markReady();
   });
 
   // 驾驶门开合：0 关闭，1 全开
@@ -97,7 +101,7 @@ export function buildPoliceCar(scene) {
   // 开关门声源位置（世界坐标）：驾驶门中部
   const DOOR_POINT = new THREE.Vector3(0.95, 0.9, -0.25);
   const doorWorld = (out) => { group.updateMatrixWorld(); return group.localToWorld(out.copy(DOOR_POINT)); };
-  return { group, update, setDoor, setRoll, doorWorld };
+  return { group, update, setDoor, setRoll, doorWorld, ready };
 }
 
 // Sketchfab 导出的材质全是 BLEND + 双面 + 纯黑自发光贴图，逐个改成合适的渲染方式
