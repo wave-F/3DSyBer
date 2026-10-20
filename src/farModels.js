@@ -15,6 +15,9 @@ import LODS from './data/buildingLods.json';
 // 同楼型同档合成 InstancedMesh；材质是 modelBuildings.js 纯烘焙版（不吃实时光、不含招牌补光和湿墙），共用同一套亮度参数
 
 export const FAR_RING = { near: 100, far: 400, l1: 250 };
+// 外圈：400 m 以外到原远景方盒的覆盖范围（|x| ≤ 530、|z| ≤ 710），也用 L2 模型楼铺满（仅桌面端）
+// 开着时 city.js 的远景方盒全部隐藏，只留作开发态对比
+export const FAR_OUTER = { on: true, x: 530, z: 710 };
 
 // 到玩家活动区（桥中线上警戒线之间那一段）的水平距离
 export function playerDist(x, z) {
@@ -69,6 +72,66 @@ function layout(r, avoid) {
   return out;
 }
 
+// 楼型占地包围盒（rot×90°、等比缩放 s）
+function footprint(type, x, z, rot, s) {
+  const [bx0, bx1, by0, by1] = TYPES[type].bounds;
+  const c = Math.cos(rot * Math.PI / 2), sn = Math.sin(rot * Math.PI / 2);
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const [lx, lz] of [[bx0, -by0], [bx1, -by0], [bx0, -by1], [bx1, -by1]]) {
+    const wx = x + s * (c * lx + sn * lz), wz = z + s * (-sn * lx + c * lz);
+    x0 = Math.min(x0, wx); x1 = Math.max(x1, wx); z0 = Math.min(z0, wz); z1 = Math.max(z1, wz);
+  }
+  return { x0, x1, z0, z1 };
+}
+
+// 外圈楼型权重：远处看天际线，偏高楼；小矮楼基本被挡，不放
+const OUTER_WEIGHTS = { towerC: 3, bldgLG: 2, tower02: 2, tower03: 2, tower08: 2, midrise: 1.5, towerL: 1.5, capsule: 0.6, bldgM: 0.6 };
+const OUTER_TRIES = 60000;
+const CELL = 64;   // 碰撞检测用的网格边长
+
+// 外圈摆放：400 m 以外的矩形区域，只用 L2
+// KitBash 楼最高 160 m、多数 60 m 左右，撑不起原方盒（40~240 m）的天际线：
+// 等比放大 1.3~1.75 之外再纵向拉伸（sy），这个距离层高变化看不出来
+function layoutOuter(r, avoid) {
+  const names = Object.keys(OUTER_WEIGHTS).filter((n) => TYPES[n] && LODS[n]);
+  const total = names.reduce((s, n) => s + OUTER_WEIGHTS[n], 0);
+  const pick = () => { let x = r() * total; for (const n of names) if ((x -= OUTER_WEIGHTS[n]) <= 0) return n; return names[0]; };
+  // 网格加速：每个格子记录压到它的占地
+  const grid = new Map();
+  const cells = (f, fn) => {
+    for (let i = Math.floor(f.x0 / CELL); i <= Math.floor(f.x1 / CELL); i++) {
+      for (let j = Math.floor(f.z0 / CELL); j <= Math.floor(f.z1 / CELL); j++) fn(`${i},${j}`);
+    }
+  };
+  const insert = (f) => cells(f, (k) => { if (!grid.has(k)) grid.set(k, []); grid.get(k).push(f); });
+  const hit = (a, gap) => {
+    let found = false;
+    cells({ x0: a.x0 - gap, x1: a.x1 + gap, z0: a.z0 - gap, z1: a.z1 + gap }, (k) => {
+      if (found) return;
+      const list = grid.get(k);
+      if (list) found = list.some((b) => a.x0 < b.x1 + gap && a.x1 > b.x0 - gap && a.z0 < b.z1 + gap && a.z1 > b.z0 - gap);
+    });
+    return found;
+  };
+  for (const f of avoid) insert(f);
+  const out = [];
+  for (let i = 0; i < OUTER_TRIES; i++) {
+    const x = (r() * 2 - 1) * FAR_OUTER.x, z = (r() * 2 - 1) * FAR_OUTER.z;
+    if (playerDist(x, z) <= FAR_RING.far) continue;
+    const type = pick();
+    const rot = Math.floor(r() * 4);
+    const s = 1.3 + r() * 0.45;
+    const tall = TYPES[type].height > 100;
+    const sy = tall ? 1 + r() * 0.35 : 1 + r() * 0.8;
+    const fp = footprint(type, x, z, rot, s);
+    if (Math.min(Math.abs(fp.x0), Math.abs(fp.x1)) < 14 || (fp.x0 < 0 && fp.x1 > 0)) continue;   // 桥两端延长线留出通道
+    if (hit(fp, GAP)) continue;
+    insert(fp);
+    out.push({ type, x, z, rot, s, sy, fp, lod: 2, outer: true });
+  }
+  return out;
+}
+
 // ---- 材质 ----
 const shade = () => {
   const k = positionWorld.y.sub(bldgShade.y0).div(bldgShade.y1.sub(bldgShade.y0)).clamp(0, 1).pow(bldgShade.curve);
@@ -85,7 +148,7 @@ function l1Material(src) {
   if (kind === 'glass') c = light.mul(bldgLight.glass);
   else if (kind === 'lamp') c = c.add(vec3(src.emissive.r, src.emissive.g, src.emissive.b).mul(bldgLight.lamp));
   else if (kind === 'let') c = c.add(base.mul(bldgLight.letter));
-  const m = new THREE.MeshBasicNodeMaterial();
+  const m = new THREE.MeshBasicNodeMaterial({ side: src.side });
   m.colorNode = c;
   m.name = `far:${src.name}`;
   return m;
@@ -94,7 +157,8 @@ function l1Material(src) {
 function l2Material(src, range) {
   const wall = texture(src.map, uv()).rgb.mul(range.wall).mul(bldgLight.wall).mul(shade());
   const glow = texture(src.emissiveMap, uv()).rgb.mul(range.glow).mul(bldgLight.glass);
-  const m = new THREE.MeshBasicNodeMaterial();
+  // 沿用 glb 的双面设置：低模壳有单面片 / 法线朝内的面，单面渲染会被剔掉，楼看起来是透的
+  const m = new THREE.MeshBasicNodeMaterial({ side: src.side });
   m.colorNode = wall.add(glow);
   m.name = src.name;
   return m;
@@ -106,6 +170,11 @@ export function buildFarModels(scene, avoid = []) {
   group.name = '中景模型楼';
   scene.add(group);
   const list = layout(rng(4096), avoid);
+  if (FAR_OUTER.on) {
+    // 单独的随机序列，不影响环带原有摆放
+    const megaFp = MEGA.map((m) => ({ x0: m.x - m.w / 2 - 8, x1: m.x + m.w / 2 + 8, z0: m.z - m.d / 2 - 8, z1: m.z + m.d / 2 + 8 }));
+    list.push(...layoutOuter(rng(8192), [...megaFp, ...list.map((b) => b.fp)]));
+  }
   const byFile = new Map();
   for (const b of list) {
     const key = `${b.type}:${b.lod}`;
@@ -115,9 +184,10 @@ export function buildFarModels(scene, avoid = []) {
   const loader = gltfLoader();
   const mats = new Map();
   const place = new THREE.Matrix4(), tmp = new THREE.Matrix4(), q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
+  const pos = new THREE.Vector3(), scl = new THREE.Vector3();
   const color = new THREE.Color();
   const tint = rng(77);
-  const stats = { buildings: list.length, l1: 0, l2: 0, tris: 0, draws: 0 };
+  const stats = { buildings: list.length, l1: 0, l2: 0, outer: list.filter((b) => b.outer).length, tris: 0, draws: 0 };
   const jobs = [...byFile].map(([key, items]) => {
     const [type, lod] = key.split(':');
     const info = LODS[type][`l${lod}`];
@@ -131,7 +201,7 @@ export function buildFarModels(scene, avoid = []) {
         mesh.name = `${key}:${o.name}`;
         items.forEach((b, i) => {
           q.setFromAxisAngle(UP, b.rot * Math.PI / 2);
-          place.compose(new THREE.Vector3(b.x, 0, b.z), q, new THREE.Vector3(b.s, b.s, b.s));
+          place.compose(pos.set(b.x, 0, b.z), q, scl.set(b.s, b.s * (b.sy ?? 1), b.s));
           mesh.setMatrixAt(i, tmp.multiplyMatrices(place, o.matrixWorld));
           const g = 0.85 + tint() * 0.3;   // 每栋楼亮度略有差别，同楼型不那么像复制
           mesh.setColorAt(i, color.setRGB(g, g, g));

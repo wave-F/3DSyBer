@@ -5,7 +5,7 @@ import { createBuildingKit } from './buildings.js';
 import { createSignKit } from './signs.js';
 import { MEGA } from './sky.js';
 import { modelFootprints, placeModelSigns, loadModelBuildings, NEAR_Z, MODEL_FOOTPRINTS } from './modelBuildings.js';
-import { buildFarModels, playerDist, FAR_RING } from './farModels.js';
+import { buildFarModels, playerDist, FAR_RING, FAR_OUTER } from './farModels.js';
 
 const NEAR_STYLES = [['resi', 0.38], ['kitsch', 0.27], ['office', 0.25], ['corp', 0.1]];
 const MID_STYLES = [['office', 0.35], ['corp', 0.25], ['resi', 0.3], ['kitsch', 0.1]];
@@ -76,7 +76,7 @@ export function buildCity(scene) {
   kit.finish(scene);
   signs.finish();
   const far = buildFarCity(scene, r);
-  // 中景 100~400 m：模型楼替换方盒（开发态右上角按钮可以切回方盒对比）
+  // 中景 100~400 m（FAR_OUTER.on 时连同 400 m 外）：模型楼替换方盒（开发态右上角按钮可以切回方盒对比）
   const farModels = buildFarModels(scene, far.kept);
   setFarModels(true);
   function setFarModels(on) {
@@ -182,7 +182,8 @@ function buildFarCity(scene, r) {
     }
   }
   // 方盒在环带里（中心距离 ≤ far）就归 ring：模型楼按中心距离摆，边缘外伸的部分由 kept 避让兜住
-  for (const b of list) b.ring = playerDist(b.x, b.z) <= FAR_RING.far;
+  // 外圈也换成模型楼时，所有方盒都归 ring（只留作对比），不需要避让
+  for (const b of list) b.ring = FAR_OUTER.on || playerDist(b.x, b.z) <= FAR_RING.far;
 
   const tiers = [
     { max: 90, tex: farWindowTexture(11, 12, 26) },
@@ -225,7 +226,7 @@ function buildFarCity(scene, r) {
 function farModelsButton(set) {
   let on = true;
   const b = document.createElement('button');
-  const label = () => { b.textContent = `测试 · 中景楼：${on ? '模型楼' : '旧方盒'}`; };
+  const label = () => { b.textContent = `测试 · ${FAR_OUTER.on ? '远景' : '中景'}楼：${on ? '模型楼' : '旧方盒'}`; };
   label();
   b.style.cssText = 'position:fixed;right:24px;top:412px;transform:scale(1.5);transform-origin:right top;z-index:10;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#9ad7ff;background:rgba(5,12,20,.7);border:1px solid rgba(154,215,255,.6);cursor:pointer;';
   document.body.appendChild(b);

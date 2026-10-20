@@ -10,11 +10,13 @@ import { FOG_HEX, fadeWithDistance } from './fog.js';
 
 export { FOG_HEX };
 
-export const MEGA = [
+// 远处三座巨型方块楼：先关掉，看模型楼自己撑天际线的效果；改回 true 即恢复（远景楼也会重新给它们让位）
+const SHOW_MEGA = false;
+export const MEGA = SHOW_MEGA ? [
   { x: 60, z: -560, w: 150, d: 120, h: 460, id: 'H7', c: '#20e8ff' },
   { x: -380, z: -260, w: 130, d: 130, h: 380, id: 'H11', c: '#ff3a9a' },
   { x: 420, z: 240, w: 120, d: 140, h: 340, id: 'H4', c: '#ffd23a' },
-];
+] : [];
 
 export function buildSky(scene) {
   // 天空盒：白天阴天全景（Poly Haven overcast_soil_puresky，只存上半球）压成夜色。
