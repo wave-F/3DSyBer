@@ -5,8 +5,8 @@
 </head>
 <body><div id="info"></div>
 <script type="module">
-// 楼体 LOD 检查页（开发用）：所有楼型排一排，同一距离看原模 / L1 / L2
-// 参数：?lod=0|1|2  d=300 距离  fog=1 游戏雾近似  rot=180 转到背面  types=tower08,towerC 只看部分楼型
+// 楼体 LOD 检查页（开发用）：所有楼型排一排，同一距离看原模 / L1 / L2 / L3
+// 参数：?lod=0|1|2|3  d=300 距离  fog=1 游戏雾近似  rot=180 转到背面  types=tower08,towerC 只看部分楼型
 import * as THREE from 'three/webgpu';
 import { texture, uv, vertexColor, vec3, float, mix, positionWorld, cameraPosition, exp } from 'three/tsl';
 import { gltfLoader, initGLTF } from './src/gltf.js';
@@ -51,7 +51,7 @@ function hiMat(src) {
   m.colorNode = fogged(c);
   return m;
 }
-// L2：wall × 4.5 × 高度明暗 + glow
+// L2 / L3：wall × 4.5 × 高度明暗 + glow
 function l2Mat(src, range) {
   const m = new THREE.MeshBasicNodeMaterial();
   m.colorNode = fogged(texture(src.map, uv()).rgb.mul(range.wall * 4.5).mul(shade()).add(texture(src.emissiveMap, uv()).rgb.mul(range.glow)));
@@ -68,7 +68,7 @@ await Promise.all(NAMES.map(async (name, i) => {
   let tris = 0;
   g.scene.traverse((o) => {
     if (!o.isMesh) return;
-    o.material = LOD === 2 ? l2Mat(o.material, LODS[name].l2.range) : hiMat(o.material);
+    o.material = LOD >= 2 ? l2Mat(o.material, LODS[name][`l${LOD}`].range) : hiMat(o.material);
     tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
   });
   g.scene.position.set(xs[i] - x / 2, 0, -D);

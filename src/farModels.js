@@ -10,14 +10,18 @@ import LODS from './data/buildingLods.json';
 
 // 中景模型楼：离玩家活动区 100~400 m 的环带，用 KitBash 楼型的简化版替换原来的程序方盒
 // 楼型和两档简化模型由 npm run assets:lod 生成（scripts/lod.mjs）：
-//   L1 自动减面（误差 0.3 m），100~250 m；L2 低模壳 + 烘焙贴图，250 m 以外
+//   L1 自动减面（误差 0.3 m），100~250 m；L2 低模壳 + 烘焙贴图，250~450 m；L3 更粗的低模壳 + 小贴图，450 m 以外
+//   （按 65° 视角、1080p 估算：450 m 处 1 m ≈ 1.9 px，L3 壳误差约 1.5~2 m，再加雨雾，看不出来）
 // 玩家只在桥上一小段走动，每栋楼到玩家的距离几乎不变：摆放时就按距离定档，运行时不切换
 // 同楼型同档合成 InstancedMesh；材质是 modelBuildings.js 纯烘焙版（不吃实时光、不含招牌补光和湿墙），共用同一套亮度参数
 
-export const FAR_RING = { near: 100, far: 400, l1: 250 };
+export const FAR_RING = { near: 100, far: 400, l1: 250, l3: 450 };
 // 外圈：400 m 以外到原远景方盒的覆盖范围（|x| ≤ 530、|z| ≤ 710），也用 L2 模型楼铺满（仅桌面端）
 // 开着时 city.js 的远景方盒全部隐藏，只留作开发态对比
 export const FAR_OUTER = { on: true, x: 530, z: 710 };
+
+// 按距离定档；楼型没有 L3 时退回 L2
+const lodAt = (type, d) => (d < FAR_RING.l1 ? 1 : d < FAR_RING.l3 || !LODS[type].l3 ? 2 : 3);
 
 // 到玩家活动区（桥中线上警戒线之间那一段）的水平距离
 export function playerDist(x, z) {
@@ -67,7 +71,7 @@ function layout(r, avoid) {
     if (z1 > -290 && z0 < 290 && Math.min(Math.abs(x0), Math.abs(x1)) < 100) continue;
     if (x0 < 0 && x1 > 0 && z1 > -290 && z0 < 290) continue;
     if (hit(fp, blocks, 0) || hit(fp, out.map((o) => o.fp), GAP)) continue;
-    out.push({ type, x, z, rot, s, fp, lod: d < FAR_RING.l1 ? 1 : 2 });
+    out.push({ type, x, z, rot, s, fp, lod: lodAt(type, d) });
   }
   return out;
 }
@@ -89,7 +93,7 @@ const OUTER_WEIGHTS = { towerC: 3, bldgLG: 2, tower02: 2, tower03: 2, tower08: 2
 const OUTER_TRIES = 60000;
 const CELL = 64;   // 碰撞检测用的网格边长
 
-// 外圈摆放：400 m 以外的矩形区域，只用 L2
+// 外圈摆放：400 m 以外的矩形区域，L2 / L3
 // KitBash 楼最高 160 m、多数 60 m 左右，撑不起原方盒（40~240 m）的天际线：
 // 等比放大 1.3~1.75 之外再纵向拉伸（sy），这个距离层高变化看不出来
 function layoutOuter(r, avoid) {
@@ -127,7 +131,7 @@ function layoutOuter(r, avoid) {
     if (Math.min(Math.abs(fp.x0), Math.abs(fp.x1)) < 14 || (fp.x0 < 0 && fp.x1 > 0)) continue;   // 桥两端延长线留出通道
     if (hit(fp, GAP)) continue;
     insert(fp);
-    out.push({ type, x, z, rot, s, sy, fp, lod: 2, outer: true });
+    out.push({ type, x, z, rot, s, sy, fp, lod: lodAt(type, playerDist(x, z)), outer: true });
   }
   return out;
 }
@@ -153,7 +157,7 @@ function l1Material(src) {
   m.name = `far:${src.name}`;
   return m;
 }
-// L2：底色槽 = 底色 × 烘焙光照 × 冷色，自发光槽 = 亮窗 + 灯具 + 字牌（tools/blender/kb3d_lod.py）
+// L2 / L3：底色槽 = 底色 × 烘焙光照 × 冷色，自发光槽 = 亮窗 + 灯具 + 字牌（tools/blender/kb3d_lod.py）
 function l2Material(src, range) {
   const wall = texture(src.map, uv()).rgb.mul(range.wall).mul(bldgLight.wall).mul(shade());
   const glow = texture(src.emissiveMap, uv()).rgb.mul(range.glow).mul(bldgLight.glass);
@@ -187,7 +191,7 @@ export function buildFarModels(scene, avoid = []) {
   const pos = new THREE.Vector3(), scl = new THREE.Vector3();
   const color = new THREE.Color();
   const tint = rng(77);
-  const stats = { buildings: list.length, l1: 0, l2: 0, outer: list.filter((b) => b.outer).length, tris: 0, draws: 0 };
+  const stats = { buildings: list.length, l1: 0, l2: 0, l3: 0, outer: list.filter((b) => b.outer).length, tris: 0, draws: 0 };
   const jobs = [...byFile].map(([key, items]) => {
     const [type, lod] = key.split(':');
     const info = LODS[type][`l${lod}`];
@@ -195,8 +199,8 @@ export function buildFarModels(scene, avoid = []) {
       gltf.scene.updateMatrixWorld(true);
       gltf.scene.traverse((o) => {
         if (!o.isMesh) return;
-        const mkey = lod === '2' ? `l2:${type}` : o.material.name;
-        if (!mats.has(mkey)) mats.set(mkey, lod === '2' ? l2Material(o.material, LODS[type].l2.range) : l1Material(o.material));
+        const mkey = lod === '1' ? o.material.name : `l${lod}:${type}`;
+        if (!mats.has(mkey)) mats.set(mkey, lod === '1' ? l1Material(o.material) : l2Material(o.material, info.range));
         const mesh = new THREE.InstancedMesh(o.geometry, mats.get(mkey), items.length);
         mesh.name = `${key}:${o.name}`;
         items.forEach((b, i) => {

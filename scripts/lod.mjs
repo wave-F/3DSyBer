@@ -1,7 +1,8 @@
 // 楼体远景 LOD：给 public/assets/bldg/<楼型>.glb 生成两档简化模型
-// 用法：npm run assets:lod [-- 楼型 ...] [--skip-l1] [--skip-l2]
+// 用法：npm run assets:lod [-- 楼型 ...] [--skip-l1] [--skip-l2] [--skip-l3]
 //   L1 <楼型>_l1.glb：meshoptimizer 自动减面（绝对误差 0.3 m，约 15~25%），材质、顶点色烘焙光照照旧，100~250 m 用
 //   L2 <楼型>_l2.glb：Blender 低模壳 + 两张烘焙贴图（tools/blender/kb3d_lod.py），约 2.5k~5k 面，250 m 以外用
+//   L3 <楼型>_l3.glb：网格聚类（sloppy）低模壳 + 小尺寸烘焙贴图，约 50~3k 面，450 m 以外用
 //   清单写到 src/data/buildingLods.json（不写进 buildings.json：kb3d_bake.py 重烘时会整条覆盖楼型条目）
 // 实测：误差 1.2 m 那档会丢掉一大半亮窗；0.3 m 在 150 m 外和原模看不出差别
 // 依赖：Blender（$BLENDER，默认找 ~/Applications/Blender/*/Blender.app），KTX-Software（同 assets:ktx2）
@@ -27,7 +28,7 @@ const L1_ERROR = 0.3;   // 米
 const argv = process.argv.slice(2);
 const names = argv.filter((a) => !a.startsWith('--'));
 const NAMES = names.length ? names : Object.keys(TYPES);
-const skipL1 = argv.includes('--skip-l1'), skipL2 = argv.includes('--skip-l2');
+const skipL1 = argv.includes('--skip-l1'), skipL2 = argv.includes('--skip-l2'), skipL3 = argv.includes('--skip-l3');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'lod-'));
 const rel = (p) => path.relative(ROOT, p);
 
@@ -97,10 +98,15 @@ async function makeL1(name) {
   return after;
 }
 
-// ---- L2 低模壳：只看几何（按位置焊接，忽略 UV / 顶点色接缝），所有图元合成一个网格再减面 ----
+// ---- L2 / L3 低模壳：只看几何（按位置焊接，忽略 UV / 顶点色接缝），所有图元合成一个网格再减面 ----
 // 先试过 Blender 体素重构（BLOCKS / VOXEL）+ 塌陷：方正楼还行，斜面、镂空楼型（capsule、towerC、towerL）会塌成一团
+// L2：边塌陷减面。KitBash 楼是很多互不相连的零件，边塌陷合并不了零件之间的缝，误差再放大面数也下不去
+// L3：网格聚类（simplifySloppy，顶点吸附到网格，能把相邻零件焊在一起）后再边塌陷清掉退化面
+//   试过直接从 L2 再减面复用 L2 贴图：smart_project 的 UV 岛边界锁死，只能减 20~30%，不划算
 const L2_TRIS = 3000, L2_TRIS_TALL = 5000, L2_ERROR = 1.5;
-async function makeShell(name) {
+const L3_GRID = 3, L3_ERROR = 3;   // 米：聚类网格目标误差 / 交给 Blender 的烘焙射线距离（kb3d_lod.py cage）
+const SHELL_ERROR = { 2: L2_ERROR, 3: L3_ERROR };
+async function makeShell(name, level) {
   const doc = await io.read(path.join(BLDG, `${name}.glb`));
   const pts = [], tri = [], key = new Map();
   const v = [0, 0, 0];
@@ -124,9 +130,16 @@ async function makeShell(name) {
       for (const i of prim.getIndices().getArray()) tri.push(remap[i]);
     }
   }
-  const height = Math.max(...pts.filter((_, i) => i % 3 === 1));
-  const target = height > 100 ? L2_TRIS_TALL : L2_TRIS;
-  const [res] = MeshoptSimplifier.simplify(new Uint32Array(tri), new Float32Array(pts), 3, target * 3, L2_ERROR, ['Prune', 'ErrorAbsolute']);
+  const P = new Float32Array(pts), T = new Uint32Array(tri);
+  let res;
+  if (level === 2) {
+    const height = Math.max(...pts.filter((_, i) => i % 3 === 1));
+    const target = height > 100 ? L2_TRIS_TALL : L2_TRIS;
+    [res] = MeshoptSimplifier.simplify(T, P, 3, target * 3, L2_ERROR, ['Prune', 'ErrorAbsolute']);
+  } else {
+    const [sloppy] = MeshoptSimplifier.simplifySloppy(T, P, 3, null, 0, L3_GRID / MeshoptSimplifier.getScale(P, 3));
+    [res] = MeshoptSimplifier.simplify(sloppy, P, 3, 0, L3_GRID / 2, ['Prune', 'ErrorAbsolute']);
+  }
   const out = new (await import('@gltf-transform/core')).Document();
   const buf = out.createBuffer();
   const prim = out.createPrimitive()
@@ -135,13 +148,13 @@ async function makeShell(name) {
   compactPrimitive(prim);
   out.getRoot().getDefaultScene() ?? out.getRoot().setDefaultScene(out.createScene());
   out.getRoot().getDefaultScene().addChild(out.createNode(`${name}_shell`).setMesh(out.createMesh().addPrimitive(prim)));
-  const file = path.join(TMP, `${name}_shell.glb`);
+  const file = path.join(TMP, `${name}_shell${level}.glb`);
   await new NodeIO().write(file, out);
-  console.log(`L2  ${name}  壳 ${tri.length / 3} → ${res.length / 3} tris`);
+  console.log(`L${level}  ${name}  壳 ${tri.length / 3} → ${res.length / 3} tris`);
   return file;
 }
 
-// ---- L2：Blender 烘焙贴图到低模壳 ----
+// ---- L2 / L3：Blender 烘焙贴图到低模壳 ----
 async function blenderSource(name) {
   const doc = await io.read(path.join(BLDG, `${name}.glb`));
   for (const t of doc.getRoot().listTextures()) {
@@ -166,20 +179,24 @@ function findBlender() {
   return hit;
 }
 
-async function makeL2(list) {
+// levels：要烘的档位（[2]、[3] 或 [2, 3]），同一楼型的高模只导出一次
+async function bakeLods(list, levels) {
   const jobs = [];
-  for (const name of list) jobs.push(`${name}=${await blenderSource(name)}=${await makeShell(name)}`);
+  for (const name of list) {
+    const src = await blenderSource(name);
+    for (const lv of levels) jobs.push(`${name}=${src}=${await makeShell(name, lv)}=${lv}=${SHELL_ERROR[lv]}`);
+  }
   const log = execFileSync(findBlender(), ['-b', '--factory-startup', '--python', path.join(ROOT, 'tools', 'blender', 'kb3d_lod.py'), '--', BLDG, ...jobs],
     { encoding: 'utf8', maxBuffer: 64 << 20 });
   const info = {};
   for (const line of log.split('\n')) {
     if (line.startsWith('@@')) console.log('    ' + line.slice(2));
-    const m = line.match(/^@@L2 (\S+) tris (\d+) tex (\d+)/);
-    if (m) info[m[1]] = { tris: Number(m[2]), tex: Number(m[3]) };
+    const m = line.match(/^@@L(\d) (\S+) tris (\d+) tex (\d+)/);
+    if (m) info[`${m[2]}:${m[1]}`] = { tris: Number(m[3]), tex: Number(m[4]) };
   }
   fs.rmSync(path.join(BLDG, '_lod_tmp'), { recursive: true, force: true });
   // 贴图转 KTX2，外置到 bldg/tex 共享目录
-  execFileSync('node', [path.join(ROOT, 'scripts', 'ktx2.mjs'), ...list.map((n) => path.join(BLDG, `${n}_l2.glb`))], { stdio: 'inherit' });
+  execFileSync('node', [path.join(ROOT, 'scripts', 'ktx2.mjs'), ...list.flatMap((n) => levels.map((lv) => path.join(BLDG, `${n}_l${lv}.glb`)))], { stdio: 'inherit' });
   return info;
 }
 
@@ -188,11 +205,15 @@ for (const name of NAMES) {
   manifest[name] ??= {};
   if (!skipL1) manifest[name].l1 = { file: `assets/bldg/${name}_l1.glb`, tris: await makeL1(name) };
 }
-if (!skipL2) {
-  const info = await makeL2(NAMES);
+const levels = [...(skipL2 ? [] : [2]), ...(skipL3 ? [] : [3])];
+if (levels.length) {
+  const info = await bakeLods(NAMES, levels);
   for (const name of NAMES) {
-    if (!info[name]) throw new Error(`L2 ${name} 没有产出`);
-    manifest[name].l2 = { file: `assets/bldg/${name}_l2.glb`, tris: info[name].tris, range: { wall: 1, glow: 2 } };
+    for (const lv of levels) {
+      const r = info[`${name}:${lv}`];
+      if (!r) throw new Error(`L${lv} ${name} 没有产出`);
+      manifest[name][`l${lv}`] = { file: `assets/bldg/${name}_l${lv}.glb`, tris: r.tris, range: { wall: 1, glow: 2 } };
+    }
   }
 }
 fs.writeFileSync(MANIFEST, JSON.stringify(manifest, null, 1) + '\n');

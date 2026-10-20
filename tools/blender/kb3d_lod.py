@@ -1,8 +1,8 @@
-# KB3D 楼体远景 LOD（L2）：低模壳 + 烘焙贴图
-# 由 scripts/lod.mjs 调用：Blender -b --factory-startup --python tools/blender/kb3d_lod.py -- <out_dir> <name>=<src.glb>=<shell.glb> ...
+# KB3D 楼体远景 LOD（L2 / L3）：低模壳 + 烘焙贴图
+# 由 scripts/lod.mjs 调用：Blender -b --factory-startup --python tools/blender/kb3d_lod.py -- <out_dir> <name>=<src.glb>=<shell.glb>=<档位>=<壳误差米> ...
 # src.glb 是已经烘焙好光照的楼体（public/assets/bldg/<name>.glb，贴图换回 JPG，Blender 读不了 KTX2）
 #
-# 低模壳由 scripts/lod.mjs 用 meshopt 按几何减面后传进来（name=src.glb=shell.glb），这里只展 UV、烘焙
+# 低模壳由 scripts/lod.mjs 用 meshopt 按几何减面后传进来，这里只展 UV、烘焙；产物 <out_dir>/<name>_l<档位>.glb
 # 贴图两张，都是 1:1 还原运行时 modelBuildings.js 的 basic 材质（不含高度明暗，运行时再乘，调参面板照样生效）：
 #   wall （底色槽）：底色 × 烘焙光照 × 冷色，运行时 × bldgLight.wall × 高度明暗
 #   glow （自发光槽）：亮窗 + 灯具 × 0.7 + 字牌 × 0.9，运行时 × bldgLight.glass
@@ -16,7 +16,8 @@ JOBS = [a.split('=') for a in args[1:]]
 RANGE = {'wall': 1.0, 'glow': 2.0}
 LIGHT_RANGE = 4.0     # 顶点色编码（kb3d_bake.py RANGE）
 COOL = (0.78, 0.95, 1.05)
-SHELL_ERROR = 1.5     # 低模壳和高模的最大偏差（米，scripts/lod.mjs L2_ERROR），决定烘焙射线距离
+# 贴图边长：L2 矮楼 1024 / 高楼 2048；L3 在 450 m 以外，屏幕上不到 L2 一半大，各降一档
+TEX_SIZE = {'2': (1024, 2048), '3': (512, 1024)}
 TMP = os.path.join(OUT, '_lod_tmp')
 os.makedirs(TMP, exist_ok=True)
 
@@ -89,7 +90,7 @@ def rebuild(m, col_name):
     return mix
 
 
-def build(name, src, shell):
+def build(name, src, shell, level, shell_error):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     setup_cycles()
     bpy.ops.import_scene.gltf(filepath=src)
@@ -103,19 +104,19 @@ def build(name, src, shell):
     col_name = hi.data.color_attributes[0].name
     switches = [rebuild(m, col_name) for m in {s.material for s in hi.material_slots if s.material}]
 
-    size = 1024 if hi.dimensions.z < 100 else 2048
+    size = TEX_SIZE[level][0 if hi.dimensions.z < 100 else 1]
     # 低模壳（scripts/lod.mjs 用 meshopt 按几何减好的）
     before = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=shell)
-    lo = next(o for o in bpy.data.objects if o not in before and o.type == 'MESH'); lo.name = f'{name}_l2'
+    lo = next(o for o in bpy.data.objects if o not in before and o.type == 'MESH'); lo.name = f'{name}_l{level}'
     for o in bpy.context.scene.objects: o.select_set(False)
     lo.select_set(True); bpy.context.view_layer.objects.active = lo
     bpy.ops.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     lo.data.materials.clear()
-    cell = SHELL_ERROR
+    cell = float(shell_error)   # 低模壳和高模的最大偏差，决定烘焙射线距离
     bpy.ops.object.mode_set(mode='EDIT'); bpy.ops.mesh.select_all(action='SELECT'); bpy.ops.mesh.quads_convert_to_tris()
-    bpy.ops.uv.smart_project(angle_limit=math.radians(30), island_margin=0.003, area_weight=0.0, scale_to_bounds=False)
+    bpy.ops.uv.smart_project(angle_limit=math.radians(30), island_margin=0.003 if level == '2' else 0.006, area_weight=0.0, scale_to_bounds=False)
     bpy.ops.object.mode_set(mode='OBJECT')
     for p in lo.data.polygons: p.use_smooth = False
 
@@ -135,9 +136,9 @@ def build(name, src, shell):
         px = np.array(bake_img.pixels[:], dtype=np.float32).reshape(-1, 4)
         print(f'@@{name} {key} p50 {float(np.median(px[:, :3])):.4f} p99 {float(np.percentile(px[:, :3], 99)):.4f} max {float(px[:, :3].max()):.3f}')
         px[:, :3] = srgb_oetf(px[:, :3] / RANGE[key]); px[:, 3] = 1
-        img = bpy.data.images.new(f'{name}_l2_{key}', size, size)
+        img = bpy.data.images.new(f'{name}_l{level}_{key}', size, size)
         img.pixels.foreach_set(px.ravel())
-        img.filepath_raw = os.path.join(TMP, f'{name}_l2_{key}.png'); img.file_format = 'PNG'; img.save()
+        img.filepath_raw = os.path.join(TMP, f'{name}_l{level}_{key}.png'); img.file_format = 'PNG'; img.save()
         files[key] = img
 
     # 导出材质：底色 = wall，自发光 = glow（运行时按槽位取贴图，不用 glTF 的着色）
@@ -152,7 +153,7 @@ def build(name, src, shell):
     lo.data.materials.append(em)
     for o in sc.objects: o.select_set(False)
     lo.select_set(True); bpy.context.view_layer.objects.active = lo
-    path = os.path.join(OUT, f'{name}_l2.glb')
+    path = os.path.join(OUT, f'{name}_l{level}.glb')
     bpy.ops.export_scene.gltf(
         filepath=path, use_selection=True, export_format='GLB',
         export_texcoords=True, export_normals=True, export_materials='EXPORT', export_image_format='AUTO',
@@ -160,9 +161,9 @@ def build(name, src, shell):
         export_draco_position_quantization=14, export_draco_texcoord_quantization=12,
         export_yup=True, export_apply=False, export_animations=False, export_cameras=False, export_lights=False,
     )
-    print(f'@@L2 {name} tris {len(lo.data.polygons)} tex {size}')
+    print(f'@@L{level} {name} tris {len(lo.data.polygons)} tex {size}')
 
 
-for name, src, shell in JOBS:
-    build(name, src, shell)
+for name, src, shell, level, shell_error in JOBS:
+    build(name, src, shell, level, shell_error)
 print('@@DONE')
