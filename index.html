@@ -20,7 +20,7 @@
       #overlay.hidden { display: none; }
       #lang-btn { position: fixed; top: 28px; right: 28px; z-index: 40; padding: 8px 16px; font: 14px/1 "SF Mono", Menlo, monospace; letter-spacing: .14em; color: #dff2ff; background: rgba(4,12,20,.45); border: 1px solid rgba(223,242,255,.45); cursor: pointer; }
 
-      /* ---------- 加载界面：主视觉 + 标题 + 卡顿提示 + 耳机提示 + 进度条，加载完成后点击任意位置开始 ---------- */
+      /* ---------- 加载界面：主视觉 + 标题 + 耳机提示 + 进度条，加载完成后点击任意位置开始 ---------- */
       #loading {
         position: fixed; inset: 0; z-index: 1000; overflow: hidden; background: #000;
         font-family: "PingFang SC", "Helvetica Neue", sans-serif; color: #eef6ff; user-select: none;
@@ -83,19 +83,6 @@
       }
       @keyframes ld-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-      /* 卡顿提示：静态首屏直接显示，不依赖脚本、加载进度或入场动画 */
-      .ld-notice {
-        position: absolute; top: 28px; left: 8vw; width: max-content; max-width: calc(84vw - 90px);
-        display: flex; align-items: flex-start; gap: 12px; box-sizing: border-box;
-        margin: 0; padding: 14px 18px; border: 1px solid rgba(255,207,106,.65); border-left: 4px solid #ffcf6a;
-        background: rgba(24,16,5,.92); color: #ffe1a3; box-shadow: 0 4px 24px rgba(0,0,0,.45);
-        font-size: clamp(16px, 1.3vw, 20px); font-weight: 600; line-height: 1.7;
-      }
-      .ld-notice .mark {
-        flex: 0 0 24px; height: 24px; margin-top: 2px; border: 1px solid #ffcf6a; border-radius: 50%;
-        color: #ffcf6a; font: 700 18px/24px "SF Mono", Menlo, monospace; text-align: center;
-      }
-
       /* 耳机提示：整个加载期间都在 */
       .ld-phones {
         position: absolute; left: 50%; bottom: 19vh; transform: translateX(-50%);
@@ -148,12 +135,10 @@
       }
       .ld-title .en-title { display: none; margin: 0; font-size: clamp(40px, 5.2vw, 92px); font-weight: 600; letter-spacing: .12em; line-height: 1.05; color: #f4f9ff; text-shadow: 0 0 28px rgba(160,210,255,.25); animation: ld-title 2.2s cubic-bezier(.2,.7,.2,1) .4s both, ld-glitch 9s steps(1) 3s infinite; }
       #loading[data-lang="en"] .ld-title h1,
-      #loading[data-lang="en"] .ld-notice .zh,
       #loading[data-lang="en"] .ld-phones .zh,
       #loading[data-lang="en"] .ld-start .zh,
       #loading[data-lang="en"] .ld-title .en { display: none; }
       #loading[data-lang="en"] .ld-title .en-title { display: block; }
-      #loading[data-lang="zh"] .ld-notice .en,
       #loading[data-lang="zh"] .ld-phones .en2,
       #loading[data-lang="zh"] .ld-start .en { display: none; }
     </style>
@@ -165,11 +150,6 @@
       <div class="ld-rain"></div>
       <div class="ld-shade"></div>
       <div class="ld-scan"></div>
-      <p class="ld-notice" role="note">
-        <span class="mark" aria-hidden="true">!</span>
-        <span class="zh" lang="zh-CN">电脑在加载和切换网页分辨率的时候会卡住，这是正常的，请耐心等待。<br>可以先点击屏幕触发全屏界面</span>
-        <span class="en" lang="en">Your computer may freeze while loading or changing the webpage resolution. This is normal. Please be patient.<br>Click the screen to enter fullscreen.</span>
-      </p>
       <div class="ld-title">
         <h1>零号事故</h1>
         <div class="en-title">ZERO PRIORITY</div>

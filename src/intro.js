@@ -3,6 +3,7 @@ import { CAR_POS } from './crash.js';
 import { DECK_Y } from './bridge.js';
 import { POLICE_POS, POLICE_YAW } from './policeCar.js';
 import { sound } from './audio/sound.js';
+import { setSurfaceRainCabin } from './surfaceRain.js';
 import { PEAK } from './audio/events.js';
 
 // 开场：高角度跟车 → 正面看停车 → 回到车内 → 第一人称下车 → 打开终端
@@ -67,13 +68,15 @@ export function createIntro({ camera, police, controls, inv }) {
     sound.follow('vehicle/brake', null);
     sound.loop('vehicle/drive_in', true);
     sound.setCarInterior(true);
+    setSurfaceRainCabin(true);
   }
   function cabinSounds(time) {
     if (!doorOpened && time >= DOOR.open[0]) {
       doorOpened = true;
       sound.play('vehicle/door_open', { position: police.doorWorld(doorPoint) });
-      sound.loop('vehicle/drive_in', false);
+sound.loop('vehicle/drive_in', false);
       sound.setCarInterior(false);
+      setSurfaceRainCabin(false);
     }
     // 关门素材峰值对齐门板合上的那一帧
     if (!doorClosed && time >= DOOR.close[1] - PEAK.doorClose) {
@@ -86,6 +89,7 @@ export function createIntro({ camera, police, controls, inv }) {
     sound.follow('vehicle/brake', null);
     sound.loop('vehicle/drive_in', false);
     sound.setCarInterior(false);
+    setSurfaceRainCabin(false);
   }
 
   function placeCar(z) {

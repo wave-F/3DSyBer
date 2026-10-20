@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { float, mx_noise_float, positionLocal, positionWorld, vec3, smoothstep } from 'three/tsl';
+import { applySurfaceRain } from './surfaceRain.js';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { gltfLoader } from './gltf.js';
 import { rng } from './textures.js';
@@ -152,6 +153,7 @@ function buildCar(onReady) {
     if (CRUMPLE > 0) body.traverse((o) => { if (o.isMesh) crumpleFront(o.geometry); });
     // 整辆车都是线索，分析模式下保留原色
     model.traverse((o) => { if (o.isMesh) markKeep(o.material); });
+    applySurfaceRain(group);
 
     // 左前轮脱落，平躺在车身左侧偏后（车左侧朝向护栏，再往前会出桥面悬空）
     const wheel = model.getObjectByName('Wheel_FL');
@@ -178,7 +180,7 @@ function carMaterials(hazardMat) {
   const phys = (o) => new THREE.MeshPhysicalMaterial(o);
   // 车架/底盘/引擎占车身表面约 40%，按哑光深灰处理，只留少量金属感
   const darkMetal = std({ color: 0x1e2023, roughness: 0.7, metalness: 0.3 });
-  return {
+  const mats = {
     CarPaint_Main: carPaint,
     CarPaint_Accent: phys({ color: 0x0c0e10, roughness: 0.4, metalness: 0.3, clearcoat: 0.5, clearcoatRoughness: 0.2 }),
     Carbon_Fiber: phys({ color: 0x141518, roughness: 0.45, metalness: 0.2, clearcoat: 0.4, clearcoatRoughness: 0.2 }),
@@ -196,6 +198,9 @@ function carMaterials(hazardMat) {
     LED_WhiteHeadlight: std({ color: 0x050607, emissive: 0x000000, emissiveIntensity: 0 }),
     LED_OrangeSignle: hazardMat,
   };
+  carPaint.name = 'CarPaint_Main';
+  for (const [name, mat] of Object.entries(mats)) if (!mat.name) mat.name = name;
+  return mats;
 }
 
 // 未替换的导入材质（皮革、轮胎、织物等）：去掉错误的满金属度、避免镜面

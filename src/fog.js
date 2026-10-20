@@ -216,7 +216,7 @@ export function createVolumetricFog({ scene, camera, renderer, depthNode }) {
     return vec4(radiance, viewPos.z.negate());
   });
 
-  const volTex = rtt(march(), null, null, { type: THREE.HalfFloatType }).setResolutionScale(FOG_QUALITY.res);
+  const volTex = rtt(march(), null, null, { type: THREE.HalfFloatType });
 
   // 联合双边上采样：3×3 低分辨率邻域，按深度差拒绝跨边缘的样本，同时抹平抖动
   const upsample = Fn(() => {
@@ -267,9 +267,7 @@ export function createVolumetricFog({ scene, camera, renderer, depthNode }) {
     camera.updateMatrixWorld();
     camWorld.value.copy(camera.matrixWorld);
     camPos.value.setFromMatrixPosition(camera.matrixWorld);
-    renderer.getDrawingBufferSize(_size);
-    const res = FOG_QUALITY.res;
-    lowSize.value.set(Math.max(1, Math.floor(_size.x * res)), Math.max(1, Math.floor(_size.y * res)));
+    lowSize.value.set(Math.max(1, volTex.renderTarget.width), Math.max(1, volTex.renderTarget.height));
 
     picked.length = 0;
     const reach = U.maxDist.value * 1.5;
@@ -297,11 +295,11 @@ export function createVolumetricFog({ scene, camera, renderer, depthNode }) {
   // 画质档位：分辨率、每灯步数、灯数上限都能运行时改，不用重编译着色器
   function setQuality(q) {
     Object.assign(FOG_QUALITY, q);
-    volTex.setResolutionScale(FOG_QUALITY.res);
+    volTex._resolutionScale = FOG_QUALITY.res;
     lightSteps.value = Math.min(FOG_QUALITY.lightSteps, LIGHT_STEPS);
   }
 
-  return { node, update, setQuality };
+  return { node, update, setQuality, tex: volTex };
 }
 
 // ---------- 开发态调参面板 ----------

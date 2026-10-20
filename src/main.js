@@ -35,6 +35,8 @@ import { sound } from './audio/sound.js';
 import { AD_DWELL } from './ads.js';
 import { createStaticGI } from './globalIllumination.js';
 import { initGLTF } from './gltf.js';
+import { applySurfaceRain, mountSurfaceRainPanel, updateSurfaceRain } from './surfaceRain.js';
+
 
 // 网页一打开就装入全部 Bank 并预备好所有循环；加载界面等声音就绪后才允许点击开始
 loading.waitFor(sound.preload(), '声音', 'AUDIO');
@@ -49,6 +51,32 @@ renderer.lighting = new ClusteredLighting(64, 32, 24, 16);
 // 画质：像素比、体积雾、屏幕反射（原版 1.5 / 雾 0.5·6 步·24 灯 / 反射 80·0.5，帧率对比后定为下面这套）
 const QUALITY = { pixelRatio: 1.25, fog: { res: 0.33, lightSteps: 4, maxLights: 12 }, ssr: { maxDistance: 50, quality: 0.3 } };
 renderer.setPixelRatio(Math.min(devicePixelRatio, QUALITY.pixelRatio));
+// 中间 RT（场景、AO、SSR、雾、辉光）不超过 1920×1080，避免大屏按实际像素建一堆全分辨率目标。
+// 画布本身跟窗口走：最后一步全屏 quad 画到实际分辨率，铺满窗口，不留黑边
+const FRAME = { w: 1920, h: 1080 };
+// 中间 RT 钉死在 1920×1080（再乘各自的半分辨率系数），跟窗口无关。
+// 尺寸不变时 RenderTarget.setSize 直接返回，不 dispose，所以切分辨率不会重建这些 RT。
+// 窗口更小只是采样一张更大的贴图，不会按小尺寸重分配。最终 quad 仍画到画布的实际分辨率
+function capScale(node, fraction, key = 'resolutionScale') {
+  const pin = (target) => {
+    target.x = FRAME.w * renderer.getPixelRatio();
+    target.y = FRAME.h * renderer.getPixelRatio();
+    if (key) node[key] = fraction;
+    return target;
+  };
+  // SMAA / 辉光在 updateBefore 里自己取屏幕尺寸再调 setSize，包 setSize 会被绕过
+  if (node.updateBefore) {
+    const update = node.updateBefore.bind(node);
+    node.updateBefore = (frame) => {
+      const get = frame.renderer.getDrawingBufferSize.bind(frame.renderer);
+      frame.renderer.getDrawingBufferSize = (target) => pin(get(target));
+      try { return update(frame); }
+      finally { frame.renderer.getDrawingBufferSize = get; }
+    };
+  }
+  const orig = node.setSize.bind(node);
+  node.setSize = (w, h) => orig(FRAME.w * renderer.getPixelRatio(), FRAME.h * renderer.getPixelRatio());
+}
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
@@ -141,6 +169,7 @@ if (gi) {
     syncGiButton();
   }
 }
+mountSurfaceRainPanel();
 const crash = buildCrash(scene);
 const police = buildPoliceCar(scene);
 loading.waitFor(crash.ready, '事故车辆', 'VEHICLE');
@@ -150,6 +179,7 @@ const updateSky = buildSky(scene);
 for (const o of scene.children) if (!beforeSky.has(o)) farOnly(o);
 const updateRain = buildRain(scene, camera);
 const updateCordon = buildCordon(scene);
+applySurfaceRain(scene);
 const playArea = { x: [-HALF_W, HALF_W], z: [CORDON.z0, CORDON.z1], y: DECK_Y + 1.7 };
 sound.setRainSpots(updateCity.rainSpots, playArea);
 sound.setBillboards(updateCity.adScreens, playArea, AD_DWELL);
@@ -194,21 +224,23 @@ function syncAoCamera() {
 }
 syncAoCamera();
 const aoPrePass = pass(scene, aoCamera);
-aoPrePass.setResolutionScale(0.5);
+capScale(aoPrePass, 0.5, '_resolutionScale');
 aoPrePass.transparent = false;
 aoPrePass.setMRT(mrt({ output: normalView }));
 const aoDepth = aoPrePass.getTextureNode('depth');
 const aoNormal = aoPrePass.getTextureNode('output');
 const aoPass = ao(aoDepth, aoNormal, aoCamera);
-aoPass.resolutionScale = 0.5;
+capScale(aoPass, 0.5);
 aoPass.radius.value = 0.65;
 aoPass.thickness.value = 0.35;
 aoPass.samples.value = 16;
 const aoFiltered = denoise(aoPass.getTextureNode(), aoDepth, aoNormal, aoCamera);
 aoFiltered.radius.value = 3;
-const aoTexture = rtt(aoFiltered).setResolutionScale(0.5);
+const aoTexture = rtt(aoFiltered);
+capScale(aoTexture, 0.5, '_resolutionScale');
 const aoAmount = uniform(0.65);
 const scenePass = pass(scene, camera);
+capScale(scenePass, 1, '_resolutionScale');
 scenePass.contextNode = builtinAOContext(mix(float(1), aoTexture.sample(screenUV).r, aoAmount));
 addLightGroup('AO（车底、轮拱遮蔽）', (on) => { aoAmount.value = on ? 0.65 : 0; });
 scenePass.setMRT(mrt({
@@ -231,7 +263,7 @@ const ssrPass = ssr(sceneColor, sceneDepth, sceneNormal, {
   metalnessNode: sceneMR.r,
   roughnessNode: sceneMR.g,
 });
-ssrPass.resolutionScale = 0.5;
+capScale(ssrPass, 0.5);
 ssrPass.maxDistance.value = QUALITY.ssr.maxDistance;
 ssrPass.thickness.value = 0.6;
 ssrPass.quality.value = QUALITY.ssr.quality;
@@ -242,7 +274,7 @@ addLightGroup('屏幕反射', (on) => { ssrAmt.value = on ? 1 : 0; });
 // 1.1 烟雾粒子：独立场景、半分辨率渲染，按 alpha 盖到场景上（在辉光和分析去饱和之前）
 const smoke = buildSmoke(camera, sceneDepth, scene.fogNode);
 const smokePass = pass(smoke.scene, camera);
-smokePass.setResolutionScale(0.5);
+capScale(smokePass, 0.5, '_resolutionScale');
 const smokeTex = smokePass.getTextureNode('output');
 hdr = hdr.mul(float(1).sub(smokeTex.a)).add(smokeTex.rgb);
 if (import.meta.env.DEV) window.__smoke = smoke.scene;   // 开发时截图对比用
@@ -250,12 +282,14 @@ if (import.meta.env.DEV) window.__smoke = smoke.scene;   // 开发时截图对�
 // 1.2 体积雾：雾里的灯光散射（光晕、路灯光锥、底雾），在手和终端叠加之前
 const volFog = createVolumetricFog({ scene, camera, renderer, depthNode: sceneDepth });
 volFog.setQuality(QUALITY.fog);
+capScale(volFog.tex, QUALITY.fog.res, '_resolutionScale');
 hdr = hdr.add(volFog.node);
 
 // 1.5 平板：举起时背景压暗虚化，叠加单独渲染的平板界面（独立场景，不会被场景遮挡）
 const tabletAmt = uniform(0);
 // 叠加场景（平板 + 第一人称手和扫描设备）：mask 通道标记不透明的手/设备，用来遮住背后的世界
 const uiPass = pass(inv.tablet.uiScene, camera);
+capScale(uiPass, 1, '_resolutionScale');
 uiPass.setMRT(mrt({ output, mask: float(1) }));
 uiPass.getTexture('mask').type = THREE.UnsignedByteType;
 const uiMask = uiPass.getTextureNode('mask').r;
@@ -269,7 +303,9 @@ hdr = hdr.mul(float(1).sub(uiMask)).add(uiPass.getTextureNode('output').rgb);
 // 2. 辉光
 // 阈值 1.3：只让真正的光源发光晕，被照亮的地面和高光不再泛白
 const bloomAmt = uniform(1);
-hdr = hdr.add(bloom(hdr, 0.5, 0.35, 1.3).mul(bloomAmt));
+const bloomPass = bloom(hdr, 0.5, 0.35, 1.3);
+capScale(bloomPass, 0.5, '_resolutionScale');
+hdr = hdr.add(bloomPass.mul(bloomAmt));
 addLightGroup('辉光', (on) => { bloomAmt.value = on ? 1 : 0; });
 
 // 2.5 分析模式：灰蓝去饱和 + 世界网格 + 扫描波
@@ -285,7 +321,9 @@ graded = mix(graded, vec3(luminance(graded)).mul(vec3(1.04, 0.97, 0.96)), HURT.d
 // 4. 色调映射后：抗锯齿 → 色差 → 暗角 → 胶片颗粒
 const pipeline = new THREE.RenderPipeline(renderer);
 pipeline.outputColorTransform = false;
-let ldr = smaa(renderOutput(graded));
+const smaaPass = smaa(renderOutput(graded));
+capScale(smaaPass, 1, null);
+let ldr = smaaPass;
 ldr = chromaticAberration(ldr, HURT.ca, vec2(0.5, 0.5), float(0.3));
 const vignette = smoothstep(0.85, 0.25, screenUV.sub(0.5).length());
 ldr = ldr.mul(mix(float(0.55), float(1), vignette));
@@ -373,6 +411,7 @@ renderer.setAnimationLoop(() => {
   if (!started) warmTransitions();
   if (intro.playing) intro.update(step);
   else updatePlayer(step, inv.moveScale);
+  updateSurfaceRain(step);
   crash.update(clock.dt, clock.elapsed);
   police.update(clock.dt, clock.elapsed);
   updateRain(clock.dt);
