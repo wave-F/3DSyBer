@@ -1,9 +1,10 @@
 import * as THREE from 'three/webgpu';
 import { sound } from '../audio/sound.js';
-import { mrt, float, uv, vec2, vec3, color, smoothstep, sin, fract, texture, uniform } from 'three/tsl';
+import { mrt, float, uv, vec2, vec3, vec4, color, smoothstep, sin, fract, texture, uniform, positionWorld, output, mix } from 'three/tsl';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { uiTime } from './clock.js';
 import { tx } from '../i18n.js';
+import { gltfLoader } from '../gltf.js';
 
 const NO_MASK = mrt({ mask: float(0) }); // 玻璃和界面是加法发光，不遮挡背后的世界
 
@@ -15,8 +16,11 @@ const BEZEL = 0.012;                // 黑色玻璃边框宽度
 const RIM = 0.0045;                 // 金属边框正面宽度
 const DEPTH = 0.0075;               // 机身厚度
 const CW = 1600, CH = 1000;         // 界面画布分辨率
-const SHOWN = { pos: new THREE.Vector3(0, -0.012, -0.375), rot: new THREE.Euler(-0.06, 0, 0) };
-const HIDDEN = { pos: new THREE.Vector3(0.22, -0.5, -0.32), rot: new THREE.Euler(-1.25, 0.25, 0.35) };
+// 左手握住平板左边缘：平板往右、往远放一点，给左手和前臂留出画面左下角；左边缘略朝镜头转
+// 握姿是按这个姿态在 Blender 里摆的（tools/blender/build_tablet_hand.py 的 SHOWN_POS / SHOWN_ROT），改了要一起改
+const SHOWN = { pos: new THREE.Vector3(0.035, -0.022, -0.43), rot: new THREE.Euler(-0.06, 0.08, 0.02) };
+// 收起：往左下方放下（左手拿着）
+const HIDDEN = { pos: new THREE.Vector3(-0.2, -0.5, -0.32), rot: new THREE.Euler(-1.25, -0.25, -0.35) };
 const C = { cyan: '#7fd6ff', dim: 'rgba(127,214,255,0.45)', faint: 'rgba(127,214,255,0.12)', gold: '#ffcf6a', white: '#eaf6ff', red: '#ff4a3a' };
 const SANS = '"PingFang SC", "Helvetica Neue", sans-serif';
 const tabName = (i) => (i === 0 ? tx('线索', 'CLUES') : tx('报告', 'REPORT'));
@@ -121,7 +125,8 @@ export function createTablet(camera) {
   holder.add(body.group);
 
   // 透明屏幕玻璃：极淡的蓝色 + 一道斜向反光
-  const glassMat = new THREE.MeshBasicNodeMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
+  // 玻璃和界面开深度测试：压在正面边框上的拇指要挡住界面，背面的手指则透过玻璃看得到、界面叠在上面
+  const glassMat = new THREE.MeshBasicNodeMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
   const diag = uv().x.mul(0.6).add(uv().y);
   const sheen = smoothstep(0.62, 0.75, diag).mul(smoothstep(0.95, 0.78, diag)).mul(0.035);
   glassMat.colorNode = color(0x0e2a3a).mul(0.6).add(vec3(sheen));
@@ -135,7 +140,7 @@ export function createTablet(camera) {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
   // 全息显示：RGB 轻微错位（色散）+ 细扫描线 + 缓慢下扫的亮带 + 偶发闪烁
-  const screenMat = new THREE.MeshBasicNodeMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
+  const screenMat = new THREE.MeshBasicNodeMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
   const flicker = uniform(1);
   const suv = uv();
   const ca = vec2(0.0009, 0);
@@ -156,6 +161,41 @@ export function createTablet(camera) {
   backing.position.z = -0.0005;
   backing.visible = false;
   holder.add(backing);
+
+  // 握平板的左手（tools/blender/fps_arm_left.py，握姿在 art/tablet_hand.blend 里摆）：捏握左下角
+  // 前臂从画面左下斜着伸进来，拇指平放在正面边框上斜向右上；食指勾住左边缘靠下处，其余三指收拳在机身外侧——屏幕是透明的，四指不能伸到屏幕背后
+  // glTF 坐标就是 holder 的本地坐标，直接挂上去，跟着举起 / 收起 / 晃动一起动
+  const hand = new THREE.Group();
+  holder.add(hand);
+  // 万一有手指落在屏幕背后：压暗、偏冷，读起来是在玻璃后面（正面的拇指、屏幕外的手掌不变）
+  const holderInv = uniform(new THREE.Matrix4());
+  const lp = holderInv.mul(vec4(positionWorld, 1));
+  const behind = smoothstep(-0.001, -0.007, lp.z)
+    .mul(smoothstep(W / 2 + 0.004, W / 2 - 0.004, lp.x.abs()))
+    .mul(smoothstep(H / 2 + 0.004, H / 2 - 0.004, lp.y.abs()));
+  const glassDim = mix(vec3(1), vec3(0.3, 0.38, 0.44), behind);
+  gltfLoader().load(`${import.meta.env.BASE_URL}assets/tablet-hand.glb?v=17`, (gltf) => {
+    const model = gltf.scene;
+    model.traverse((o) => {
+      if (!o.isSkinnedMesh) return;
+      o.frustumCulled = false;
+      const src = o.material;
+      const m = src.isMeshPhysicalMaterial ? new THREE.MeshPhysicalNodeMaterial() : new THREE.MeshStandardNodeMaterial();
+      for (const k in src) m[k] = src[k];   // 和渲染器自动转换节点材质的做法相同
+      m.outputNode = vec4(output.rgb.mul(glassDim), output.a);
+      o.material = m;
+    });
+    const clip = THREE.AnimationClip.findByName(gltf.animations, 'Grip_Tablet');
+    if (clip) {
+      const mixer = new THREE.AnimationMixer(model);
+      const act = mixer.clipAction(clip);
+      act.setLoop(THREE.LoopOnce, 1);
+      act.clampWhenFinished = true;
+      act.play();
+      mixer.update(1);   // 单帧姿势：定住后不用再更新
+    }
+    hand.add(model);
+  }, undefined, (error) => console.error('Failed to load tablet hand:', error));
   rig.visible = false;
   let flickT = 0;
 
@@ -839,6 +879,11 @@ export function createTablet(camera) {
       holder.quaternion.identity();
     } else followCamera(dt, t);
     backing.visible = !!state.world;
+    hand.visible = !state.world;   // 掉在地上时没有手
+    if (hand.visible) {
+      rig.updateMatrixWorld(true);
+      holderInv.value.copy(holder.matrixWorld).invert();
+    }
 
     // 内容：举到位后开机，界面动画期间逐帧重绘
     if (state.open && state.k > 0.6) state.boot = Math.min(1, state.boot + dt * 1.8);
@@ -902,7 +947,7 @@ export function createTablet(camera) {
     holder.position.x += sway.yaw * 0.25;
     holder.position.y += sway.pitch * 0.25 + Math.sin(t * 1.6) * 0.0025;
     qa.setFromEuler(HIDDEN.rot);
-    qb.setFromEuler(new THREE.Euler(SHOWN.rot.x + sway.pitch * 0.6 + Math.sin(t * 1.1) * 0.006, sway.yaw * 0.6, Math.sin(t * 0.8) * 0.004));
+    qb.setFromEuler(new THREE.Euler(SHOWN.rot.x + sway.pitch * 0.6 + Math.sin(t * 1.1) * 0.006, SHOWN.rot.y + sway.yaw * 0.6, SHOWN.rot.z + Math.sin(t * 0.8) * 0.004));
     holder.quaternion.slerpQuaternions(qa, qb, Math.min(1, x));
   }
 
