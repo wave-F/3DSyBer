@@ -2,11 +2,11 @@
  "bldgLG": {
   "l1": {
    "file": "assets/bldg/bldgLG_l1.glb",
-   "tris": 22092
+   "tris": 14502
   },
   "l2": {
    "file": "assets/bldg/bldgLG_l2.glb",
-   "tris": 6416,
+   "tris": 4820,
    "range": {
     "wall": 1,
     "glow": 2
@@ -14,7 +14,7 @@
   },
   "l3": {
    "file": "assets/bldg/bldgLG_l3.glb",
-   "tris": 543,
+   "tris": 563,
    "range": {
     "wall": 1,
     "glow": 2

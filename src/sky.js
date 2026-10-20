@@ -130,15 +130,6 @@ function buildHolograms(scene) {
   }
   logo.position.set(-18, 118, 200);
   scene.add(logo);
-  // 投影环跟着标志，仍在画面下沿
-  const ringMat = new THREE.MeshBasicMaterial({ color: 0xffb030, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-  ringMat.color.multiplyScalar(2.5);
-  ringMat.fog = false;
-  fadeWithDistance(ringMat);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(7.2, 0.2, 6, 48), ringMat);
-  ring.rotation.x = Math.PI / 2;
-  ring.position.set(-18, 100, 200);
-  scene.add(ring);
   holos.push({ mesh: logo, base: logo.position.clone(), rot: 0, k: 0.3, bob: 0.8, spin: 0.25 });
 }
 
