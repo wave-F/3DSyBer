@@ -5,6 +5,7 @@ import { createBuildingKit } from './buildings.js';
 import { createSignKit } from './signs.js';
 import { MEGA } from './sky.js';
 import { modelFootprints, placeModelSigns, loadModelBuildings, NEAR_Z, MODEL_FOOTPRINTS } from './modelBuildings.js';
+import { buildFarModels, playerDist, FAR_RING } from './farModels.js';
 
 const NEAR_STYLES = [['resi', 0.38], ['kitsch', 0.27], ['office', 0.25], ['corp', 0.1]];
 const MID_STYLES = [['office', 0.35], ['corp', 0.25], ['resi', 0.3], ['kitsch', 0.1]];
@@ -74,12 +75,20 @@ export function buildCity(scene) {
   placeModelSigns(signs);   // 放在程序楼之后，不打乱程序楼的随机序列
   kit.finish(scene);
   signs.finish();
-  buildFarCity(scene, r);
+  const far = buildFarCity(scene, r);
+  // 中景 100~400 m：模型楼替换方盒（开发态右上角按钮可以切回方盒对比）
+  const farModels = buildFarModels(scene, far.kept);
+  setFarModels(true);
+  function setFarModels(on) {
+    farModels.group.visible = on;
+    far.ring.visible = !on;
+  }
+  if (import.meta.env.DEV) farModelsButton(setFarModels);
 
   function update() {}
   update.rainSpots = rainSpots;
   update.adScreens = signs.screens;
-  update.ready = buildingsReady;
+  update.ready = Promise.all([buildingsReady, farModels.ready]);
   return update;
 
   function decorate(b, side, near) {
@@ -148,6 +157,8 @@ export function buildCity(scene) {
 }
 
 // 远景楼群：实例化方盒 + 稀疏暖光窗
+// 离玩家 100~400 m 的环带（ring）由 farModels.js 的模型楼替换，单独成组，留着做对比切换
+// 返回 { ring: 环带方盒组, kept: 保留方盒的占地（模型楼避让用）}
 function buildFarCity(scene, r) {
   const list = [];
   const add = (x, z) => {
@@ -170,6 +181,8 @@ function buildFarCity(scene, r) {
       }
     }
   }
+  // 方盒在环带里（中心距离 ≤ far）就归 ring：模型楼按中心距离摆，边缘外伸的部分由 kept 避让兜住
+  for (const b of list) b.ring = playerDist(b.x, b.z) <= FAR_RING.far;
 
   const tiers = [
     { max: 90, tex: farWindowTexture(11, 12, 26) },
@@ -181,6 +194,9 @@ function buildFarCity(scene, r) {
   geo.translate(0, 0.5, 0);
   const m = new THREE.Matrix4();
   const color = new THREE.Color();
+  const ring = new THREE.Group();
+  ring.name = '远景方盒（中景环带）';
+  scene.add(ring);
   let min = 0;
   for (const tier of tiers) {
     const sub = list.filter((b) => b.h > min && b.h <= tier.max);
@@ -188,13 +204,40 @@ function buildFarCity(scene, r) {
     const side = new THREE.MeshStandardMaterial({
       map: tier.tex, emissiveMap: tier.tex, emissive: 0xffffff, emissiveIntensity: 1.5, roughness: 0.7,
     });
-    const mesh = new THREE.InstancedMesh(geo, [side, side, roofMat, roofMat, side, side], sub.length);
-    sub.forEach((b, i) => {
-      m.makeScale(b.w, b.h, b.d).setPosition(b.x, 0, b.z);
-      mesh.setMatrixAt(i, m);
-      const g = 0.25 + r() * 0.25;
-      mesh.setColorAt(i, color.setRGB(g, g * 1.05, g * 1.08));
-    });
-    scene.add(mesh);
+    for (const inRing of [false, true]) {
+      const part = sub.filter((b) => b.ring === inRing);
+      if (!part.length) continue;
+      const mesh = new THREE.InstancedMesh(geo, [side, side, roofMat, roofMat, side, side], part.length);
+      part.forEach((b, i) => {
+        m.makeScale(b.w, b.h, b.d).setPosition(b.x, 0, b.z);
+        mesh.setMatrixAt(i, m);
+        const g = 0.25 + r() * 0.25;
+        mesh.setColorAt(i, color.setRGB(g, g * 1.05, g * 1.08));
+      });
+      (inRing ? ring : scene).add(mesh);
+    }
   }
+  const kept = list.filter((b) => !b.ring).map((b) => ({ x0: b.x - b.w / 2, x1: b.x + b.w / 2, z0: b.z - b.d / 2, z1: b.z + b.d / 2 }));
+  return { ring, kept };
+}
+
+// 开发态测试按钮：中景模型楼 / 旧方盒
+function farModelsButton(set) {
+  let on = true;
+  const b = document.createElement('button');
+  const label = () => { b.textContent = `测试 · 中景楼：${on ? '模型楼' : '旧方盒'}`; };
+  label();
+  b.style.cssText = 'position:fixed;right:24px;top:412px;transform:scale(1.5);transform-origin:right top;z-index:10;padding:8px 16px;font:13px "PingFang SC",sans-serif;letter-spacing:.1em;color:#9ad7ff;background:rgba(5,12,20,.7);border:1px solid rgba(154,215,255,.6);cursor:pointer;';
+  document.body.appendChild(b);
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    on = !on;
+    set(on);
+    label();
+    b.blur();
+  });
+  const sync = () => { b.style.display = document.pointerLockElement ? 'none' : ''; };
+  document.addEventListener('pointerlockchange', sync);
+  sync();
+  if (import.meta.env.DEV) window.__farModels = (v) => { on = v; set(v); label(); };
 }

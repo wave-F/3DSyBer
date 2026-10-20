@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "assets:ktx2": "node scripts/ktx2.mjs",
+    "assets:lod": "node scripts/lod.mjs",
     "test:audio": "node --experimental-vm-modules --test tests/foley.test.js",
     "test:voice": "node --test tests/voice.test.mjs tests/dialogue.test.mjs",
     "test:lighting": "node --test tests/globalIllumination.test.mjs",

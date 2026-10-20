@@ -1,0 +1,84 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>楼体 LOD 检查</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}#info{position:fixed;left:8px;top:8px;color:#9ad7ff;font:12px monospace;white-space:pre}</style>
+</head>
+<body><div id="info"></div>
+<script type="module">
+// 楼体 LOD 检查页（开发用）：所有楼型排一排，同一距离看原模 / L1 / L2
+// 参数：?lod=0|1|2  d=300 距离  fog=1 游戏雾近似  rot=180 转到背面  types=tower08,towerC 只看部分楼型
+import * as THREE from 'three/webgpu';
+import { texture, uv, vertexColor, vec3, float, mix, positionWorld, cameraPosition, exp } from 'three/tsl';
+import { gltfLoader, initGLTF } from './src/gltf.js';
+import TYPES from './src/data/buildings.json';
+import LODS from './src/data/buildingLods.json';
+
+const q = new URLSearchParams(location.search);
+const LOD = Number(q.get('lod') ?? 0), D = Number(q.get('d') ?? 300), FOG = q.get('fog') === '1', ROT = Number(q.get('rot') ?? 0);
+const NAMES = q.get('types') ? q.get('types').split(',') : Object.keys(TYPES);
+const W = 1920, H = 1080;
+
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+document.body.appendChild(renderer.domElement);
+initGLTF(renderer);
+
+const scene = new THREE.Scene();
+const FOG_HEX = 0x161a1e;
+scene.background = new THREE.Color(FOG ? FOG_HEX : 0x05070a);
+const camera = new THREE.PerspectiveCamera(65, W / H, 0.05, 3000);
+camera.position.set(0, 21.7, 0);
+camera.lookAt(0, 40, -D);
+
+function fogged(col) {
+  if (!FOG) return col;
+  const d = positionWorld.sub(cameraPosition).length();
+  const f = float(1).sub(exp(float(0.0045).mul(exp(positionWorld.y.max(0).mul(-0.006))).mul(d).negate())).min(0.9);
+  return mix(col, vec3(...new THREE.Color(FOG_HEX).toArray()), f);
+}
+const shade = () => mix(float(1.25), float(0.22), positionWorld.y.div(100).clamp(0, 1).pow(0.75));
+// 原模 / L1：modelBuildings.js basic 材质（默认参数，不含招牌补光）
+function hiMat(src) {
+  const [kind] = src.name.split(':');
+  const light = vertexColor().rgb.pow(2.2).mul(4);
+  const base = src.map ? texture(src.map, uv()).rgb.mul(vec3(src.color.r, src.color.g, src.color.b)) : vec3(src.color.r, src.color.g, src.color.b);
+  let c = base.mul(light.mul(4.5).mul(shade()).mul(vec3(0.78, 0.95, 1.05)).add(vec3(0.006, 0.014, 0.014)));
+  if (kind === 'glass') c = light;
+  else if (kind === 'lamp') c = c.add(vec3(src.emissive.r, src.emissive.g, src.emissive.b).mul(0.7));
+  else if (kind === 'let') c = c.add(base.mul(0.9));
+  const m = new THREE.MeshBasicNodeMaterial();
+  m.colorNode = fogged(c);
+  return m;
+}
+// L2：wall × 4.5 × 高度明暗 + glow
+function l2Mat(src, range) {
+  const m = new THREE.MeshBasicNodeMaterial();
+  m.colorNode = fogged(texture(src.map, uv()).rgb.mul(range.wall * 4.5).mul(shade()).add(texture(src.emissiveMap, uv()).rgb.mul(range.glow)));
+  return m;
+}
+
+const loader = gltfLoader();
+const xs = []; let x = 0;
+for (const n of NAMES) { const w = TYPES[n].width; xs.push(x + w / 2); x += w + 8; }
+const stats = [];
+await Promise.all(NAMES.map(async (name, i) => {
+  const url = LOD === 0 ? TYPES[name].file : LODS[name][`l${LOD}`].file;
+  const g = await loader.loadAsync('/' + url);
+  let tris = 0;
+  g.scene.traverse((o) => {
+    if (!o.isMesh) return;
+    o.material = LOD === 2 ? l2Mat(o.material, LODS[name].l2.range) : hiMat(o.material);
+    tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
+  });
+  g.scene.position.set(xs[i] - x / 2, 0, -D);
+  g.scene.rotation.y = ROT * Math.PI / 180;
+  scene.add(g.scene);
+  stats[i] = `${name}: ${Math.round(tris)}`;
+}));
+document.getElementById('info').textContent = `LOD${LOD} d=${D}m fog=${FOG}\n` + stats.join('\n');
+renderer.setAnimationLoop(() => renderer.render(scene, camera));
+window.__ready = true;
+</script>
+</body>
+</html>
