@@ -348,7 +348,7 @@ export function createTablet(camera) {
     g.fillRect(70, 190, CW - 140, 2);
     text(f.source, 70, 254, 22, C.dim, 400, 'left', true);
     text(f.tag, 70, 316, 46, C.white, 500);
-    // 右上角两行时间：事故时间、报告签收（签收更早，红色）
+    // 右上角两行时间：事故时间、报告生成（生成更早，红色）
     (f.stamps ?? []).forEach((s, i) => {
       if (f.typed <= 0) return;
       text(`${s.label}  ${s.t}`, CW - 70, 254 + i * 50, 26, s.tone === 'red' ? C.red : C.dim, 400, 'right', true);

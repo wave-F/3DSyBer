@@ -18,6 +18,7 @@ import { PEAK } from '../audio/events.js';
 import { IMPACT_T } from './recon.js';
 import { bi, onLang, tx } from '../i18n.js';
 import { loading } from '../loading.js';
+import { createScanReveal } from './scanReveal.js';
 
 const HOLD_TIME = 1.4;      // Includes raising the instrument and one readable scan pass.
 const AIM_RANGE = 6;        // 准星可分析距离
@@ -77,6 +78,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   tablet.onBlank = closeTabletFromBlank;
   const vm = createViewmodel(tablet.uiScene, camera, gait);
   const mag = createMagazine({ scene, uiScene: tablet.uiScene, camera });   // 地上的电子杂志（世界观补充）
+  const magReveal = createScanReveal({ range: SCAN_RANGE, showTime: SCAN_SHOW });
   let magAimed = false;
   const slot = buildCardSlot(crash);
   const rootKey = buildRootKey(crash);
@@ -223,7 +225,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
   function statusText() {
     if (round >= 4) return roundDone[4] ? tx('复核未结', 'REVIEW OPEN') : tx('第 4 轮复核', 'REVIEW 4');
     if (round === 3) return revised.has('r3') ? tx('移交暂缓', 'HANDOVER HELD') : tx('第 3 轮复核', 'REVIEW 3');
-    return revised.has('r2') ? tx('复核挂起', 'REVIEW HELD') : roundDone[2] ? tx('待归档', 'TO ARCHIVE') : tx(`第 ${round} 轮复核`, `REVIEW ${round}`);
+    return revised.has('r2') ? tx('复核暂停', 'REVIEW PAUSED') : roundDone[2] ? tx('待归档', 'TO ARCHIVE') : tx(`第 ${round} 轮复核`, `REVIEW ${round}`);
   }
 
   setMode('explore');
@@ -1307,7 +1309,12 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     if (scanCd > 0) return;
     // 手持设备举起对准前方，发射瞬间从设备位置放出扫描波
     // 发射瞬间世界声音高切一下（Radar Snapshot）
-    if (!vm.scan((origin) => { clues.forEach((c) => { c.hit = false; }); fx.pulse(origin); sound.radarDuck(); })) return;
+    if (!vm.scan((origin) => {
+      clues.forEach((c) => { c.hit = false; });
+      magReveal.beginScan();
+      fx.pulse(origin);
+      sound.radarDuck();
+    })) return;
     sound.play('scifi/radar');   // Studio 里素材后移 0.198 秒，峰值落在举枪 0.5 秒后的发射瞬间
     scanCd = SCAN_COOLDOWN;
   }
@@ -1442,6 +1449,17 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       const label = c === aimedProbe ? c.name : `${c.name} ${d.toFixed(0)} m`;
       list.push({ id: c.id, x: s.x, y: s.y, front: s.front, show, done: c.done, aim: c === aimedProbe, label });
     }
+    // 杂志只显示交互圆点，不作为线索；在黑梦和过场中也传入隐藏状态，避免遗留标记。
+    const magT = mag.target;
+    const ms = magT ? project(magT.p) : { x: 0, y: 0, front: false };
+    const md = magT ? magT.p.distanceTo(camera.position) : Infinity;
+    const magName = tx('电子杂志', 'E-zine');
+    list.push({
+      id: 'magazine', kind: 'interaction', x: ms.x, y: ms.y, front: ms.front,
+      show: showClues && !!magT && ms.front && (md < NEAR_RANGE || magAimed || magReveal.visible),
+      done: false, aim: magAimed, flash: magReveal.takeFlash(),
+      label: !magT ? '' : magAimed ? tx('电子杂志 · 按 E 拾起', 'E-zine · Press E to pick up') : `${magName} ${md.toFixed(1)} m`,
+    });
     return list;
   }
 
@@ -1467,6 +1485,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     keyAimed = keyOn && !aimed && aimAt([keyTarget()], AIM_RANGE) != null;
     // 地上的杂志：走近、准星对准时按 E 拾起
     const magT = mag.target;
+    magReveal.update(dt, magT ? magT.p.distanceTo(camera.position) : Infinity, fx.pulsing, fx.pulseRadius, !!magT);
     magAimed = !!magT && !aimed && !doorAimed && !portAimed && !keyAimed && aimAt([magT], mag.range) != null;
     tickFinished(dt);
     holdAnalyze(aimed, dt, finishClue);
@@ -1482,7 +1501,6 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     const tap = doorAimed ? { ...project(doorTarget().p), name: tx('右侧车门', 'Right door') }
       : portAimed ? { ...project(portTarget().p), name: tx('检修接口', 'Service port') }
       : keyAimed ? { ...project(keyTarget().p), name: tx('根钥', 'Root key') }
-      : magAimed ? { ...project(magT.p), name: tx('电子杂志 · 拾起', 'E-zine · pick up') }
       : null;
     if (!analysisClue && tap) ui.setAnalysis(tap, 0, 'tap');
     if (analysisClue || tap || ui.panelOn) ui.setPrompt(null);
@@ -1510,11 +1528,13 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     if (!mag.pickUp()) return;
     reading = true;
     magAimed = false;
+    magReveal.clear();
     holdT = 0; finishedAnalysis = null;
     controls.enabled = false;
     ui.setPrompt(null);
     ui.setAnalysis(null);
     ui.hidePanel();
+    ui.updateMarkers(markerList(false, false, null));
     ui.setReading(true);
   }
   function tickRead() {

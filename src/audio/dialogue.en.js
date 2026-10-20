@@ -14,7 +14,7 @@ export const VOICE_ROLES = {
     brief: 'Woman around thirty. Neutral American English. Cold, emotionally distant dispatcher, clipped consonants, impatient procedural authority. No warmth, reassurance or smiling; restrained irritation and finality carry the performance. Record clean and dry; walkie-talkie coloration belongs in FMOD.',
   },
   device: {
-    name: 'Investigation device', env: 'ELEVENLABS_VOICE_DEVICE', stability: 1, similarity: 0.85,
+    name: 'URSA', env: 'ELEVENLABS_VOICE_DEVICE', stability: 1, similarity: 0.85,
     acting: 'robotic, precise, eerily calm',
     brief: 'Distinctly female artificial intelligence. Precise synthetic phrasing, unnervingly composed, faintly condescending corporate politeness and deliberate sentence-final falls. Portal 2 inspires only the synthetic texture and clinical contrast, not an imitation of its character or actor. FMOD adds a subtle doubled, resonant electronic layer. Never a human dispatcher or a harsh unintelligible robot.',
   },
@@ -39,10 +39,10 @@ export const ENGLISH = {
   opening: [
      line('B1016，到场没有？', 'B1016, are you on scene?', 'Cold check-in, a clipped question with no personal interest.', 'cold, questioning'),
     line('到了。', 'I’m here.', 'Short, tired acknowledgement. No enthusiasm.', 'weary, matter-of-fact'),
-     line('一场简单事故。核完赶紧交单，北岸还有两件。', 'A simple accident. File it and move. Two more on the north bank.', 'Dismiss the incident. Cut off each instruction; impatient, emotionally uninvolved.', 'cold, impatient, authoritative'),
+     line('一场简单的事故。审核完赶紧交单，北岸还有两件。', 'A simple accident. Finish the review and file it. Two more on the north bank.', 'Dismiss the incident. Cut off each instruction; impatient, emotionally uninvolved.', 'cold, impatient, authoritative'),
   ],
   start1: [
-    line('先看撞哪儿了。', 'Check the impact first.', 'To himself, after putting the terminal away. Short, ready to work.', 'quiet, matter-of-fact'),
+    line('先看看撞哪儿了。', 'Let’s see where it hit first.', 'To himself, after putting the terminal away. Short, ready to work.', 'quiet, matter-of-fact'),
   ],
   // 倒回完成后的字幕。还没有录音，不送去合成。
   afterRewind: [
@@ -52,10 +52,10 @@ export const ENGLISH = {
     line('车头都压进去了。', 'The whole front end is crushed in.', 'Observe the damage plainly.', 'quiet, focused'),
   ],
   clueRail: [
-    line('不是擦过去，是对着护栏冲的。', 'It did not graze the barrier. It went straight at it.', 'Trace the impact path to himself.', 'quiet, focused'),
+    line('不是擦过去，是对着护栏撞过去的。', 'It didn’t scrape past. It crashed straight into the rail.', 'Trace the impact path to himself.', 'quiet, focused'),
   ],
   clueDebris: [
-    line('这几块都是车头掉的。', 'These pieces all came off the front end.', 'Identify the debris without drama.', 'quiet, matter-of-fact'),
+    line('这几块都是车头掉下来的。', 'These pieces all came off the front end.', 'Identify the debris without drama.', 'quiet, matter-of-fact'),
   ],
   ready1: [
     line('构建黑梦，看看发生了什么。', 'Build Blackdream. See what happened.', 'A quiet decision to himself after the last scene clue. Not a tutorial.', 'quiet, curious'),
@@ -67,31 +67,31 @@ export const ENGLISH = {
     line('还有另一辆车的痕迹。', 'There are tracks from another car too.', 'Notice the second set of tracks without jumping to a conclusion.', 'quiet, focused'),
   ],
   clueTrim: [
-    line('饰条也是黄的，漆对得上。', 'Yellow trim too. The paint matches.', 'Confirm the connection plainly.', 'quiet, certain'),
+    line('装饰条也是黄的，颜色对得上。', 'The trim is yellow too. The color matches.', 'Confirm the connection plainly.', 'quiet, certain'),
   ],
   ready2: [
-    line('把黄车加进去，再放一遍。', 'Add the yellow car. Run it again.', 'A practical next step to himself.', 'quiet, resolved'),
+    line('把黄车加进去，再构建一次。', 'Add the yellow car. Rebuild it again.', 'A practical next step to himself.', 'quiet, resolved'),
   ],
   clueP2car: [
     line('碰撞时产生了新数据。', 'The collision produced new data.', 'Notice the new record without raising his voice.', 'quiet, certain'),
   ],
   clueP3override: [
-    line('就在这儿，控制权被夺过去了。', 'Right here. That is when control was taken.', 'Pinpoint the takeover without raising his voice.', 'quiet, focused'),
+    line('就是在这儿，控制权被夺过去了。', 'This is exactly where control was taken away.', 'Pinpoint the takeover without raising his voice.', 'quiet, focused'),
   ],
   clueP4end: [
     line('这辆车，已经不受控制了。', 'This car is no longer under control.', 'Let the implication settle between the two beats.', 'low, grave'),
   ],
   clueDReason: [
-    line('陆世承，承岳的人。', 'Lu Shicheng. Chengyue.', 'Name the person and the group, then stop.', 'quiet, reflective'),
+    line('陆世承，承岳集团的继承人。', 'Lu Shicheng. The heir to the Chengyue Group.', 'Name the person and identify him as the group’s heir, then stop.', 'quiet, reflective'),
   ],
   clueDRaw: [
-    line('程叙是经纬的审计工程师？出事前还在用这个接口。', 'Cheng Xu was an audit engineer at Meridian? He was using this port just before the crash.', 'Register his profession and the recent port access as a concrete lead.', 'quiet, curious'),
+    line('程叙是经纬的工程师？', 'Cheng Xu was an engineer at Meridian?', 'Register his employer and profession as a concrete lead.', 'quiet, curious'),
   ],
   clueDRawOpen: [
-    line('临时给的？', 'A temporary grant?', 'Question the new evidence, not a shocked outburst.', 'quiet, skeptical'),
+    line('临时添加的？', 'Added temporarily?', 'Question the new evidence, not a shocked outburst.', 'quiet, skeptical'),
   ],
   clueRTime: [
-    line('早了 0.38 秒。那时候车还没转。', '0.38 seconds early. The car had not turned yet.', 'Read the timing precisely; contained unease.', 'low, troubled'),
+    line('早了 0.38 秒。那时候车还没有发生碰撞。', '0.38 seconds early. The collision hadn’t happened yet.', 'Read the time difference precisely, then note that the collision had not happened; contained unease.', 'low, troubled'),
   ],
   dream1: [
     line('轮子现在就转向了。', 'The wheel is turning now.', 'Watching the replay. The turn is happening at this moment. Keep it short.', 'quiet, focused'),
@@ -105,7 +105,7 @@ export const ENGLISH = {
     line('那时候黄车还没碰到它。', 'The yellow car had not touched it yet.', 'Questioning the causal chain, not expressing shock.', 'quiet, skeptical'),
   ],
   question2: [
-     line('你说刮擦让它转向。可胎痕在刮擦点之前就弯了。', 'You said the scrape made it turn. But the tire marks curve before the contact point.', 'Challenge the lie. Frustration builds; stress BEFORE, then leave a pointed silence.', 'accusing, frustrated, controlled'),
+     line('你说碰撞让它转向。可胎痕在碰撞点之前就弯了。', 'You said the collision made it turn. But the tire marks curve before the collision point.', 'Challenge the lie. Frustration builds; stress BEFORE, then leave a pointed silence.', 'accusing, frustrated, controlled'),
      line('接触可能影响了判断轨迹。', 'Contact may have affected the assessed trajectory.', 'Synthetic corporate reassurance. Deliberate, precise, calmly evasive with an artificial falling cadence.', 'robotic, measured, coolly dismissive'),
      line('可能？', 'May have?', 'A sharp incredulous echo, containing anger rather than an innocent question.', 'incredulous, bitter, clipped'),
   ],
@@ -128,7 +128,7 @@ export const ENGLISH = {
   ],
   revised3: [],
   after3: [
-    line('我的权限不够，程叙的呢？', 'My clearance is not enough. What about Cheng Xu’s?', 'Recall the audit engineer’s credential as a possibility, not a guaranteed solution.', 'quiet, thoughtful'),
+    line('如果我的权限不够，那程叙的呢？', 'If my clearance isn’t enough, what about Cheng Xu’s?', 'Recall the engineer’s credential as a possibility, not a guaranteed solution.', 'quiet, thoughtful'),
     line('事故前2分钟还在使用，去车里找找根钥。', 'It was still in use two minutes before the crash. Look in the car for the root key.', 'A practical next step to himself.', 'quiet, resolved'),
   ],
   keyFound: [
@@ -143,19 +143,17 @@ export const ENGLISH = {
     line('这时候才添加了零号保障。', 'That is when Zero Priority was added.', 'Pinpoint the moment; firm but not shouted.', 'quiet, certain'),
   ],
   dream4b: [
-    line('他想取消变道。系统没让。', 'He tried to cancel the lane change. The system refused.', 'Recognize that the apparent perpetrator was also being controlled.', 'quiet, grave'),
+    line('他想取消变道。系统拒绝了。', 'He tried to cancel the lane change. The system refused.', 'Recognize that the apparent perpetrator was also being controlled.', 'quiet, grave'),
   ],
   target: [
-     line('就因为他查看了原始记录？', 'Just because he looked at the raw records?', 'Horrified accusation. A man has been killed for looking; let the human cost break through.', 'horrified, accusing, breathless'),
-     line('得把这些带回去。', 'I need to take this back.', 'Urgent resolve with fear underneath. A quick breath, then the decision to move.', 'tense, urgent, determined'),
+      line('得把这些带回去。', 'I need to take this back.', 'Urgent resolve with fear underneath. A quick breath, then the decision to move.', 'tense, urgent, determined'),
   ],
   transferred: [
-     line('收到。特权争议转审查科，经纬和承岳那边会有人对接。', 'Received. Privilege dispute goes to Review. Jingwei and Chengyue will send someone.', 'Cold bureaucratic handoff; names are just another case number.', 'cold, businesslike'),
+     line('收到。特权争议转审查科，经纬集团那边会有人对接。', 'Received. The privilege dispute goes to Review. The Meridian Group will send someone.', 'Cold bureaucratic handoff; the group is just another administrative contact.', 'cold, businesslike'),
      line('B1016，这单你可以结了。', 'B1016, you can close this.', 'Curt, final dismissal. No relief or friendliness.', 'cold, clipped, final'),
     line('知道了。', 'Understood.', 'Resigned, not satisfied. The doubt has not disappeared.', 'weary, subdued'),
-    line('特权会有人去吵。', 'Someone will argue about the privilege.', 'Rationalizing his decision to leave.', 'quiet, resigned'),
-    line('至于零号保障是什么时候生效的——', 'As for when Zero Priority took effect —', 'An unfinished thought he chooses not to pursue.', 'quiet, trailing off'),
-    line('那不是我的单子了。', 'That is no longer my file.', 'Self-dismissal, not a triumphant closing line.', 'quiet, resigned'),
+    line('零号保障是什么时候生效的？ 这里还有疑点', 'When did Zero Priority take effect? There are still questions here.', 'Recognize that the timing remains unresolved, even as he prepares to leave.', 'quiet, doubtful'),
+    line('但那不是我的单子了。', 'But that is no longer my file.', 'Self-dismissal despite the remaining doubts, not a triumphant closing line.', 'quiet, resigned'),
   ],
   archived: [
      line('收到。肇事车辆转追查科。', 'Received. The other vehicle goes to Pursuit.', 'Flat procedural confirmation, no concern for the victim.', 'cold, businesslike'),
@@ -192,9 +190,10 @@ export function dialogueLines({ includeReserve = false, includeSilent = false, s
     if (translations.length !== originals.length) throw new Error(`English line count changed: ${group}`);
     return originals.map((original, index) => {
       const english = translations[index];
-      const id = `${group}_${String(index + 1).padStart(2, '0')}`;
+      // 删句后保留幸存台词的原配音 ID，不能让下一句占用已删除台词的编号。
+      const id = original.voiceId ?? `${group}_${String(index + 1).padStart(2, '0')}`;
       if (english.source !== original.text) throw new Error(`Stale English voice script: ${id}. Review the changed source before generating.`);
-      const speaker = original.who === '派单员' ? 'dispatch' : original.who === '仪器' || original.who === '终端' ? 'device' : 'chen';
+      const speaker = original.who === '派单员' ? 'dispatch' : original.who === 'URSA' || original.who === '仪器' || original.who === '终端' ? 'device' : 'chen';
       const channel = !original.who ? 'inner' : speaker === 'dispatch' ? 'radio' : speaker === 'device' ? 'device' : 'spoken';
       return { ...english, id, group, index, speaker, channel, reserve: group === 'call' };
     });
