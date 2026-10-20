@@ -26,7 +26,7 @@ function bannerTexture() {
     g.fillStyle = '#fff';
     g.textBaseline = 'middle';
     g.font = 'bold 54px "Menlo", "PingFang SC", monospace';
-    g.fillText(tx('// RESTRICTED AREA  调查封锁区  NCPD-7731  禁止越过  ', '// RESTRICTED AREA  CRIME SCENE  NCPD-7731  DO NOT CROSS  '), 30, 66);
+    g.fillText(tx('// RESTRICTED AREA  调查封锁区  公序 COS-7731  禁止越过  ', '// RESTRICTED AREA  CRIME SCENE  COS-7731  DO NOT CROSS  '), 30, 66);
     t.needsUpdate = true;
   };
   paint();

@@ -44,6 +44,11 @@ def crop_aspect(im, aspect):
     out.paste(im, ((W - cw) // 2, (H - ch) // 2))
     return out
 
+def fit(im, aspect):
+    """compose_ads.py 排好的图已是目标比例，不再切边（暗色留白会被误判成纯色边）"""
+    if abs(im.width / im.height - aspect) < 0.02: return im
+    return crop_aspect(trim_white(im), aspect)
+
 def glow(im):
     a = np.asarray(im.convert('RGB'), dtype=np.float32) / 255
     lin = np.where(a > 0.04045, ((a + 0.055) / 1.055) ** 2.4, a / 12.92).reshape(-1, 3)
@@ -59,11 +64,11 @@ W = max(HW * HC, VW * VC); H = HH * hrows + VH * vrows
 atlas = Image.new('RGB', (W, H), (0, 0, 0))
 meta = dict(size=[W, H], h=dict(cell=[HW, HH], cols=HC, y=0, n=len(hs)), v=dict(cell=[VW, VH], cols=VC, y=HH * hrows, n=len(vs)), glow=[], names=[])
 for i, f in enumerate(hs):
-    im = crop_aspect(trim_white(Image.open(f)), HW / HH).resize((HW, HH), Image.LANCZOS)
+    im = fit(Image.open(f).convert("RGB"), HW / HH).resize((HW, HH), Image.LANCZOS)
     atlas.paste(im, ((i % HC) * HW, (i // HC) * HH))
     meta['glow'].append(glow(im)); meta['names'].append(os.path.basename(f))
 for i, f in enumerate(vs):
-    im = crop_aspect(trim_white(Image.open(f)), VW / VH).resize((VW, VH), Image.LANCZOS)
+    im = fit(Image.open(f).convert("RGB"), VW / VH).resize((VW, VH), Image.LANCZOS)
     atlas.paste(im, ((i % VC) * VW, HH * hrows + (i // VC) * VH))
     meta['glow'].append(glow(im)); meta['names'].append(os.path.basename(f))
 out = os.path.join(ROOT, 'art', 'textures', 'gen', 'ads_atlas.jpg')
