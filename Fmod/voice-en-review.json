@@ -1,13 +1,14 @@
 {
-  "take": "recast-20261015",
+  "take": "chris-revised-20261020",
+  "branch": "chenn",
   "usage": "noncommercial-internal",
   "technicalChecks": {
-    "generatedLines": 59,
-    "spokenDialogueLines": 56,
+    "generatedLines": 57,
+    "spokenDialogueLines": 54,
     "replayGuideLines": 2,
     "nonverbalImpactCues": 1,
-    "totalSeconds": 181.344,
-    "fmodEventsWithPositiveDuration": 59,
+    "totalSeconds": 197.58,
+    "fmodEventsWithPositiveDuration": 57,
     "fmodEventDurationsMatchStagedWavs": true,
     "browser": "Chrome with real FMOD WASM and compiled VoiceEN.bank",
     "playbackCompletion": "passed",
@@ -21,39 +22,52 @@
       "[WRN] FMOD_OS_CriticalSection_Enter : cannot enter NULL critical section",
       "[WRN] FMOD_OS_CriticalSection_Leave : cannot leave NULL critical section"
     ],
-    "nativeWarningCount": 7562,
-    "browserRevisionNote": "2026-10-16 single-cry revision: playback, 59 durations, cancellation and pause/resume passed with no native errors. Current runtime emitted NULL critical-section warnings; the existing smoke script does not fail on these warnings. They are not fixed or suppressed by this change.",
+    "nativeWarningCount": 7740,
+    "browserRevisionNote": "2026-10-20 Chris revised take: playback, 57 durations, cancellation and pause/resume passed with no native errors. Current runtime still emits the pre-existing NULL critical-section warnings; the existing smoke script does not fail on these warnings. They were not fixed or suppressed by this recast.",
     "nativeErrors": [],
-    "existingFmodMetadata": "40 voice GUIDs retained, 19 new events, 25 obsolete events removed from VoiceEN bank without deletion; 44 nonvoice events and 5 snapshots byte-identical to pre-import backup; device dialogue effect chain authored, followed by user-requested DIALOGUE parent fader boost from 0 to +3 dB",
-    "dialogueMixRevision": { "bus": "bus:/DIALOGUE", "previousFaderDB": 0, "faderDB": 3, "scope": "All voice roles, replay guides and impact cry; child gains, effects and source WAVs unchanged" },
-    "voiceUnitTests": { "passed": 38, "failed": 0 },
-    "impactCrySingleTrigger": { "durationMilliseconds": 1824, "oncePerFinale": true, "regressionChecks": "Duplicate crossings, pause, rewind, missing audio handle, new-play reset and the second vocalization being outside the published crop" },
+    "existingFmodMetadata": "All 57 active voice GUIDs retained; 0 created; target_01 and transferred_04 removed from VoiceEN without deletion. All 69 other existing Event files and every pre-existing non-Event metadata file are byte-identical to the pre-recast backup. Event/instrument volume and pitch properties are unchanged.",
+    "dialogueMixRevision": { "bus": "bus:/DIALOGUE", "previousFaderDB": 3, "faderDB": 3, "scope": "No mixer edits. All child faders, effects, snapshots and event/instrument gain settings preserved. Master.bank, Frontend.bank, Preview.bank and Main.bank are byte-identical to the pre-recast banks." },
+    "loudness": {
+      "method": "Per-line EBU R128 integrated loudness matching of new mono 48 kHz/24-bit WAVs to the actual published recast-20261015 WAVs; measured before FMOD effects, not a claim of post-effect output identity",
+      "matchedLines": 57,
+      "maximumAbsoluteDeltaLU": 0.14,
+      "acceptanceToleranceLU": 0.15,
+      "truePeakLimitDBTP": -2,
+      "highestMeasuredTruePeakDBTP": -2.09,
+      "sourceAndReferenceHashes": "Each clip's mastering and wavSha256 fields in voice-en-manifest.json",
+      "rawApiAudioAndOldTakesPreserved": true
+    },
+    "voiceUnitTests": { "passed": 40, "failed": 0 },
+    "storyUnitTests": { "passed": 8, "failed": 0 },
+    "impactCrySingleTrigger": { "durationMilliseconds": 780, "oncePerFinale": true, "regressionChecks": "Duplicate crossings, pause, rewind, missing audio handle and new-play reset remain covered. New Chris recording cropped at 0.780 s, before the second detected vocalization at 0.992676 s. Matched to the prior published cry loudness after cropping." },
     "existingAudioSuite": {
-      "passed": 31,
-      "failed": 3,
+      "passed": 29,
+      "failed": 4,
       "unrelatedFailures": [
-        "Two viewmodel tests have a missing ./scannerMaterial.js mock dependency",
+        "Three viewmodel tests have a missing ../gltf.js mock dependency",
         "Loading UI test calls the absent loading.showTitle function"
       ],
       "note": "Affected production modules and these tests were not modified in this recast."
     },
     "webBuild": "passed (existing large-chunk warning)",
-    "webArtifactFilesScannedForApiKey": 74,
+    "webArtifactFilesScannedForApiKey": 178,
     "apiKeyInWebBuild": false,
-    "fmodBuild": "Single-cry VoiceEN rebuild/export/sync completed successfully; one FSBank file-cache diagnostic was printed. Browser playback passed with the current runtime warnings recorded above."
+    "fmodBuild": "Chris VoiceEN rebuild, GUID export and bank sync completed successfully. FSBank OS file-cache diagnostics were printed during the build, which nevertheless reported success; real browser playback and all 57 event durations passed. Runtime warnings are recorded above."
   },
   "contentChecks": {
     "method": "ElevenLabs Scribe v2 transcription, not synthesis alignment",
-    "checkedLines": 58,
-    "lexicallyMatchedAfterNormalizationAndRepair": 57,
-    "normalization": "Case, punctuation, root key/Rootkey, Black Dream/Blackdream, and 0.38/zero point three eight are equivalent; proper-name differences are not hidden",
+    "checkedLines": 56,
+    "lexicallyMatchedAfterNormalization": 55,
+    "expectedText": "Actual performedText, including intentional Chen Mo interjections and excluding unspoken audio tags; display subtitles unchanged",
+    "normalization": "Case, punctuation, root key/Rootkey, Black Dream/Blackdream, 0.38/zero point three eight, alright/all right, hm/hmm and this car's/this car is are equivalent. Interjections are not globally discarded. Proper-name differences are not hidden.",
     "repaired": [
-      { "id": "fatalImpact_01", "problem": "Original file contained two vocalizations separated by about 360 ms of silence; user requested only the first cry", "action": "2026-10-16: shorten the previous 0.156–4.000 s crop to original API audio 0.156–1.980 s, before the second onset at 2.2885 s. 5 ms fade-in, 30 ms fade-out and remaster. All original audio and prior crops retained; no new synthesis.", "durationSeconds": 1.824, "trigger": "finale T.hit = 2.3 seconds, 2D Dialogue voice; once per finale with no retrigger on repeated crossings or seek. New play alone resets the guard; +3 dB parent mix retained." }
+      { "id": "fatalImpact_01", "problem": "New Chris synthesis produced separated vocalizations despite the single-cry input", "action": "Keep original API audio 0–0.780 s only. Silence starts at 0.680363 s and the next detected vocalization begins at 0.992676 s (-38 dB, 120 ms detector). Apply 5 ms fade-in and 30 ms fade-out, then match the prior published pain-cry loudness. Raw audio and the pre-edit staged WAV retained.", "durationSeconds": 0.78, "trigger": "Unchanged finale T.hit = 2.3 seconds; once per finale, no retrigger on repeated crossings, pause or seek. +3 dB parent mix retained." }
     ],
     "properNameTranscriptionAmbiguities": [
-      { "id": "clueDReason_01", "name": "Lu Shicheng", "synthesisPronunciation": "Loo Shih-chung", "recognition": "Lu Xizhong", "note": "ASR cannot certify pronunciation. Human listening remains required; no claim that this spelling discrepancy is harmless." }
+      { "id": "clueDReason_01", "name": "Lu Shicheng / Chengyue", "synthesisPronunciation": "Loo Shih-chung / Chengyue", "recognition": "Lu Si Cong / Chengye", "note": "ASR cannot certify pronunciation. Human listening remains required; no claim that these proper-name discrepancies are harmless." }
     ],
     "nonverbalImpactCry": "Not evaluated by lexical ASR; non-silent WAV and real FMOD playback verified, perceived pain/acting still requires listening",
-    "manualActingReview": "pending; automatic checks do not certify age, tone, emotional richness, character suitability or pronunciation"
+    "manualActingReview": "pending; automatic checks do not certify perceived age 30–40, emotional richness, character suitability, robotic quality or pronunciation",
+    "audition": "Open /audio.html for the final FMOD mix. The ignored local take directory also has index.html for raw pre-mastered API audio, not the final single-cry crop."
   }
 }

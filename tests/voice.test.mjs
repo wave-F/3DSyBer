@@ -9,8 +9,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { LINES } from '../src/investigation/clues.js';
 import { RAW } from '../src/i18n.js';
-import { AUDITION_IDS, ENGLISH, VOICE_ROLES, PERFORMANCE_CUES, dialogueLines, productionLines, spokenText, synthesisText } from '../src/audio/dialogue.en.js';
-import { ElevenLabs, castFromEnv, validateCast, speechRequest, generateLine, digest, auditionHTML, fmimportScript } from '../scripts/lib/voice.mjs';
+import { AUDITION_IDS, ENGLISH, VOICE_ROLES, PERFORMANCE_CUES, CHEN_PERFORMANCES, dialogueLines, productionLines, spokenText, synthesisText } from '../src/audio/dialogue.en.js';
+import { ElevenLabs, castFromEnv, validateCast, speechRequest, generateLine, digest, auditionHTML, fmimportScript, matchVoiceLoudness, measureVoice, audioDuration } from '../scripts/lib/voice.mjs';
 
 const cast = { chen: 'test_chen_123456', dispatch: 'test_dispatch_123456', device: 'test_device_123456' };
 // 新版制作工具链用当前稿检查；已发布旧录音在 dialogue.test.mjs 按 manifest 和中文快照独立验证。
@@ -132,6 +132,45 @@ test('锁定的请求包含声音、上下文、语气及读音，改动会失�
   assert.equal(opening.request.next_text, undefined);
 });
 
+test('Chris 按 30–40 岁表演，语气词只用于男主制作稿；Sarah 的参数、语气与显示稿不变', async () => {
+  const castFile = JSON.parse(await readFile(new URL('../Fmod/voice-cast.en.json', import.meta.url), 'utf8'));
+  assert.equal(castFile.voices.chen.id, 'iP95p4xoKVk53GoZ742B');
+  assert.match(castFile.voices.chen.name, /Chris/);
+  assert.match(VOICE_ROLES.chen.brief, /thirty to forty/);
+  assert.equal(VOICE_ROLES.chen.stability, 0.3);
+  assert.ok(Object.keys(CHEN_PERFORMANCES).every((id) => lines.some((l) => l.id === id && l.speaker === 'chen')));
+  assert.equal(castFile.voices.dispatch.id, 'EXAVITQu4vr4xnSDxMaL');
+  assert.equal(VOICE_ROLES.dispatch.stability, 0.5);
+  assert.equal(VOICE_ROLES.dispatch.acting, 'cold, detached, clipped');
+  assert.ok(lines.filter((l) => l.speaker !== 'chen').every((l) => !l.perform));
+  const opening = lines.find((l) => l.id === 'opening_02');
+  assert.equal(opening.text, 'I’m here.');
+  assert.equal(opening.source, '到了。');
+  assert.match(synthesisText(opening), /Yeah\. I’m here\./);
+  assert.notEqual(speechRequest(opening, options).fingerprint, speechRequest({ ...opening, perform: 'I’m here.' }, options).fingerprint);
+  assert.match(synthesisText(lines.find((l) => l.speaker === 'device')), /robotic, monotone, mechanical, emotionless/);
+  assert.ok(!/Ugh|groan/.test(PERFORMANCE_CUES.find((l) => l.nonverbal).text));
+});
+
+test('响度匹配真实参考 WAV，保留时长、原始素材且禁止覆盖，输出不超过 -2 dBTP', async (t) => {
+  const directory = await fixture(t);
+  const source = join(directory, 'source.wav'), reference = join(directory, 'reference.wav'), destination = join(directory, 'matched.wav');
+  for (const [file, amplitude] of [[source, 0.03], [reference, 0.15]]) {
+    const result = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-n', '-f', 'lavfi', '-i', `aevalsrc=${amplitude}*sin(2*PI*440*t):s=48000:d=2`, '-c:a', 'pcm_s24le', file], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+  }
+  const original = digest(await readFile(source));
+  const matched = await matchVoiceLoudness(source, destination, reference);
+  assert.ok(Math.abs(matched.deltaLU) <= 0.15);
+  assert.equal(matched.referenceSha256, digest(await readFile(reference)));
+  assert.ok(Number(measureVoice(destination).input_tp) <= -1.95);
+  assert.ok(Math.abs(audioDuration(destination) - audioDuration(source)) < 0.01);
+  assert.equal(digest(await readFile(source)), original);
+  const output = digest(await readFile(destination));
+  await assert.rejects(matchVoiceLoudness(source, destination, reference), /EEXIST/);
+  assert.equal(digest(await readFile(destination)), output);
+});
+
 test('音色必须配置为三个不同 ID；不会偷偷用默认或中文音色', () => {
   assert.throws(() => validateCast({}), /ELEVENLABS_VOICE_CHEN/);
   assert.throws(() => validateCast({ ...cast, device: cast.dispatch }), /distinct/);
@@ -156,6 +195,9 @@ test('每条仅请求一次，可断点续跑，不覆盖不同演员或不同�
   assert.equal(calls, 1);
   const metadata = JSON.parse(await readFile(join(directory, `${lines[0].id}.json`), 'utf8'));
   assert.equal(metadata.model, 'eleven_v4');
+  assert.equal(metadata.performedText, lines[0].text);
+  assert.equal(metadata.synthesisInput, speechRequest(lines[0], options).request.text);
+  assert.deepEqual(metadata.voiceSettings, speechRequest(lines[0], options).request.voice_settings);
 });
 
 test('网络中断后留下不确定请求记录，第二次不会重复扣费', async (t) => {

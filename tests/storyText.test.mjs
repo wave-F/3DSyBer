@@ -95,9 +95,11 @@ test('删句不重新编号，改写对白不播放旧录音，未改写对白�
   const voiceOf = createVoiceMap(LINES, VOICE_LINES);
   const raw = LINES[RAW];
   assert.equal(voiceOf(raw.target[0]), 'target_02');
-  for (const group of ['clueDReason', 'clueDRaw', 'clueRTime', 'ready2']) assert.equal(voiceOf(raw[group][0]), undefined);
-  assert.equal(voiceOf(raw.transferred[3]), undefined);
-  assert.equal(voiceOf(raw.transferred[4]), undefined);
+  for (const group of ['clueDReason', 'clueDRaw', 'clueRTime', 'ready2']) assert.equal(voiceOf(raw[group][0]), `${group}_01`);
+  assert.equal(voiceOf(raw.transferred[3]), 'transferred_05');
+  assert.equal(voiceOf(raw.transferred[4]), 'transferred_06');
+  // 新版录音覆盖改稿，但仍不能把过时录音绑定到改写句。
+  assert.equal(createVoiceMap({ g: [{ text: '新台词' }] }, { g_01: { source: '旧台词' } })({ text: '新台词' }), undefined);
 });
 
 test('游戏源码不再使用 URSA 的中文旧译名或 Pivot 别名', async () => {

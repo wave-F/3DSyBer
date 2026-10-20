@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { readFile, mkdir } from 'node:fs/promises';
 import { AUDITION_IDS, VOICE_ROLES, productionLines } from '../src/audio/dialogue.en.js';
-import { ElevenLabs, castFromEnv, validateCast, speechRequest, cachedLine, generateLine, readJSON, digest, atomicWrite, auditionHTML, fmimportScript, masterVoice, audioDuration } from './lib/voice.mjs';
+import { ElevenLabs, castFromEnv, validateCast, speechRequest, cachedLine, generateLine, readJSON, digest, atomicWrite, auditionHTML, fmimportScript, masterVoice, matchVoiceLoudness, audioDuration } from './lib/voice.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const work = join(root, 'Fmod/voice-work.local');
@@ -21,6 +21,7 @@ export async function main(args = process.argv.slice(2)) {
     'non-commercial': { type: 'boolean' }, 'allow-unreviewed': { type: 'boolean' },
     'direct-production': { type: 'boolean' },
     'update-existing': { type: 'boolean' },
+    'match-published-loudness': { type: 'boolean' },
   } });
   const mode = positionals[0] || 'plan';
   if (flags.help) {
@@ -107,9 +108,28 @@ export async function main(args = process.argv.slice(2)) {
       catch (error) { if (error.code !== 'ENOENT') throw error; }
     }
     await mkdir(destination, { recursive: true });
-    const measurements = entries.map((e) => masterVoice(join(directory, `${e.id}.mp3`), e.file));
+    let references;
+    if (flags['match-published-loudness']) {
+      const published = await readJSON(join(root, 'Fmod/voice-en-manifest.json'));
+      const previous = await readJSON(join(work, 'en', published.take, 'staged.json'));
+      if (!Array.isArray(previous)) throw new Error('Missing published staging references. No guessing at loudness.');
+      references = entries.map((e) => {
+        const clip = previous.find((c) => c.id === e.id);
+        const recorded = published.clips.find((c) => c.id === e.id);
+        if (!clip?.wav || clip.wavSha256 !== recorded?.wavSha256) throw new Error(`Missing or stale loudness reference: ${e.id}`);
+        return clip;
+      });
+      for (const clip of references) if (digest(await readFile(clip.wav)) !== clip.wavSha256) throw new Error(`Changed loudness reference: ${clip.id}`);
+    }
+    const measurements = [];
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      measurements.push(references
+        ? await matchVoiceLoudness(join(directory, `${e.id}.mp3`), e.file, references[i].wav)
+        : { targetLUFS: -18, truePeakLimitDB: -2, input: masterVoice(join(directory, `${e.id}.mp3`), e.file) });
+    }
     const staged = [];
-    for (let i = 0; i < entries.length; i++) staged.push({ ...clips[i].metadata, review: flags['approved-audio'] ? 'user-approved' : 'unreviewed-internal-draft', event: `event:/voice/en/${entries[i].id}`, wav: entries[i].file, wavDuration: audioDuration(entries[i].file), mastering: { targetLUFS: -18, truePeakLimitDB: -2, input: measurements[i] }, wavSha256: digest(await readFile(entries[i].file)) });
+    for (let i = 0; i < entries.length; i++) staged.push({ ...clips[i].metadata, review: flags['approved-audio'] ? 'user-approved' : 'unreviewed-internal-draft', event: `event:/voice/en/${entries[i].id}`, wav: entries[i].file, wavDuration: audioDuration(entries[i].file), mastering: measurements[i], wavSha256: digest(await readFile(entries[i].file)) });
     await atomicWrite(join(directory, 'staged.json'), JSON.stringify(staged, null, 2) + '\n');
     const mixScript = await readFile(join(root, 'Fmod/voice-mix.js'), 'utf8');
     const importScript = flags['update-existing']

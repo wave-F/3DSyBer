@@ -38,8 +38,8 @@ export function speechRequest(l, { cast, model, seed, lines, nonCommercial = fal
   // 只借用同一段里相邻、同一人的英文，绝不把中文或叙述性静默送入 TTS。
   const previous = lines.find((x) => x.group === l.group && x.index === l.index - 1 && x.speaker === l.speaker && x.channel === l.channel && !x.silent);
   const next = lines.find((x) => x.group === l.group && x.index === l.index + 1 && x.speaker === l.speaker && x.channel === l.channel && !x.silent);
-  if (previous) request.previous_text = spokenText(previous.text);
-  if (next) request.next_text = spokenText(next.text);
+  if (previous) request.previous_text = spokenText(previous.perform || previous.text);
+  if (next) request.next_text = spokenText(next.perform || next.text);
   const voiceId = cast[l.speaker];
   const fingerprint = digest(JSON.stringify({ source: l.source, direction: l.direction, voiceId, usage: nonCommercial ? 'noncommercial' : 'commercial', output: 'mp3_44100_128', request }));
   return { voiceId, request, fingerprint };
@@ -124,17 +124,53 @@ export function audioDuration(path) {
   return seconds;
 }
 
-export function masterVoice(source, destination) {
+export function measureVoice(source) {
   const analysis = spawnSync('ffmpeg', ['-hide_banner', '-nostdin', '-i', source, '-af', 'aformat=channel_layouts=mono,loudnorm=I=-18:TP=-2:LRA=11:print_format=json', '-f', 'null', '-'], { encoding: 'utf8' });
   if (analysis.error || analysis.status !== 0) throw new Error(`Voice loudness analysis failed: ${source}`);
   const match = analysis.stderr.match(/\{[^{}]*"input_i"[^{}]*\}/s);
   if (!match) throw new Error(`Missing loudness measurements: ${source}`);
   const levels = JSON.parse(match[0]);
   for (const key of ['input_i', 'input_tp', 'input_lra', 'input_thresh', 'target_offset']) if (!Number.isFinite(Number(levels[key]))) throw new Error(`Invalid or silent audio: ${source}`);
+  return levels;
+}
+
+export function masterVoice(source, destination) {
+  const levels = measureVoice(source);
   const filter = `aformat=channel_layouts=mono,loudnorm=I=-18:TP=-2:LRA=11:measured_I=${levels.input_i}:measured_TP=${levels.input_tp}:measured_LRA=${levels.input_lra}:measured_thresh=${levels.input_thresh}:offset=${levels.target_offset}:linear=true`;
   const result = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-n', '-i', source, '-af', filter, '-ac', '1', '-ar', '48000', '-c:a', 'pcm_s24le', destination], { encoding: 'utf8' });
   if (result.error || result.status !== 0) throw new Error(`Voice mastering failed: ${destination}: ${result.error?.message || result.stderr}`);
   return levels;
+}
+
+// 逐句匹配已发布 WAV 的实际响度，而不是只沿用 -18 LUFS 的名义目标。
+// 不改总线或事件推子；限峰、增益仅作用于新 take，原始 API 音频永久保留。
+export async function matchVoiceLoudness(source, destination, reference) {
+  const referenceLevels = measureVoice(reference);
+  const target = Number(referenceLevels.input_i);
+  const temporary = `${destination}.master.wav`;
+  const input = masterVoice(source, temporary);
+  try {
+    const before = measureVoice(temporary);
+    let gain = target - Number(before.input_i), output;
+    // 所有轮次都从同一母版处理，避免反复限峰或覆盖输出。
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = `${destination}.match-${attempt}.wav`;
+      try {
+        const filter = `aresample=192000,volume=${gain.toFixed(4)}dB,alimiter=limit=0.785:level=false:latency=true,aresample=48000`;
+        const result = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-n', '-i', temporary, '-af', filter, '-ac', '1', '-ar', '48000', '-c:a', 'pcm_s24le', candidate], { encoding: 'utf8' });
+        if (result.error || result.status !== 0) throw new Error(`Loudness matching failed: ${result.error?.message || result.stderr}`);
+        output = measureVoice(candidate);
+        const delta = Number(output.input_i) - target;
+        if (Math.abs(delta) <= 0.15 && Number(output.input_tp) <= -1.95) {
+          // 不覆盖已有 take。
+          await writeFile(destination, await readFile(candidate), { flag: 'wx' });
+          return { targetLUFS: target, truePeakLimitDB: -2, input, output, referenceSha256: digest(await readFile(reference)), referenceLUFS: target, deltaLU: delta, gainDB: gain };
+        }
+        gain -= delta;
+      } finally { await unlink(candidate).catch((e) => { if (e.code !== 'ENOENT') throw e; }); }
+    }
+    throw new Error(`Could not match published loudness: ${destination} (${output?.input_i} vs ${target} LUFS)`);
+  } finally { await unlink(temporary).catch((e) => { if (e.code !== 'ENOENT') throw e; }); }
 }
 
 export async function cachedLine(directory, l, options) {
@@ -174,6 +210,7 @@ export async function generateLine(directory, l, options, api, probe = audioDura
   const metadata = {
     id: l.id, group: l.group, speaker: l.speaker, channel: l.channel,
     text: l.text, source: l.source, direction: l.direction,
+    performedText: l.perform || l.text, synthesisInput: request.text, voiceSettings: request.voice_settings,
     provider: 'elevenlabs', model: options.model, voiceId, fingerprint,
     usage: options.nonCommercial ? 'noncommercial' : 'commercial', accountTier: api.accountTier || 'unknown',
     seed: request.seed, sha256: digest(bytes), duration, review: 'unreviewed',

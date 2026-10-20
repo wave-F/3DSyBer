@@ -79,7 +79,7 @@
 			<value>3.04</value>
 		</property>
 		<relationship name="audioFile">
-			<destination>{d4dcaba6-37a7-4ea5-bf5c-999a7397cf7e}</destination>
+			<destination>{9db8c891-fbb3-4cb6-b65e-c9eb4c457634}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusEffectChain" id="{a1984d3e-05db-4e9f-ae98-cd8b971b5b40}">

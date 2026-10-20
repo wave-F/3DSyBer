@@ -18,7 +18,7 @@ const lines = productionLines().filter((l) => !l.nonverbal && (!values.id || val
 const clips = lines.map((l) => {
   const clip = staged.find((c) => c.id === l.id);
   if (!clip) throw new Error(`Missing staged ${l.id}`);
-  return { ...clip, text: spokenText(l.text) };
+  return { ...clip, text: spokenText(l.perform || l.text) };
 });
 const hash = digest(JSON.stringify(clips.map((c) => [c.id, c.wavSha256, c.text]))).slice(0, 16);
 const directory = join(source, 'content-check', hash);
@@ -51,6 +51,8 @@ const digits = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', '
 const normalize = (text) => spokenText(text).toLowerCase()
   .replace(/\b0\.(\d+)\b/g, (_, fraction) => 'zero point ' + [...fraction].map((d) => digits[Number(d)]).join(' '))
   .replace(/\bblack dream\b/g, 'blackdream').replace(/\bnorthbank\b/g, 'north bank').replace(/\broot key\b/g, 'rootkey')
+  // 可听上等价的语气词拼写及本稿的缩读；不吞掉整类语气词，不归一化人名。
+  .replace(/\balright\b/g, 'all right').replace(/\bhm+\b/g, 'hm').replace(/\bcar['’]s\b/g, 'car is')
   .replace(/\[[^\]]*\]|\([^)]*\)/g, '').replace(/-/g, ' ').replace(/[^a-z0-9 ]/g, '').trim().split(/\s+/).filter(Boolean);
 function distance(a, b) {
   let row = Array.from({ length: b.length + 1 }, (_, i) => i);

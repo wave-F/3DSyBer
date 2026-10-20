@@ -76,10 +76,10 @@
 	</object>
 	<object class="SingleSound" id="{090a6d22-d122-47a9-a5ac-0c8e01e83647}">
 		<property name="length">
-			<value>2.8799999999999999</value>
+			<value>3.6800000000000002</value>
 		</property>
 		<relationship name="audioFile">
-			<destination>{ddfdfa39-9717-41c7-99d6-ecb37e4b3b68}</destination>
+			<destination>{1e7ca02c-a089-436a-8abd-ddf082a03dfa}</destination>
 		</relationship>
 	</object>
 	<object class="MixerBusEffectChain" id="{dbdf8253-dcd1-4328-9da0-f1a3f817b0b4}">

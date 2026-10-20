@@ -47,14 +47,17 @@ test('声音尚未就绪或返回空句柄时也不反复补播结局痛呼', ()
   assert.doesNotThrow(() => voice.reset());
 });
 
-test('发布的痛呼素材在第二段叫声开始前结束，只保留第一声', async () => {
+test('Chris 撞击痛呼只保留第一声，原始音频和裁剪来源可追溯', async () => {
   const manifest = JSON.parse(await readFile(new URL('../Fmod/voice-en-manifest.json', import.meta.url), 'utf8'));
   const clip = manifest.clips.find((c) => c.id === 'fatalImpact_01');
   const edit = clip.edits.at(-1);
-  assert.equal(edit.startSeconds, 0.156);
-  assert.equal(edit.keepUntilSeconds, 1.98);
-  assert.equal(clip.wavDuration, 1.824);
-  assert.ok(edit.keepUntilSeconds < 2.2885); // 原始素材中第二段叫声的起点
+  assert.equal(clip.voiceId, 'iP95p4xoKVk53GoZ742B');
+  assert.equal(clip.text, 'Aah!');
+  assert.equal(edit.startSeconds, 0);
+  assert.equal(edit.keepUntilSeconds, 0.78);
+  assert.ok(Math.abs(clip.wavDuration - 0.78) < 0.01);
+  assert.ok(edit.keepUntilSeconds < 0.992676); // -38 dB / 120 ms 检测到的第二段起点
+  assert.equal(edit.originalAudioSha256, clip.sha256);
   assert.equal(VOICE_LINES.fatalImpact_01.duration, clip.wavDuration);
 });
 
@@ -233,10 +236,10 @@ test('仪器沉默只显示原字幕；声音失败时仍能完成剧情', async
   assert.equal(await done, true);
 });
 
-test('已发布 59 条配音仍与录音清单、Bank 指纹和演员一致，不冒充修订后的新录音', async () => {
+test('发布的 57 条新版 Chris 配音与当前稿、Bank、演员及匹配响度一致', async () => {
   const manifest = JSON.parse(await readFile(new URL('../Fmod/voice-en-manifest.json', import.meta.url), 'utf8'));
-  assert.equal(Object.keys(VOICE_LINES).length, 59);
-  assert.equal(manifest.clips.length, 59);
+  assert.equal(Object.keys(VOICE_LINES).length, 57);
+  assert.equal(manifest.clips.length, 57);
   assert.deepEqual(new Set(Object.keys(VOICE_LINES)), new Set(manifest.clips.map((l) => l.id)));
   for (const l of manifest.clips) {
     const clip = VOICE_LINES[l.id];
@@ -249,10 +252,16 @@ test('已发布 59 条配音仍与录音清单、Bank 指纹和演员一致，�
     assert.ok(clip.duration > 0);
   }
   assert.equal(manifest.usage, 'noncommercial-internal');
-  assert.equal(manifest.take, 'recast-20261015');
+  assert.equal(manifest.take, 'chris-revised-20261020');
   assert.ok(manifest.clips.every((c) => c.accountTier === 'free' && c.usage === 'noncommercial'));
   assert.ok(manifest.clips.every((c) => c.review === 'unreviewed-internal-draft'));
-  for (const clip of manifest.clips) assert.equal(clip.voiceId, manifest.cast.voices[clip.speaker].id);
+  for (const clip of manifest.clips) {
+    assert.equal(clip.voiceId, manifest.cast.voices[clip.speaker].id);
+    assert.ok(Math.abs(clip.mastering.deltaLU) <= 0.15, clip.id);
+    assert.equal(clip.mastering.truePeakLimitDB, -2);
+    assert.ok(Number(clip.mastering.output.input_tp) <= -1.95, clip.id);
+    assert.ok(clip.mastering.referenceSha256);
+  }
   assert.equal(manifest.bankSha256, digest(await readFile(new URL('../public/fmod/VoiceEN.bank', import.meta.url))));
   assert.ok(VOICE_LINES.fatalImpact_01.nonverbal);
   assert.equal(VOICE_LINES.rootRead_02, undefined);
@@ -276,11 +285,11 @@ test('只有中文原文和录音原文一致的台词才播配音，改写过�
   }
   const unchanged = dialogueLines().filter((line) => VOICE_LINES[line.id]?.source === line.source);
   assert.equal(matched, unchanged.length);
-  assert.ok(matched > 0 && matched < dialogueLines().length);
-  assert.equal(voiceOf(raw.clueDReason[0]), undefined);
-  assert.equal(voiceOf(raw.clueRTime[0]), undefined);
-  assert.equal(voiceOf(raw.transferred[3]), undefined);
-  assert.equal(voiceOf(raw.transferred[4]), undefined);
+  assert.equal(matched, dialogueLines().length);
+  assert.equal(voiceOf(raw.clueDReason[0]), 'clueDReason_01');
+  assert.equal(voiceOf(raw.clueRTime[0]), 'clueRTime_01');
+  assert.equal(voiceOf(raw.transferred[3]), 'transferred_05');
+  assert.equal(voiceOf(raw.transferred[4]), 'transferred_06');
   assert.equal(voiceOf(raw.target[0]), 'target_02');
   // 录音原文和当前台词不同时不播
   const changed = { g: [{ text: '改写后的台词' }] };

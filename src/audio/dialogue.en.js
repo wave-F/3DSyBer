@@ -4,9 +4,9 @@ import { LINES } from '../investigation/clues.js';
 
 export const VOICE_ROLES = {
   chen: {
-    name: 'Chen Mo', env: 'ELEVENLABS_VOICE_CHEN', stability: 0.5, similarity: 0.8,
-    acting: 'mature, weathered, gravelly',
-    brief: 'Man around fifty. Neutral American English, weathered low register, tired breath and textured chest resonance. Intimate, emotionally present screen acting: investigative curiosity grows into disbelief, bitter anger, then urgent fear. Never a trailer narrator or superhero. The impact cry is involuntary, raw pain, not a heroic battle shout.',
+    name: 'Chen Mo', env: 'ELEVENLABS_VOICE_CHEN', stability: 0.3, similarity: 0.8,
+    acting: 'natural, emotionally engaged, conversational',
+    brief: 'Chris, man aged thirty to forty. Natural American English with a grounded adult register, not artificially aged or gravelly. Intimate screen acting: curiosity grows into unease, disbelief, restrained anger and urgent fear. Brief hm, yeah, oh and breaths support specific discoveries without turning every line into a sigh. Inner thoughts stay close and audible, not whispered. Never a trailer narrator. One short involuntary impact cry, no second groan.',
   },
   dispatch: {
     name: 'Dispatcher', env: 'ELEVENLABS_VOICE_DISPATCH', stability: 0.5, similarity: 0.8,
@@ -15,8 +15,8 @@ export const VOICE_ROLES = {
   },
   device: {
     name: 'URSA', env: 'ELEVENLABS_VOICE_DEVICE', stability: 1, similarity: 0.85,
-    acting: 'robotic, precise, eerily calm',
-    brief: 'Distinctly female artificial intelligence. Precise synthetic phrasing, unnervingly composed, faintly condescending corporate politeness and deliberate sentence-final falls. Portal 2 inspires only the synthetic texture and clinical contrast, not an imitation of its character or actor. FMOD adds a subtle doubled, resonant electronic layer. Never a human dispatcher or a harsh unintelligible robot.',
+    acting: 'robotic, monotone, mechanical, emotionless',
+    brief: 'Female machine intelligence, not a reassuring human. Level pitch, evenly timed words, discrete phrase boundaries and abrupt sentence endings. No breaths, hesitation, interjections, sympathy or conversational warmth. Preserve clear diction and intelligibility. Electronic texture is isolated to the FMOD device bus; never imitate a specific character or actor.',
   },
 };
 
@@ -106,7 +106,7 @@ export const ENGLISH = {
   ],
   question2: [
      line('你说碰撞让它转向。可胎痕在碰撞点之前就弯了。', 'You said the collision made it turn. But the tire marks curve before the collision point.', 'Challenge the lie. Frustration builds; stress BEFORE, then leave a pointed silence.', 'accusing, frustrated, controlled'),
-     line('接触可能影响了判断轨迹。', 'Contact may have affected the assessed trajectory.', 'Synthetic corporate reassurance. Deliberate, precise, calmly evasive with an artificial falling cadence.', 'robotic, measured, coolly dismissive'),
+      line('接触可能影响了判断轨迹。', 'Contact may have affected the assessed trajectory.', 'Machine-generated assessment. Flat pitch, evenly separated phrases, no breath or reassuring human inflection; an impersonal, evasive conclusion.', 'robotic, monotone, evenly paced'),
      line('可能？', 'May have?', 'A sharp incredulous echo, containing anger rather than an innocent question.', 'incredulous, bitter, clipped'),
   ],
   revised2: [],
@@ -124,7 +124,7 @@ export const ENGLISH = {
   question3: [
     line('原始记录为什么锁着？', 'Why are the raw records locked?', 'Question the lock itself, not a theory he already knows.', 'questioning, controlled'),
      line('我要看接口日志。', 'I want to see the port log.', 'Firm demand with rising frustration. No pleading; he refuses to be brushed off.', 'insistent, angry, clipped'),
-     line('当前权限不足。', 'Current permissions are insufficient.', 'An immaculate synthetic denial. Faint superior politeness; absolute finality, no human apology.', 'robotic, cold, final'),
+      line('当前权限不足。', 'Current permissions are insufficient.', 'An automated access-denied response. Discrete, evenly timed words, flat pitch and an abrupt final stop. No apology or human emotion.', 'robotic, monotone, cold, final'),
   ],
   revised3: [],
   after3: [
@@ -175,8 +175,47 @@ export const AUDITION_IDS = [
 export const PERFORMANCE_CUES = [
   { ...line('等等，前轮。', 'Wait. The front wheel.', 'A sudden discovery interrupts his thought. Alert, intrigued.', 'alert, surprised'), id: 'dreamGuide_01', group: 'dreamGuide', index: 0, speaker: 'chen', channel: 'inner' },
   { ...line('倒回 {time}，再看一遍。', 'Rewind and look again.', 'Quiet urgency; he needs to verify what he just saw.', 'focused, urgent'), id: 'dreamGuide_02', group: 'dreamGuide', index: 1, speaker: 'chen', channel: 'inner' },
-  { ...line('[撞击痛呼]', 'Aah! Ugh...', 'Immediate involuntary cry as a car strikes him, followed by a short collapsing, winded groan. Raw shock and agony, no spoken words, no battle cry, no theatrical prolonged screaming.', 'screams in pain, agonized, winded'), id: 'fatalImpact_01', group: 'fatalImpact', index: 0, speaker: 'chen', channel: 'spoken', nonverbal: true },
+  { ...line('[撞击痛呼]', 'Aah!', 'One short involuntary cry as a car strikes him. Raw shock and pain, then stop. No second cry, trailing groan, spoken words or heroic battle shout.', 'screams in pain, shocked'), id: 'fatalImpact_01', group: 'fatalImpact', index: 0, speaker: 'chen', channel: 'spoken', nonverbal: true },
 ];
+
+// 仅制作时使用：语气词与呼吸不改写中英文显示稿，也不影响派单员。
+export const CHEN_PERFORMANCES = {
+  opening_02: '[exhales] Yeah. I’m here.',
+  start1_01: 'Alright... let’s see where it hit first.',
+  clueFront_01: 'Hm. The whole front end is crushed in.',
+  clueRail_01: 'No... it didn’t scrape past. It crashed straight into the rail.',
+  ready1_01: 'Okay. Build Blackdream... see what happened.',
+  clueScrape_01: 'Huh... yellow paint. This car is not yellow.',
+  clueSkidB_01: 'Wait... there are tracks from another car too.',
+  clueTrim_01: 'Yeah. The trim is yellow too. The color matches.',
+  ready2_01: 'Alright. Add the yellow car. Rebuild it again.',
+  clueP3override_01: 'There... this is exactly where control was taken away.',
+  clueP4end_01: '[breathes in] This car... is no longer under control.',
+  clueDRaw_01: 'Huh. Cheng Xu was an engineer at Meridian?',
+  clueDRawOpen_01: 'Hm... added temporarily?',
+  clueRTime_01: 'Wait. Zero point three eight seconds early. The collision hadn’t happened yet.',
+  dream2_01: 'Wait... the wheel moved first.',
+  dream2_02: 'But... the yellow car had not touched it yet.',
+  question2_01: 'You said the collision made it turn. [short pause] But the tire marks curve before the collision point.',
+  question2_03: 'May have? [scoffs]',
+  call2_02: '[breathes in] Give me ten more minutes.',
+  call2_03: 'Okay... the right door is bent out. Should pry open. Check the service port.',
+  cardRead_01: 'No... it was not a manual input. [short pause] The wheel was forced.',
+  dream3_01: '[exhales] Zero Priority... a talisman for the rich.',
+  question3_02: 'I want to see the port log.',
+  after3_01: 'Hm. If my clearance isn’t enough... what about Cheng Xu’s?',
+  keyFound_01: 'Cheng Xu’s root key. [short pause] Procedure says turn it in.',
+  keyFound_02: 'Well... I’ll borrow it.',
+  rootRead_01: '[breathes in] Why was Zero Priority added temporarily?',
+  dream4b_01: 'Oh... he tried to cancel the lane change. The system refused.',
+  target_02: '[breathes in] I need to take this back.',
+  transferred_03: '[exhales] Yeah. Understood.',
+  transferred_05: 'But... when did Zero Priority take effect? There are still questions here.',
+  transferred_06: '[sighs] But that is no longer my file.',
+  archived_03: '[exhales] Yeah. Understood.',
+  archived_05: 'But... why it turned first —',
+  archived_06: '[sighs] That is no longer my file.',
+};
 
 export const productionLines = (options) => [...dialogueLines(options), ...PERFORMANCE_CUES];
 
@@ -195,7 +234,7 @@ export function dialogueLines({ includeReserve = false, includeSilent = false, s
       if (english.source !== original.text) throw new Error(`Stale English voice script: ${id}. Review the changed source before generating.`);
       const speaker = original.who === '派单员' ? 'dispatch' : original.who === 'URSA' || original.who === '仪器' || original.who === '终端' ? 'device' : 'chen';
       const channel = !original.who ? 'inner' : speaker === 'dispatch' ? 'radio' : speaker === 'device' ? 'device' : 'spoken';
-      return { ...english, id, group, index, speaker, channel, reserve: group === 'call' };
+      return { ...english, ...(speaker === 'chen' && CHEN_PERFORMANCES[id] ? { perform: CHEN_PERFORMANCES[id] } : {}), id, group, index, speaker, channel, reserve: group === 'call' };
     });
   }).filter((l) => (includeReserve || !l.reserve) && (includeSilent || !l.silent));
 }
@@ -207,5 +246,5 @@ export function spokenText(text) {
 export function synthesisText(l) {
   if (l.silent) throw new Error(`Do not synthesize narrative silence: ${l.id}`);
   const inner = l.channel === 'inner' ? '[quiet, close, internal monologue] ' : '';
-  return `[${VOICE_ROLES[l.speaker].acting}] ${inner}[${l.tag}] ${spokenText(l.text)}`;
+  return `[${VOICE_ROLES[l.speaker].acting}] ${inner}[${l.tag}] ${spokenText(l.perform || l.text)}`;
 }
