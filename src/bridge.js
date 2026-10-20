@@ -97,8 +97,8 @@ export function buildBridge(scene) {
   });
 
   // 跨桥龙门架：高速路牌 + LED 跑马灯
-  addGantry(group, -48, false, ['湾岸線', 'BAYSHORE  ROUTE', 'B7'], ['出口 新宿', 'EXIT  SHINJUKU', '2km'], '前方事故 减速慢行  ACCIDENT AHEAD  SLOW DOWN  雨天路滑  RAIN  ', '#ffb020');
-  addGantry(group, 70, true, ['夜城中心', 'CITY  CENTER', 'C1'], ['港区', 'HARBOR', '5km'], '欢迎来到夜城  WELCOME TO NIGHT CITY  限速 80  SPEED LIMIT 80  ', '#ff3030');
+  addGantry(group, -48, false, ['湾岸线', 'BAYSHORE  ROUTE', 'B7'], ['出口 北岸', 'NORTH  BANK', '2km'], '前方事故 减速慢行  ACCIDENT AHEAD  SLOW DOWN  雨天路滑  RAIN  ', '#ffb020');
+  addGantry(group, 70, true, ['市中心', 'CITY  CENTER', 'C1'], ['港区', 'HARBOR', '5km'], '本路段由 URSA 调度  ROUTED BY URSA  限速 80  SPEED LIMIT 80  ', '#ff3030');
 
   mergeStatic(group);
   scene.add(group);

@@ -11,20 +11,21 @@ const UP = new THREE.Vector3(0, 1, 0);
 
 export const NEON_HEX = ['#20f0ff', '#ff2a9a', '#ffd23a', '#a060ff', '#ff3040', '#40ff90'];
 export const NEON = { cyan: '#20f0ff', pink: '#ff2a9a', yellow: '#ffd23a', violet: '#a060ff', red: '#ff3040', green: '#40ff90' };
-const V_WORDS = ['居酒屋', '拉面', '义体诊所', '夜城', '寿司', '烧肉', '网咖', '旅馆', '按摩', '药', '酒', 'カラオケ', 'ホテル', '珈琲', '電脳', '整形', '麻雀', '当铺', '龍神', '赤鬼', '新星', '白'];
-const H_WORDS = ['NEOTEK', 'SYNAPSE+', 'RAMEN 24H', 'HOTEL LUNA', 'BAR 66', 'HAMADA', 'KARAOKE', '電脳街', 'NIGHT MARKET', 'BRAINDANCE', '新宿', 'PACHINKO', 'VOLTA', 'KIROKU', 'CLUB ECLIPSE', 'GHOSTNET'];
+// 街面小店：中文为主，少量日文（龍神、赤鬼、カラオケ）保留港口城市的混杂感；前 12 个也做灯箱
+const V_WORDS = ['拉面', '义体', '茶餐厅', '夜宵', '烧腊', '网吧', '旅馆', '按摩', '药房', '酒', '修车', '当铺', '龍神', '赤鬼', '新星', 'カラオケ', '麻将', '整形', '电器', '回收', '粥', '冰室'];
+const H_WORDS = ['醒 XING', 'HENGGU 义体', 'RAMEN 24H', 'HOTEL 月', 'BAR 66', '北岸冰室', 'KARAOKE', 'NIGHT MARKET', '夜市', '麻将馆', 'DREAMLINK', 'ANTU 安途', '云渡 AIR', 'ECLIPSE', 'NOVA 新星', '回收 RECYCLE'];
 const BOX_COLORS = [['#ffe14a', '#1a1208'], ['#f4f4ee', '#c01020'], ['#ff5a2a', '#ffffff'], ['#2ad4ff', '#04121a'], ['#ff3a8a', '#ffffff']];
-// 楼顶企业标志 / 跑马灯文字（与广告图集里的虚构品牌一致）
+// 楼顶企业标志 / 跑马灯文字（与广告图集、世界观品牌一致；广告语点到为止，不直说）
 export const BRANDS = [
-  ['MIRAI BANK', '#ffd23a', 'YOUR FUTURE, SECURED'], ['KIROKU', '#ff3040', 'OPTICS'], ['HAMADA', '#20f0ff', 'CHROME'],
-  ['OKAMI ARMS', '#ff3040', ''], ['TETSU', '#ffd23a', 'MOTORS'], ['DREAMLINK', '#a060ff', ''], ['SYNAPSE+', '#20f0ff', ''],
-  ['SKYLINE AIR', '#40ff90', ''], ['VOLTA', '#ffd23a', 'NRG'],
+  ['承岳', '#ffd23a', 'CHENGYUE'], ['经纬 MERIDIAN', '#bfefff', 'URBAN SYSTEMS'], ['零号保障', '#f4f4ee', 'ZERO PRIORITY'],
+  ['公序', '#20f0ff', 'CIVIC ORDER'], ['醒 XING', '#ffd23a', ''], ['恒骨', '#ff3040', 'HENGGU'], ['安途', '#40ff90', 'ANTU'],
+  ['云渡', '#20f0ff', 'AIR TAXI'], ['DREAMLINK', '#a060ff', ''],
 ];
 const TICKER_TEXT = [
-  ['MIRAI BANK ▸ YOUR FUTURE, SECURED ▸ 夜城证券 +3.2% ▸ ', '#ffd23a'],
-  ['VOLTA NRG ▸ STAY WIRED ▸ 新品上市 ▸ HAMADA CHROME ▸ UPGRADE YOURSELF ▸ ', '#20f0ff'],
-  ['NC NEWS ▸ 高架事故调查中 ▸ 请绕行 ▸ TRAFFIC ALERT ▸ ', '#ff3040'],
-  ['CLUB ECLIPSE ▸ OPEN TILL DAWN ▸ DREAMLINK ▸ LIVE ANOTHER LIFE ▸ ', '#ff2a9a'],
+  ['承岳 CHENGYUE ▸ 北岸一号 · 江景臻席 ▸ 承岳指数 +3.2% ▸ ', '#ffd23a'],
+  ['醒 XING ▸ 再撑一班 ▸ ONE MORE SHIFT ▸ 恒骨义体 ▸ 换一只，还是你 ▸ ', '#20f0ff'],
+  ['城脉快讯 ▸ 高架路段临时管制 ▸ 请绕行 ▸ 今日道路通行率 99.4% ▸ ', '#ff3040'],
+  ['月蚀 ECLIPSE ▸ OPEN TILL DAWN ▸ 零号保障 ▸ 您先请 ▸ AFTER YOU ▸ ', '#ff2a9a'],
 ];
 
 export function createSignKit(scene, r) {

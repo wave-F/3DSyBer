@@ -71,10 +71,6 @@ const CSS = `
 .inv-mk.done .n { color: #e8f6ff; opacity: .7; }
 .inv-mk.aim .d { width: 30px; height: 30px; margin: -4px; background: rgba(255,207,74,.3); }
 .inv-mk.pop .d { animation: inv-pop .5s ease-out; }
-.inv-mk.interaction .d { width: 10px; height: 10px; border: 0; border-radius: 50%; transform: none; background: #ffcf4a; box-shadow: 0 0 10px rgba(255,207,74,.75); }
-.inv-mk.interaction .snap { width: 18px; height: 18px; margin: -11px 0 0 -11px; border-radius: 50%; }
-.inv-mk.interaction .n { left: 20px; top: -3px; font-size: 12px; }
-.inv-mk.interaction.aim .d { width: 14px; height: 14px; margin: -2px; background: #ffe7a3; }
 @keyframes inv-pop { 0% { transform: rotate(45deg) scale(2.4); opacity: 0; } 100% { transform: rotate(45deg) scale(1); opacity: 1; } }
 @keyframes inv-snap { 0% { transform: rotate(45deg) scale(3.4); opacity: .95; } 100% { transform: rotate(45deg) scale(1); opacity: 0; } }
 #inv-prompt { left: 50%; bottom: 190px; transform: translateX(-50%); font-size: 14px; letter-spacing: .12em; padding: 8px 18px; border: 1px solid rgba(108,200,255,.5); background: rgba(4,12,20,.55); opacity: 0; transition: opacity .2s; white-space: nowrap; }
@@ -513,20 +509,18 @@ export function createUI() {
       fpsShown = text;
       fpsEl.textContent = text;
     },
-    // list: [{ id, x, y, show, done, aim, label, kind? }]；interaction 使用黄色圆点
+    // list: [{ id, x, y, show, done, aim, label }]
     updateMarkers(list) {
       for (const m of list) {
         let e = markerEls.get(m.id);
         if (!e) {
           e = document.createElement('div');
           e.className = 'inv-mk';
-          e.dataset.id = m.id;
           e.innerHTML = `<div class="d"></div><div class="snap"></div><div class="n"></div>`;
           e.style.opacity = 0;
           markers.appendChild(e);
           markerEls.set(m.id, e);
         }
-        e.classList.toggle('interaction', m.kind === 'interaction');
         if (m.show && !e._shown && !m.flash) { e.classList.remove('pop'); void e.offsetWidth; e.classList.add('pop'); }
         if (m.flash) {
           const ring = e.querySelector('.snap');

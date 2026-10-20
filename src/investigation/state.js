@@ -1446,7 +1446,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       const label = c === aimedProbe ? c.name : `${c.name} ${d.toFixed(0)} m`;
       list.push({ id: c.id, x: s.x, y: s.y, front: s.front, show, done: c.done, aim: c === aimedProbe, label });
     }
-    // 杂志不显示悬浮标记或拾取提示，交互仍由准星瞄准检测处理。
+    // 杂志不显示悬浮标记，拾取提示仅在准星对准时显示。
     return list;
   }
 
@@ -1487,6 +1487,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     const tap = doorAimed ? { ...project(doorTarget().p), name: tx('右侧车门', 'Right door') }
       : portAimed ? { ...project(portTarget().p), name: tx('检修接口', 'Service port') }
       : keyAimed ? { ...project(keyTarget().p), name: tx('根钥', 'Root key') }
+      : magAimed ? { ...project(magT.p), name: tx('电子杂志 · 拾起', 'E-zine · pick up') }
       : null;
     if (!analysisClue && tap) ui.setAnalysis(tap, 0, 'tap');
     if (analysisClue || tap || ui.panelOn) ui.setPrompt(null);
