@@ -40,7 +40,7 @@ const SKIP_NAMES = new Set([
   'LightCover', 'Hologram', 'Decals', 'Damage_Fracture_Edges', 'Ground', 'Road',
 ]);
 
-const flowMap = loadTexture('waterN1.png', false);
+const flowMap = loadTexture('waterN1_webp.webp', false);
 flowMap.wrapS = flowMap.wrapT = THREE.RepeatWrapping;
 
 function sampleFlow(uvNode) {
