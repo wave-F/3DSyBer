@@ -5,6 +5,7 @@ import {
 } from 'three/tsl';
 import { gameTime } from './investigation/clock.js';
 import { loadTexture } from './textures.js';
+import { fenestra, FENESTRA_PANEL } from './fenestra.js';
 
 // 车身水流：世界空间采两张错位滚动的水流法线，按表面法线把滚动方向对齐到重力下滑。
 // 两层错开半个相位，避免单张噪声正对移动时分离、重叠来回闪。
@@ -169,10 +170,10 @@ export function mountSurfaceRainPanel() {
   if (!import.meta.env.DEV) return;
   const css = 'font:13px "PingFang SC",sans-serif;color:#d7ecff;';
   const btn = document.createElement('button');
-  btn.textContent = '测试 · 车身雨';
+  btn.textContent = '测试 · 外观';
   btn.style.cssText = `position:fixed;left:24px;bottom:24px;transform:scale(1.5);transform-origin:left bottom;z-index:11;padding:8px 16px;letter-spacing:.1em;${css}color:#9ad7ff;background:rgba(5,12,20,.7);border:1px solid rgba(154,215,255,.6);cursor:pointer;`;
   const panel = document.createElement('div');
-  panel.style.cssText = `display:none;position:fixed;left:24px;bottom:84px;z-index:11;padding:10px 14px;background:rgba(5,12,20,.86);border:1px solid rgba(154,215,255,.35);${css}`;
+  panel.style.cssText = `display:none;position:fixed;left:24px;bottom:84px;z-index:11;max-height:calc(100vh - 120px);overflow:auto;padding:10px 14px;background:rgba(5,12,20,.86);border:1px solid rgba(154,215,255,.35);${css}`;
   for (const el of [btn, panel]) {
     el.addEventListener('click', (e) => e.stopPropagation());
     el.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -190,25 +191,51 @@ export function mountSurfaceRainPanel() {
     btn.blur();
   });
   const fmt = (v, step) => v.toFixed(Math.max(0, -Math.floor(Math.log10(step))));
-  for (const [key, label, min, max, step] of PANEL) {
+  const heading = (text) => {
+    const h = document.createElement('div');
+    h.textContent = text;
+    h.style.cssText = 'margin:8px 0 4px;color:#9ad7ff;letter-spacing:.12em;';
+    panel.appendChild(h);
+  };
+  const slider = (store, key, label, min, max, step, read) => {
     const row = document.createElement('label');
     row.style.cssText = 'display:grid;grid-template-columns:88px 150px 48px;align-items:center;gap:8px;margin:3px 0;';
     const input = document.createElement('input');
-    Object.assign(input, { type: 'range', min, max, step, value: key === 'intensity' ? RAIN_INTENSITY : surfaceRain[key].value });
+    Object.assign(input, { type: 'range', min, max, step, value: read() });
     const val = document.createElement('span');
-    val.textContent = fmt(surfaceRain[key].value, step);
+    val.textContent = fmt(read(), step);
     input.addEventListener('input', () => {
-      surfaceRain[key].value = Number(input.value);
-      val.textContent = fmt(surfaceRain[key].value, step);
+      store[key].value = Number(input.value);
+      val.textContent = fmt(store[key].value, step);
     });
     row.append(document.createTextNode(label), input, val);
     panel.appendChild(row);
+  };
+  heading('车身雨');
+  for (const [key, label, min, max, step] of PANEL) {
+    slider(surfaceRain, key, label, min, max, step, () => key === 'intensity' ? RAIN_INTENSITY : surfaceRain[key].value);
+  }
+  heading('窗视差');
+  const toggle = document.createElement('label');
+  toggle.style.cssText = 'display:flex;align-items:center;gap:8px;margin:4px 0 8px;cursor:pointer;';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = true;
+  box.addEventListener('change', () => { fenestra.on.value = box.checked ? 1 : 0; });
+  toggle.append(box, document.createTextNode('启用室内视差'));
+  panel.appendChild(toggle);
+  for (const item of FENESTRA_PANEL) {
+    if (item[1] == null) { heading(item[0]); continue; }
+    const [key, label, min, max, step] = item;
+    slider(fenestra, key, label, min, max, step, () => fenestra[key].value);
   }
   const copy = document.createElement('button');
   copy.textContent = '复制参数';
   copy.style.cssText = `margin-top:10px;padding:4px 12px;${css}background:rgba(154,215,255,.12);border:1px solid rgba(154,215,255,.5);cursor:pointer;`;
   copy.addEventListener('click', () => {
-    const text = PANEL.map(([k]) => `  ${k}: ${+surfaceRain[k].value.toFixed(5)},`).join('\n');
+    const rain = PANEL.map(([k]) => `  ${k}: ${+surfaceRain[k].value.toFixed(5)},`).join('\n');
+    const win = FENESTRA_PANEL.filter((i) => i[1] != null).map(([k]) => `  ${k}: ${+fenestra[k].value.toFixed(5)},`).join('\n');
+    const text = `车身雨\n${rain}\n窗视差\n${win}`;
     navigator.clipboard?.writeText(text);
     console.log(text);
     copy.textContent = '已复制';

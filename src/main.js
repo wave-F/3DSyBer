@@ -37,6 +37,7 @@ import { createStaticGI } from './globalIllumination.js';
 import { initGLTF } from './gltf.js';
 import { applySurfaceRain, mountSurfaceRainPanel, updateSurfaceRain } from './surfaceRain.js';
 
+
 // 网页一打开就装入全部 Bank 并预备好所有循环；加载界面等声音就绪后才允许点击开始
 loading.waitFor(sound.preload(), '声音', 'AUDIO');
 // 加载期间第一次点击 / 按键开始菜单音乐；还没就绪时的点击是无效点击

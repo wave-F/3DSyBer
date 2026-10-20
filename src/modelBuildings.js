@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { gltfLoader } from './gltf.js';
 import { texture, uv, vertexColor, uniform, vec3, float, mix, smoothstep, mx_noise_float, bumpMap, normalWorld, positionWorld } from 'three/tsl';
+import { fenestra, fenestraRoom } from './fenestra.js';
 import { adGlowNode } from './ads.js';
 import { NEON } from './signs.js';
 import TYPES from './data/buildings.json';
@@ -158,11 +159,14 @@ function bakedMaterial(src) {
     return lit;
   };
   if (kind === 'glass') {
-    // 玻璃：亮窗照旧走烘焙，暗窗变成深色镜面，倒映环境、霓虹和屏幕反射
+    // 亮窗：烘焙亮度当开关，室内走视差贴图；暗窗仍是深色镜面
+    const bakedGlow = light.mul(bldgLight.glass).add(glow.mul(0.15));
+    const lit = smoothstep(fenestra.litLo, fenestra.litHi, bakedGlow.max());
+    const room = fenestraRoom(bakedGlow.max());
     m.colorNode = vec3(0.04, 0.045, 0.05);
-    m.roughnessNode = bldgWet.glassRough;
-    m.metalnessNode = bldgWet.glassMetal;
-    m.emissiveNode = basic.colorNode = light.mul(bldgLight.glass).add(glow.mul(0.15));
+    m.roughnessNode = mix(bldgWet.glassRough, float(1), lit);
+    m.metalnessNode = mix(bldgWet.glassMetal, float(0), lit);
+    m.emissiveNode = basic.colorNode = mix(bakedGlow, room, lit);
   } else {
     // 墙体：烘焙光照当作自发光（夜景基调不变），实时光照只在上面加湿面高光、反射和少量漫反射
     const { wet, film } = wetness();
