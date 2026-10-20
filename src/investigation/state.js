@@ -539,7 +539,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       if (tablet.hacking) return;
       const st = confirm?.state;
       const closable = !confirm || st === 'suspended';
-      if (e.code === 'KeyE' && st === 'idle') holdConfirm = true;
+      if (e.code === 'KeyE' && st === 'idle' && !confirm.holdOff) holdConfirm = true;
       else if (e.code === 'Tab' && st === 'idle' && !e.repeat) declineReport();
       else if (e.code === 'Tab' && st === 'talking' && !e.repeat) holdSkip = true;
       else if ((e.code === 'Tab' || e.code === 'Escape') && closable && !e.repeat) closeReport(e.code === 'Tab');
@@ -728,7 +728,7 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
       if (skipP >= 1) skipQuestion();
       return;
     }
-    if (!confirm || confirm.state !== 'idle') return;
+    if (!confirm || confirm.state !== 'idle' || confirm.holdOff) return;
     const ready = reportT > 1.8;   // 报告逐行打完、确认按钮出现之后
     const before = confirm.p;
     confirm.p = holdConfirm && ready ? confirm.p + dt / CONFIRM_TIME : Math.max(0, confirm.p - dt * 2);
@@ -1231,6 +1231,8 @@ export function createInvestigation(scene, camera, crash, controls, gait) {
     ui.ending(null);
     ui.black(0, 600);
     confirm = makeConfirm(endingKey);
+    // 返回键就是 E。回来后再放归档条，按住的 E 会立刻再次归档。
+    if (confirm) confirm.holdOff = true;
     holdConfirm = false;
     reportT = 0;
     setMode('report');

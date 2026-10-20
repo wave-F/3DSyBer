@@ -727,8 +727,9 @@ export function createTablet(camera) {
     if (!cf) return;
     const by = low ? 870 : 820, bh = low ? 76 : 92;
     const full = CW - 70 - x;
-    const idle = cf.state === 'idle';
+    const idle = cf.state === 'idle' && !cf.holdOff;
     const split = idle && cf.onDecline;
+    const declineOnly = cf.holdOff && cf.state === 'idle' && cf.onDecline;
     const bx = x, bw = split ? full * 0.66 : full;
     const warn = cf.state === 'suspended' || cf.state === 'talking';
     const done = cf.state === 'archived';
@@ -740,6 +741,15 @@ export function createTablet(camera) {
     }
     corners(bx, by, bw, bh, 18, warn ? '#ff9a3a' : C.gold, 3);
     const ty = by + bh / 2 + 12;
+    if (declineOnly) {
+      const hot = inside(bx, by, full, bh);
+      g.fillStyle = hot ? 'rgba(127,214,255,0.16)' : 'rgba(127,214,255,0.06)';
+      g.fillRect(bx, by, full, bh);
+      corners(bx, by, full, bh, 14, C.dim, 2);
+      text(lb.decline, bx + full / 2, ty, 28, hot ? C.white : C.cyan, 500, 'center');
+      region(bx, by, full, bh, () => cf.onDecline());
+      return;
+    }
     if (idle) text(cf.p > 0 ? lb.holding : lb.hold, bx + bw / 2, ty, 34, C.gold, 500, 'center');
     else if (cf.text) text(cf.text, bx + bw / 2, ty, 30, warn ? '#ffb066' : C.gold, 500, 'center');
     if (!split) return;
