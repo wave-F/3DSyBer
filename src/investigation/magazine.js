@@ -581,7 +581,7 @@ export function createMagazine({ scene, uiScene, camera }) {
     // 右侧小标题
     let y = 330;
     for (const [a, b] of [
-      [tx('枢核年度报告', 'URSA ANNUAL REPORT'), tx('道路事故率再降 38%', 'Road deaths down 38%')],
+      [tx('URSA年度报告', 'URSA ANNUAL REPORT'), tx('道路事故率再降 38%', 'Road deaths down 38%')],
       [tx('承岳第三代', 'CHENGYUE HEIR'), tx('首次公开亮相', 'Steps into the light')],
     ]) {
       rule(CW - 330, y - 34, 50, C.gold, 4);
@@ -597,12 +597,12 @@ export function createMagazine({ scene, uiScene, camera }) {
     text(tx('城市为谁让路？我们试乘了那条空着的车道 → P.2', 'Who does the city make way for? We rode the empty lane → P.2'), 54, CH - 74, 25, C.dim, 400);
   }
 
-  // ---------- 第 2 页：枢核年度报告 ----------
+  // ---------- 第 2 页：URSA年度报告 ----------
   function drawFeature(t) {
     head(tx('城市', 'CITY'), 2);
-    text(tx('枢核年度报告：', 'URSA annual report:'), 52, 196, 54, C.ink, 800);
+    text(tx('URSA年度报告：', 'URSA annual report:'), 52, 196, 54, C.ink, 800);
     text(tx('道路事故率再降 38%', 'road deaths down 38%'), 52, 262, 54, C.gold, 800);
-    para(tx('全城车辆调度交由枢核的第九年，堵车成了历史名词。剩下的事故，几乎都与“人”有关。',
+    para(tx('全城车辆调度交由URSA的第九年，堵车成了历史名词。剩下的事故，几乎都与“人”有关。',
       'Nine years into URSA dispatch, traffic jams are history. What accidents remain involve people.'),
     52, 318, CW - 104, 28, 42, C.dim);
 
@@ -640,7 +640,7 @@ export function createMagazine({ scene, uiScene, camera }) {
     g.lineWidth = 3;
     g.beginPath(); g.arc(cx, cy, 30 + fract(t * 0.5) * 120, 0, Math.PI * 2); g.stroke();
     g.restore();
-    text(tx('URSA / 枢核 · 城市调度中枢实时路网', 'URSA live dispatch grid'), bx + 16, by + bh - 18, 20, 'rgba(111,227,255,0.8)', 500, 'left', MONO);
+    text(tx('URSA  · 城市调度中枢实时路网', 'URSA live dispatch grid'), bx + 16, by + bh - 18, 20, 'rgba(111,227,255,0.8)', 500, 'left', MONO);
 
     // 正文两栏
     const colW = (CW - 104 - 40) / 2;
@@ -648,7 +648,7 @@ export function createMagazine({ scene, uiScene, camera }) {
     let y = para(tx('经纬城市系统公司昨日发布年度报告：过去一年，全城道路事故率再降 38%，平均通勤时间缩短 11 分钟。报告指出，剩余事故中有 91% 涉及非法改装车辆或违规手动驾驶。',
       'Meridian Urban Systems’ annual report: accidents down 38%, commutes 11 minutes shorter. 91% of the accidents that remain involved modified vehicles or manual driving.'),
     52, y0, colW, 25, 38, C.ink);
-    para(tx('“事故报告由枢核在现场数据回传的同时生成，复核员只需确认。”经纬发言人说。',
+    para(tx('“事故报告由URSA在现场数据回传的同时生成，复核员只需确认。”经纬发言人说。',
       '“URSA writes the report as the scene data comes in. Reviewers just confirm it,” said a spokesperson.'),
     52, y + 8, colW, 25, 38, C.dim);
     // 右栏：引语 + 人事动态
@@ -660,7 +660,7 @@ export function createMagazine({ scene, uiScene, camera }) {
     g.fillStyle = 'rgba(255,255,255,0.05)';
     g.fillRect(rx, sy, colW, CH - 80 - sy);
     text(tx('人事动态', 'STAFF NOTE'), rx + 20, sy + 40, 22, C.cyan, 600, 'left', MONO);
-    para(tx('经纬宣布：原始数据审计岗位将于明年起逐步由枢核自动审计接替。“人工逐条核对原始记录，已经没有必要。”',
+    para(tx('经纬宣布：原始数据审计岗位将于明年起逐步由URSA自动审计接替。“人工逐条核对原始记录，已经没有必要。”',
       'Raw-data audit engineers will be replaced by URSA self-audit next year. “Checking by hand is no longer necessary.”'),
     rx + 20, sy + 78, colW - 40, 22, 32, C.ink);
   }
@@ -669,12 +669,12 @@ export function createMagazine({ scene, uiScene, camera }) {
   function drawBriefs(t) {
     head(tx('简讯', 'BRIEFS'), 3);
     const items = [
-      [tx('财经', 'MONEY'), tx('承岳第三代首次公开亮相', 'Chengyue heir makes first public appearance'),
+      [tx('财经', 'MONEY'), tx('承岳集团第三代首次公开亮相', 'Third-generation Chengyue Group heir makes first public appearance'),
         tx('陆世承很少出现在镜头前。但承岳的名字，出现在这座城市许多资产的归属栏里。', 'Lu Shicheng rarely appears on camera. But the Chengyue name sits in the owner field of much of this city.')],
       [tx('招聘', 'JOBS'), tx('公序安全事务公司招募现场复核员', 'Civic Order Services is hiring Field Review Agents'),
         tx('签约即上岗，事故按工单结算，无需警务背景。“大多数时候，你只需要证明系统没有写错。”', 'Sign and start today. Paid per ticket, no police background needed. “Most days you just confirm the system got it right.”')],
       [tx('交通', 'TRAFFIC'), tx('高架雨天夜间限速下调', 'Night speed limits cut on elevated roads'),
-        tx('枢核提示：雨季路面湿滑，请勿切换手动驾驶。违规车辆将自动记录。', 'URSA reminds drivers: roads are slick this season. Do not switch to manual. Violations are logged automatically.')],
+        tx('URSA提示：雨季路面湿滑，请勿切换手动驾驶。违规车辆将自动记录。', 'URSA reminds drivers: roads are slick this season. Do not switch to manual. Violations are logged automatically.')],
     ];
     let y = 170;
     for (const [k, h, b] of items) {
@@ -726,20 +726,6 @@ export function createMagazine({ scene, uiScene, camera }) {
     g.letterSpacing = '0px';
     text(tx('零号保障', 'Zero Priority'), CW / 2, 330, tx(140, 112), '#ffe2a6', 800, 'center', tx(SERIF, SANS));
     text(tx('世界为你让路。', 'The world makes way for you.'), CW / 2, 420, 44, C.ink, 500, 'center');
-    // 小字（压在光带上，先垫一条暗底）
-    const fb = g.createLinearGradient(0, CH - 190, 0, CH);
-    fb.addColorStop(0, 'rgba(5,4,3,0)');
-    fb.addColorStop(0.35, 'rgba(5,4,3,0.85)');
-    fb.addColorStop(1, 'rgba(5,4,3,0.95)');
-    g.fillStyle = fb;
-    g.fillRect(0, CH - 190, CW, 190);
-    font(19, 400);
-    g.fillStyle = 'rgba(255,226,166,0.55)';
-    g.textAlign = 'center';
-    const fine = tx('零号生命保障协议 · 资格由枢核依据综合生命价值评估授予，无需申请。条款以系统解释为准。',
-      'Zero Priority Life Protection Protocol. Eligibility is granted by URSA based on an overall life-value assessment. No application required. Terms as interpreted by the system.');
-    let y = CH - 120;
-    for (const l of wrap(fine, CW - 200)) { g.fillText(l, CW / 2, y); y += 30; }
   }
 
   // 内页的页眉

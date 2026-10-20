@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { dialogueLines, productionLines } from '../src/audio/dialogue.en.js';
+import { dialogueLines } from '../src/audio/dialogue.en.js';
 import { digest } from '../scripts/lib/voice.mjs';
 import { createDialoguePlayer } from '../src/audio/dialoguePlayer.js';
 import { createImpactVoice } from '../src/audio/impactVoice.js';
@@ -233,18 +233,16 @@ test('仪器沉默只显示原字幕；声音失败时仍能完成剧情', async
   assert.equal(await done, true);
 });
 
-test('本轮 59 条配音全部与当前剧本、Bank 指纹和新演员一致，保留内部非商用标签', async () => {
+test('已发布 59 条配音仍与录音清单、Bank 指纹和演员一致，不冒充修订后的新录音', async () => {
   const manifest = JSON.parse(await readFile(new URL('../Fmod/voice-en-manifest.json', import.meta.url), 'utf8'));
   assert.equal(Object.keys(VOICE_LINES).length, 59);
   assert.equal(manifest.clips.length, 59);
-  const script = productionLines();
   assert.deepEqual(new Set(Object.keys(VOICE_LINES)), new Set(manifest.clips.map((l) => l.id)));
   for (const l of manifest.clips) {
     const clip = VOICE_LINES[l.id];
     assert.equal(clip.path, `event:/voice/en/${l.id}`);
     assert.equal(clip.text, l.text);
     assert.equal(clip.source, l.source);
-    assert.equal(clip.source, script.find((x) => x.id === l.id).source);
     assert.equal(clip.speaker, l.speaker);
     assert.equal(clip.channel, l.channel);
     assert.equal(clip.duration, l.wavDuration);
@@ -276,7 +274,14 @@ test('只有中文原文和录音原文一致的台词才播配音，改写过�
       assert.equal(VOICE_LINES[id].source, line.text);
     });
   }
-  assert.equal(matched, dialogueLines().length);
+  const unchanged = dialogueLines().filter((line) => VOICE_LINES[line.id]?.source === line.source);
+  assert.equal(matched, unchanged.length);
+  assert.ok(matched > 0 && matched < dialogueLines().length);
+  assert.equal(voiceOf(raw.clueDReason[0]), undefined);
+  assert.equal(voiceOf(raw.clueRTime[0]), undefined);
+  assert.equal(voiceOf(raw.transferred[3]), undefined);
+  assert.equal(voiceOf(raw.transferred[4]), undefined);
+  assert.equal(voiceOf(raw.target[0]), 'target_02');
   // 录音原文和当前台词不同时不播
   const changed = { g: [{ text: '改写后的台词' }] };
   assert.equal(createVoiceMap(changed, { g_01: { source: '原来的台词' } })(changed.g[0]), undefined);

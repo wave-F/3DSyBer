@@ -24,13 +24,13 @@ async function fixture(t) {
   return directory;
 }
 
-test('新版英文稿覆盖当前 36 组、56 条有声台词，终端省略号保持沉默', () => {
+test('新版英文稿覆盖当前 36 组、54 条有声台词，URSA 省略号保持沉默', () => {
   const before = JSON.stringify(LINES);
   const all = dialogueLines({ includeReserve: true, includeSilent: true });
   assert.equal(Object.keys(ENGLISH).length, 36);
-  assert.equal(all.length, 58);
-  assert.equal(lines.length, 56);
-  assert.equal(new Set(all.map((l) => l.id)).size, 58);
+  assert.equal(all.length, 56);
+  assert.equal(lines.length, 54);
+  assert.equal(new Set(all.map((l) => l.id)).size, 56);
   assert.ok(all.every((l) => !l.reserve));
   assert.deepEqual(all.filter((l) => l.silent).map((l) => l.id), ['afterRewind_01', 'rootRead_02']);
   assert.ok(lines.some((l) => l.group === 'archived'));
@@ -46,8 +46,8 @@ test('新版英文稿覆盖当前 36 组、56 条有声台词，终端省略号�
 
 test('全量制作包含两条动态引导与同一男主的非语言撞击痛呼，不合成终端静默', () => {
   const production = productionLines();
-  assert.equal(production.length, 59);
-  assert.equal(new Set(production.map((l) => l.id)).size, 59);
+  assert.equal(production.length, 57);
+  assert.equal(new Set(production.map((l) => l.id)).size, 57);
   assert.ok(!production.some((l) => l.silent || l.text === '...'));
   const pain = PERFORMANCE_CUES.find((l) => l.id === 'fatalImpact_01');
   assert.equal(pain.nonverbal, true);
@@ -56,6 +56,11 @@ test('全量制作包含两条动态引导与同一男主的非语言撞击痛�
   assert.match(synthesisText(pain), /screams in pain/);
   assert.match(synthesisText(production.find((l) => l.speaker === 'dispatch')), /cold, detached/);
   assert.match(synthesisText(production.find((l) => l.speaker === 'device')), /robotic/);
+  assert.equal(VOICE_ROLES.device.name, 'URSA');
+  assert.deepEqual(production.filter((l) => l.speaker === 'device').map((l) => l.id), ['question2_02', 'question3_03']);
+  assert.deepEqual(production.filter((l) => l.group === 'target').map((l) => l.id), ['target_02']);
+  assert.deepEqual(production.filter((l) => l.group === 'transferred').map((l) => l.id),
+    ['transferred_01', 'transferred_02', 'transferred_03', 'transferred_05', 'transferred_06']);
 });
 
 test('源台词变化时阻止旧英文配音静默继续制作', () => {
