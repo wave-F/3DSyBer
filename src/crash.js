@@ -79,7 +79,7 @@ export function buildCrash(scene) {
   // info: { pristine: 未变形的模型副本（重建前半段用）, crashed: 变形后的模型（重建后半段用）, door: 右车门节点（rotation.y 开合） }
   const onCarReady = (cb) => { if (ready) cb(ready); else readyCbs.push(cb); };
   return {
-    update, carGroup: car.group, onCarReady, hazardMat: car.hazardMat,
+    update, carGroup: car.group, onCarReady, ready: car.ready, hazardMat: car.hazardMat,
     skids, setHazardOverride(o) { hazardOverride = o; },
     get hazardLit() { return hazardLit; },
     get fireOn() { return fireOn; },
@@ -100,6 +100,8 @@ function buildCar(onReady) {
   const hazardMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffa020, emissiveIntensity: 0 });
 
   const loader = gltfLoader();
+  let markCar;
+  const carReady = new Promise((resolve) => { markCar = resolve; });
   Promise.all([loader.loadAsync(CAR_URL), loader.loadAsync(CAR_GLASS_URL)]).then(([gltf, glass]) => {
     const model = gltf.scene;
     model.rotation.y = Math.PI / 2; // 车头 +Z → 组内 +X
@@ -161,11 +163,13 @@ function buildCar(onReady) {
     const box = new THREE.Box3().setFromObject(wheel);
     wheel.position.y += DECK_Y + 0.01 - box.min.y;
     onReady({ pristine, crashed: model, paintMeshes, door: model.getObjectByName('Door_R') });
+    markCar();
   }).catch((error) => {
     console.error('Failed to load the crash vehicle and replacement glazing', error);
+    markCar();
   });
 
-  return { group, hazardMat };
+  return { group, hazardMat, ready: carReady };
 }
 
 // 导出的 glTF 材质只保留了基础参数（多数是纯黑 + 金属度 1 + 粗糙度 0），按名字换成手调材质
