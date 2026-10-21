@@ -32,7 +32,7 @@ export function adSlot(pool, start = null, phase = null) {
   const i = counter++;
   return {
     pool,
-    start: start ?? (i * 5) % n,                               // 5 与 12、8 互质，连续分配的屏不会撞图
+    start: start ?? (i * 5) % n,                               // 5 与 14、8 互质，连续分配的屏不会撞图
     phase: phase ?? ((i * 0.618034) % 1) * AD_DWELL,
   };
 }

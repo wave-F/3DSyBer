@@ -52,22 +52,23 @@ def shade(im, side, amount=0.75, span=0.55):
   a = np.asarray(im, dtype=np.float32) * (1 - m[..., None])
   return Image.fromarray(a.astype(np.uint8))
 
-def text(im, s, fname, size, color, x, y, anchor='la', glow=0, track=0):
-  """x/y 是 0-1 比例坐标；track 为字距（像素）；glow 为辉光半径"""
+def text(im, s, fname, size, color, x, y, anchor='la', glow=0, track=0, stroke=0, stroke_fill=None):
+  """x/y 是 0-1 比例坐标；track 为字距（像素）；glow 为辉光半径；stroke 为描边宽度（亮底上用）"""
   W, H = im.size
   f = font(fname, size)
   layer = Image.new('RGBA', im.size, (0, 0, 0, 0))
   d = ImageDraw.Draw(layer)
   px, py = x * W, y * H
+  sk = dict(stroke_width=stroke, stroke_fill=stroke_fill) if stroke else {}
   if track:
     widths = [d.textlength(ch, font=f) + track for ch in s]
     total = sum(widths) - track
     if anchor[0] == 'm': px -= total / 2
     elif anchor[0] == 'r': px -= total
     for ch, w in zip(s, widths):
-      d.text((px, py), ch, font=f, fill=color, anchor='l' + anchor[1]); px += w
+      d.text((px, py), ch, font=f, fill=color, anchor='l' + anchor[1], **sk); px += w
   else:
-    d.text((px, py), s, font=f, fill=color, anchor=anchor)
+    d.text((px, py), s, font=f, fill=color, anchor=anchor, **sk)
   if glow:
     g = layer.filter(ImageFilter.GaussianBlur(glow))
     im.alpha_composite(g); im.alpha_composite(g)
@@ -149,6 +150,20 @@ ADS = {
     text(im, 'YUNDU  AIR TAXI', 'en', 30, CYAN, 0.685, 0.39, 'ls', track=6),
     text(im, '雨天，也准时。', 'hei', 46, WHITE, 0.685, 0.57, 'ls'),
     text(im, 'ON TIME, RAIN OR SHINE.', 'en', 22, PALE, 0.685, 0.63, 'ls', track=4))),
+  'h13': dict(kind='h', crop=dict(cx=0.5, cy=0.51), shade='l', shade_amt=0.6, draw=lambda im: (
+    text(im, 'HACKMAN', 'fut', 150, CYAN, 0.06, 0.36, 'ls', glow=16, track=12),
+    text(im, '海克曼  ·  网络安全', 'heil', 32, PALE, 0.065, 0.44, 'ls', track=6),
+    rule(im, 0.065, 0.42, 0.49, '#7fe8ff88'),
+    text(im, '小心黑客。', 'hei', 64, WHITE, 0.065, 0.62, 'ls'),
+    text(im, '我们就是。', 'hei', 64, '#ff4a5a', 0.065, 0.72, 'ls', glow=8),
+    text(im, 'BEWARE OF HACKERS. WE ARE THEM.', 'en', 22, PALE, 0.065, 0.79, 'ls', track=5),
+    text(im, '渗透测试 · 数据找回 · 不问来路', 'heil', 20, '#8aa0a8', 0.065, 0.92, 'ls', track=2))),
+  'h14': dict(kind='h', crop=dict(cx=0.5, cy=0.44), shade='l', shade_amt=0.35, draw=lambda im: (
+    text(im, '胡闹洗车', 'hei', 140, WHITE, 0.055, 0.36, 'ls', stroke=8, stroke_fill='#e8532e'),
+    text(im, 'HUNAO  CAR WASH', 'fut', 46, '#ffd84a', 0.06, 0.45, 'ls', track=8, stroke=3, stroke_fill='#1d4d48'),
+    text(im, '越闹，越干净。', 'hei', 58, WHITE, 0.06, 0.64, 'ls', stroke=4, stroke_fill='#1d4d48'),
+    text(im, 'THE MESSIER, THE CLEANER.', 'en', 24, '#fff3c4', 0.06, 0.71, 'ls', track=5, stroke=2, stroke_fill='#1d4d48'),
+    text(im, '洗车 · 打蜡 · 不保证车顶有没有猫', 'heil', 22, WHITE, 0.06, 0.93, 'ls', track=2, stroke=2, stroke_fill='#1d4d48'))),
   'v01': dict(kind='v', crop=dict(cx=0.69, cy=0.5), shade='t', shade_amt=0.6, draw=lambda im: (
     text(im, 'AURA', 'enl', 120, WHITE, 0.5, 0.13, 'ms', glow=12, track=26),
     text(im, '奥拉 · 今夜开唱', 'heil', 30, CYAN, 0.5, 0.18, 'ms', track=6),
