@@ -561,10 +561,14 @@ test('加载界面中英切换仍等待声音预加载，保留菜单手势、�
   calls.length = 0;
   root.fire('pointerdown'); root.fire('click');
   assert.deepEqual(calls, ['start']);
-  assert.deepEqual(timers.map((t) => t.ms), [1150, 4750]);
+  assert.deepEqual(timers.map((t) => t.ms), [700, 3300, 4250, 7850]);
   root.fire('click'); keys.get('keydown')();
   assert.deepEqual(calls, ['start']);
-  const fadeTimers = timers.splice(0);
+  const [noticeIn, noticeOut, ...fadeTimers] = timers.splice(0);
+  noticeIn.fn();
+  assert.equal(root.classList.contains('notice'), true);
+  assert.equal(loading.fadeLeft, null); // 提示期间开场不推进
+  noticeOut.fn();
   now += fadeTimers[0].ms;
   fadeTimers[0].fn();
   assert.equal(loading.fadeLeft, 3600);

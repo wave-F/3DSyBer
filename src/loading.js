@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { getLang, setLang, onLang, tx } from './i18n.js';
 
-// 加载界面（index.html 的 #loading）：真实加载进度 → 着色器预热 → 点击任意位置开始 → 黑场淡出
+// 加载界面（index.html 的 #loading）：真实加载进度 → 着色器预热 → 点击任意位置开始 → 黑场提示 → 黑场淡出
 // 进度前 85% 来自 three.js 默认加载管理器（所有 GLTF / 贴图 / HDR 都走它），后 15% 是渲染预热：
 // 资源到齐后，等画面连续若干帧不卡（WebGPU 第一次渲染要编译管线），避免进游戏第一秒掉帧
 // main.js 第一个 import 本文件，保证在其他模块开始加载资源前挂上回调
@@ -14,7 +14,9 @@ const WARM_DT = 50;          // 不卡：帧间隔小于这个毫秒数
 const WARM_MAX_MS = 10000;   // 预热最长等待
 const PREP_SHARE = 0.8;      // 有预编译任务时：预热段里预编译占的比例，剩下的给「连续不卡」检测
 const BLACK_MS = 700;        // 点击后黑场盖满
-const HOLD_MS = 450;         // 全黑再停一下，再开始露出开场
+const NOTICE_MS = 3200;      // 黑场上的提示（通关时长 + 耳机动画），含最后 0.6 秒淡出（与 index.html 的 .ld-notice 一致）
+const NOTICE_OUT_MS = 600;
+const HOLD_MS = 350;         // 提示消失后全黑再停一下，再开始露出开场
 const FADE_MS = 3600;        // 黑场淡出（与 index.html 的 .fading 一致）
 
 // 文件名 → 状态文字
@@ -196,8 +198,12 @@ function beginGame() {
   root.style.pointerEvents = 'none';
   root.classList.add('closing');
   startFn?.();
-  setTimeout(() => { fadeAt = performance.now(); root.classList.add('fading'); }, BLACK_MS + HOLD_MS);
-  setTimeout(() => root.classList.add('gone'), BLACK_MS + HOLD_MS + FADE_MS);
+  // 黑场盖满 → 提示「10 分钟通关 · 建议佩戴耳机」+ 耳机动画 → 提示淡出 → 黑场淡出露出开场
+  setTimeout(() => root.classList.add('notice'), BLACK_MS);
+  setTimeout(() => root.classList.add('notice-out'), BLACK_MS + NOTICE_MS - NOTICE_OUT_MS);
+  const reveal = BLACK_MS + NOTICE_MS + HOLD_MS;
+  setTimeout(() => { fadeAt = performance.now(); root.classList.add('fading'); }, reveal);
+  setTimeout(() => root.classList.add('gone'), reveal + FADE_MS);
 }
 
 root.addEventListener('click', () => {
